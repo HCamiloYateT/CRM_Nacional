@@ -34,7 +34,7 @@ TablaIndicadores <- function(id) {
     
     .estilo_tabla <- function(tabla) {
       racafeShiny::racafeCompactTable(tabla, backend = "gt", show_header = FALSE,
-        font_size = 10, row_padding = 1, align = c("left", "right"))
+        font_size = 12, row_padding = 4, align = c("left", "right"))
     }
     
     .limpiar_html <- function(x) {

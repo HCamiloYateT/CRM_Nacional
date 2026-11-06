@@ -28,13 +28,36 @@ server <- function(input, output, session) {
   output$user <- renderText("Prueba local")
   valor <- racafeModulos::cajaValor_server("valor", reactive(input$cantidad), "numero")
   legacy <- racafeShiny::cajaValor_server("legacy", reactive(input$cantidad), "numero")
+  clientes <- data.frame(CLCliNit = as.character(900123 + seq_len(18) - 1L),
+    CLLinNegNo = rep(c("A LA MEDIDA", "CONVENCIONALES"), 9), LinNegCod = "A",
+    PerRazSoc = c("Café & Cía.", rep("COMPAÑÍA CAFETERA DE NOMBRE EXTENSO & ASOCIADOS", 17)))
   racafeModulos::MenuHeaderServer("MenuClientes", items_r = reactive(widgets$.header_items_clientes(
-    data.frame(CLCliNit = "900123", CLLinNegNo = "Nacional", LinNegCod = "A", PerRazSoc = "Café & Cía."),
-    "nuevo", "header_cliente_nuevo")), headerText = "Clientes")
+    clientes, "nuevo", "header_cliente_nuevo")), headerText = "Clientes por revisar", href = "#", footerText = "Ver clientes")
+  clientes$UltActualizacion <- "01/01/2025"
+  racafeModulos::MenuHeaderServer("MenuClientesAnt", items_r = reactive(widgets$.header_items_clientes(
+    clientes[1:2, ], "antiguo", "header_cliente_antiguo")), headerText = "Clientes con información anterior")
+  tareas <- data.frame(cons = seq_len(12), titulo = rep(c("Revisión de resultados comerciales de la zona cafetera",
+    "Crear cotizaciones de clientes"), 6), Tipo = "list", Prioridad = rep(c("URGENTE", "IMPORTANTE"), 6),
+    Responsable = "ANA|LUIS|EQUIPO COMERCIAL", FechaCumplimiento = as.Date("2026-11-06"),
+    Archivado = 0, Cumplido = rep(c(0, 1), 6), Actividades = "Revisar|Confirmar|Notificar", Cumplidas = "1|0|0")
+  racafeModulos::MenuHeaderServer("MenuTareas", items_r = reactive(do.call(racafeShiny::racafeListGroup,
+    lapply(seq_len(nrow(tareas)), function(i) widgets$.tareas_lista_item(tareas[i, ], "task_selected")))),
+    headerText = "Tareas y notas", href = "#", footerText = "Ver todas las tareas")
+  racafeModulos::MenuHeaderServer("MenuIndicadores", items_r = widgets$TablaIndicadoresUI("ind_kpis"))
+  shiny::moduleServer("ind_kpis", function(input, output, session) {
+    output$tabla_indicadores <- gt::render_gt(racafeShiny::racafeCompactTable(data.frame(
+      Indicador = c("TRM (Hoja de trabajo)", "Precio Carga (Promedio de últimas entradas del día)",
+        rep("Precio consumo y posición de mercado", 12)), Valor = c("$ 3,228", "$ 2,112,214", rep("$ 22,202", 12))),
+      font_size = 12, row_padding = 4, show_header = FALSE, align = c("left", "right")))
+    output$tabla_disponible <- gt::render_gt(racafeShiny::racafeCompactTable(
+      data.frame(Concepto = c("Sacos", "Precio / Carga"), Valor = c("1,244", "$ 2,141,600")),
+      font_size = 12, row_padding = 4, show_header = FALSE, align = c("left", "right")))
+    session$onFlushed(function() racafeShiny::racafeUpdateOverlayLoader(session, "indicadores_loader", FALSE), once = TRUE)
+  })
   observeEvent(input$header_cliente_nuevo, showModal(racafeForms::racafeModalDetail("Cliente de prueba",
     racafeForms::racafeDataBadge("NIT", input$header_cliente_nuevo$nit),
     racafeForms::racafeChecklist("activities", c(review = "Revisar", confirm = "Confirmar"), checked = "confirm"))))
   output$state <- renderPrint(list(detalle = valor$click_detalle(), legacy = legacy$click_detalle(),
-    titulo = input$`CrearNota-NOT_Titulo`, actividades = input$activities))
+    titulo = input$`CrearNota-NOT_Titulo`, actividades = input$activities, tarea = input$task_selected))
 }
 shinyApp(ui, server)

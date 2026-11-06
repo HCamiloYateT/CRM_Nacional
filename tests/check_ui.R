@@ -67,4 +67,19 @@ sys.source(file.path(root, "APP/misc/ui/header.R"), env)
 html <- htmltools::renderTags(env$header)$html
 .check(!grepl("li_menu_", html, fixed = TRUE))
 .check(!grepl("crmHeaderRetenerMenu", html, fixed = TRUE))
+clientes <- data.frame(CLCliNit = "900123", CLLinNegNo = "A LA MEDIDA", LinNegCod = "A",
+  PerRazSoc = "Cliente <script>texto</script>", UltActualizacion = "01/01/2025")
+html <- htmltools::renderTags(env$.header_items_clientes(clientes, "antiguo", "cliente"))$html
+.check(length(regmatches(html, gregexpr("NIT:", html, fixed = TRUE))[[1]]) == 1L)
+.check(grepl("Actualización: 01/01/2025", html, fixed = TRUE))
+.check(!grepl("rf-status-badge", html, fixed = TRUE))
+.check(grepl("&lt;script&gt;", html, fixed = TRUE))
+tarea <- data.frame(cons = 7, titulo = "Revisar Café & <texto>", Tipo = "list", Prioridad = "URGENTE",
+  Responsable = "ANA|LUIS", FechaCumplimiento = as.Date("2026-11-06"), Archivado = 0, Cumplido = 0,
+  Actividades = "Revisar|Confirmar", Cumplidas = "1|0")
+html <- htmltools::renderTags(env$.tareas_lista_item(tarea, "abrir"))$html
+.check(grepl("Urgente", html, fixed = TRUE))
+.check(grepl("Actividades: 1/2 actividades", html, fixed = TRUE))
+.check(grepl("ANA · LUIS", html, fixed = TRUE))
+.check(grepl("&lt;texto&gt;", html, fixed = TRUE))
 cat(checks, "comprobaciones de SQL, comentarios y UI correctas; no se ejecutaron servidores ni operaciones BD.\n")

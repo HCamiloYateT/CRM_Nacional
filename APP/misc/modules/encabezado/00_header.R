@@ -264,8 +264,8 @@
 
 
 # Listados del header ----
-.header_lista_item <- function(titulo, detalle, badges = NULL, id = NULL, value = NULL) {
-  racafeShiny::racafeListItem(titulo, subtitle = detalle, badges = badges, id = id, value = value)
+.header_lista_item <- function(titulo, detalle, badges = NULL, id = NULL, value = NULL, metadata = NULL) {
+  racafeShiny::racafeListItem(titulo, subtitle = detalle, metadata = metadata, badges = badges, id = id, value = value)
 }
 
 .header_lista_badge <- function(texto, variante = "neutral") {
@@ -281,15 +281,12 @@
     nit <- as.character(fila$CLCliNit[[1]])
     linea <- .header_nombre(fila$CLLinNegNo, as.character(fila$LinNegCod[[1]]))
     razon <- .header_nombre(fila$PerRazSoc, paste("NIT", nit))
-    badges <- list(.header_lista_badge(paste("NIT:", nit), "neutral"),
-                   .header_lista_badge(linea, "neutral"))
+    metadata <- c(Línea = linea)
     if (identical(tipo, "antiguo")) {
-      badges <- c(badges, list(
-        .header_lista_badge(paste("Actualización:", fila$UltActualizacion[[1]]), "warning")
-      ))
+      metadata <- c(metadata, Actualización = as.character(fila$UltActualizacion[[1]]))
     }
     .header_lista_item(
-      titulo = razon, detalle = paste("NIT:", nit), badges = badges,
+      titulo = razon, detalle = paste("NIT:", nit), metadata = metadata,
       id = input_id, value = list(nit = nit, linneg = as.character(fila$LinNegCod[[1]]))
     )
   }))
