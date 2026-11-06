@@ -20,6 +20,17 @@
   )
 }
 
+# DETALLE OPERATIVO DEL CLIENTE ----
+.header_cliente_detalle_ui <- function(resumen, key) {
+  labels <- c(pedidos = "Pedidos", lotes = "Lotes", produccion = "Producción (sacos)",
+    despachos = "Despachos (sacos)", asignados = "Sacos asignados", facturacion = "Facturación (sacos)")
+  racafeForms::racafeModalDetail(title = paste("Detalle:", labels[[key]]), size = "ventana",
+    .header_tabla(attr(resumen, "header_detalle"), min_width = "1500px"),
+    footer = racafeForms::racafeModalFooter(
+      racafeForms::racafeButton("header_cliente_volver", "Volver", variant = "secondary", size = "xs"),
+      racafeForms::racafeButtonCancel("header_cliente_cerrar", "Cerrar", size = "xs")))
+}
+
 # Helpers ----
 .header_valor <- function(x) {
   x <- suppressWarnings(as.numeric(x))
@@ -53,8 +64,8 @@
 }
 
 .header_tarjeta <- function(nombre, id, icono, detalle = NULL) {
-  racafeModulos::cajaValor_ui(id, icono = icono, texto = nombre, mostrar_boton = FALSE,
-    color = "#DA291C", color_kpi = "#344054", color_footer = "#667085", compact = TRUE,
+  racafeModulos::cajaValor_ui(id, icono = icono, texto = nombre, mostrar_boton = TRUE, label_boton = "Ver detalle",
+    color = "#DA291C", color_kpi = "#000000", color_footer = "#667085", compact = TRUE,
     footer = if (is.null(detalle)) shiny::tags$span(`aria-hidden` = "true", "\u00a0") else detalle)
 }
 
@@ -67,12 +78,14 @@
 }
 
 # INDICADORES REACTIVOS DEL CLIENTE ----
-.header_kpis_server <- function(resumen) {
+.header_kpis_server <- function(resumen, on_detail = NULL) {
   keys <- c("pedidos", "lotes", "produccion", "despachos", "asignados", "facturacion")
   stats::setNames(lapply(keys, function(key) {
-    racafeModulos::cajaValor_server(paste0("header_cli_", key), valor_r = shiny::reactive({
+    modulo <- racafeModulos::cajaValor_server(paste0("header_cli_", key), valor_r = shiny::reactive({
       attr(resumen(), "header_kpis")[[key]]
     }), formato = if (key %in% c("pedidos", "lotes")) "entero" else "numero", empty = "—")
+    if (is.function(on_detail)) shiny::observeEvent(modulo$click_detalle(), on_detail(key))
+    modulo
   }), keys)
 }
 
@@ -216,6 +229,7 @@
       )
     )
   )
+  attr(contenido, "header_detalle") <- detalle
   attr(contenido, "header_kpis") <- list(pedidos = nrow(pedidos), lotes = nrow(lotes),
     produccion = .header_numero(lotes$SacProd), despachos = .header_numero(lotes$SacDesp),
     asignados = .header_numero(lotes$SacLote), facturacion = .header_numero(lotes$SacosFact))
@@ -525,6 +539,7 @@ HeaderClientesServer <- function(data_c, datos_rv, clientes_raw, usuario,
   
   identidad_nueva <- shiny::reactiveVal(NULL)
   identidad_antigua <- shiny::reactiveVal(NULL)
+  cliente_modal_rv <- shiny::reactiveVal(NULL)
   form_nuevo <- crear_formulario("mod_form_cli", identidad_nueva, por_clinit = TRUE)
   form_antiguo <- crear_formulario("mod_form_cli_ant", identidad_antigua, por_clinit = TRUE)
   
@@ -551,7 +566,9 @@ HeaderClientesServer <- function(data_c, datos_rv, clientes_raw, usuario,
                             operaciones = get0("crm_detalle_operaciones", envir = .GlobalEnv))
   })
   
-  .header_kpis_server(resumen_nuevo)
+  .header_kpis_server(resumen_nuevo, on_detail = function(key) {
+    shiny::showModal(.header_cliente_detalle_ui(resumen_nuevo(), key))
+  })
   output$resumen_cli_modal <- shiny::renderUI(resumen_nuevo())
 
   output$resumen_cli_ant_modal <- shiny::renderUI({
@@ -570,6 +587,7 @@ HeaderClientesServer <- function(data_c, datos_rv, clientes_raw, usuario,
   })
   
   mostrar_cliente <- function(fila, antiguo = FALSE) {
+    cliente_modal_rv(list(fila = fila, antiguo = antiguo))
     identidad <- list(nit = fila$CLCliNit[[1]],
                       linneg_cod = fila$LinNegCod[[1]])
     if (antiguo) identidad_antigua(identidad) else identidad_nueva(identidad)
@@ -577,6 +595,12 @@ HeaderClientesServer <- function(data_c, datos_rv, clientes_raw, usuario,
     shiny::showModal(.header_cliente_modal_ui(titulo, fila, identidad, antiguo))
   }
   
+  shiny::observeEvent(sesion$input$header_cliente_volver, {
+    actual <- cliente_modal_rv()
+    shiny::req(actual)
+    mostrar_cliente(actual$fila, actual$antiguo)
+  })
+
   shiny::observeEvent(sesion$input$header_cliente_cerrar, {
     shiny::removeModal()
   })

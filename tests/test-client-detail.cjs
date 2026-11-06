@@ -55,8 +55,14 @@ const {chromium} = require('playwright');
     const heights=await modal.locator('.racafe-caja-valor').evaluateAll(nodes=>nodes.map(el=>el.getBoundingClientRect().height));
     check(Math.max(...heights)-Math.min(...heights)<2, 'Cajas de altura uniforme');
     check(Math.max(...heights)<100, 'Cajas compactas de menos de 100px');
-    check(cards.every(c=>c.border==='rgb(218, 41, 28)' && c.width==='3px' && c.top==='0px' && c.icon && c.color==='rgb(218, 41, 28)'),
+    check(cards.every(c=>c.border==='rgb(218, 41, 28)' && c.width==='3px' && c.top==='1px' && c.icon && c.color==='rgb(218, 41, 28)'),
       'Todas las cajas con borde lateral e icono rojos');
+    check(await modal.locator('.rmcv-footer .rmcv-button').count()===6, 'Seis acciones de detalle visibles');
+    await modal.locator('#header_cli_pedidos-detalle').click();
+    await page.locator('.modal.show .modal-title').filter({hasText:'Detalle: Pedidos'}).waitFor();
+    check(await page.locator('.modal.show .gt_table').count()===1, 'Botón abre el detalle operativo');
+    await page.locator('#header_cliente_volver').click();
+    await page.locator('#header_cli_pedidos-valor_display').filter({hasText:'2'}).waitFor();
     check((await modal.textContent()).includes('Creación: 20/10/2026'), 'Conserva fecha de creación');
     await modal.locator('#header_detalle_pedidos > summary').click();
     const detail=modal.locator('#header_detalle_pedidos .gt_table');

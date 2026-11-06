@@ -14,6 +14,7 @@ checks <- 0L
 paths <- c(list.files(file.path(root, "APP/misc/modules/controlbar"), "[.]R$", full.names = TRUE),
   list.files(file.path(root, "APP/misc/modules/encabezado"), "[.]R$", full.names = TRUE),
   file.path(root, "APP/misc/modules/generalidades/01_resumen_ejecutivo.R"),
+  file.path(root, "APP/misc/modules/generalidades/02_validacion_financiera.R"),
   file.path(root, "APP/misc/ui/header.R"))
 .collect <- function(tree) {
   result <- character()

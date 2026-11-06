@@ -116,3 +116,21 @@ teclado sin eventos duplicados, botón ausente, colores independientes, cero rea
 y vista móvil sin desbordamiento. R CMD build/instalación correctos; R CMD check sin errores, con las mismas
 4 advertencias y 1 nota históricas de licencia, ASCII, código anterior y documentación pendiente de otros objetos.
 No se ejecutaron consultas, transacciones ni guardados reales.
+
+## Corrección de colores, contorno y acciones KPI (0.5.1)
+
+Sin meta los valores son negros y los textos neutrales. Una meta explícita permite comparar en sentido
+directo (prop TRUE: mayor/mejor) o inverso (FALSE: menor/mejor), incluyendo igualdad y meta cero.
+Los colores de acento se reservan a borde lateral, icono y botón; los overrides de texto explícitos siguen disponibles.
+Las tarjetas recuperan borde superior, derecho e inferior de 1px y mantienen acento lateral de 3px.
+
+Resumen Ejecutivo usa Abrir módulo con sus destinos existentes y el evento nativo click_detalle. Las ocho
+acciones financieras usan Ver detalle e id_boton = btn_abrir, reutilizando los observadores/modal existentes.
+Las seis cajas del cliente abren el detalle de operaciones ya calculado y Volver restaura el resumen.
+No se registran módulos por cada apertura ni se añaden consultas, metas financieras o cálculos comerciales.
+
+Validación: 107 pruebas testthat de racafeModulos, 45 comprobaciones estáticas/UI, 25 de tarjetas genéricas,
+32 del modal de clientes y 18 de UI de Resumen/Financiera correctas. Los ocho botones financieros abren su modal
+y el botón de resumen cambia a su sección. Los servidores financieros de prueba usan datos/contenido ficticios;
+no se ejecuta el servidor comercial ni servicios BD reales. Las transformaciones y consultas del CRM se conservan.
+Actualizar racafeModulos y aplicar los cambios del CRM; reiniciar la aplicación para cargar el código nuevo.

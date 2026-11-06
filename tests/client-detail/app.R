@@ -31,7 +31,9 @@ server <- function(input, output, session) {
   identity <- reactiveVal(NULL)
   summary <- reactive(widgets$.header_resumen_cliente(identity(), clients, history,
     por_clinit = TRUE, operaciones = operations))
-  widgets$.header_kpis_server(summary)
+  widgets$.header_kpis_server(summary, on_detail = function(key) {
+    showModal(widgets$.header_cliente_detalle_ui(summary(), key))
+  })
   output$resumen_cli_modal <- renderUI(summary())
   output$resumen_cli_ant_modal <- renderUI(widgets$.header_historial_comercial(identity(), history))
   racafeModulos::MenuHeaderServer("MenuClientes", items_r = reactive(widgets$.header_items_clientes(
@@ -47,6 +49,10 @@ server <- function(input, output, session) {
   observeEvent(input$header_cliente_nuevo, .open(input$header_cliente_nuevo))
   observeEvent(input$header_cliente_antiguo, .open(input$header_cliente_antiguo, TRUE))
   observeEvent(input$header_cliente_cerrar, removeModal())
+  observeEvent(input$header_cliente_volver, {
+    fila <- clients[clients$CLCliNit == identity()$nit, ]
+    showModal(widgets$.header_cliente_modal_ui(fila$PerRazSoc, fila, identity()))
+  })
   output$default_table <- gt::render_gt(racafeShiny::racafeTableVancouver(table_data))
   output$custom_table <- gt::render_gt(racafeShiny::racafeTableVancouver(table_data,
     header_color = "#245A81", header_width = 3, total_background = "#EEF0F2", row_padding = 9,

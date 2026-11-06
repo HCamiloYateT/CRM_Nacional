@@ -104,17 +104,8 @@
 }
 
 .resumen_ejecutivo_caja_ui <- function(ns, caja) {
-  evento <- ns(paste0("nav_", caja$id))
-  shiny::tags$div(
-    class = "re-navegar", role = "button", tabindex = "0",
-    `aria-label` = paste("Abrir", caja$texto),
-    onclick = sprintf("Shiny.setInputValue('%s', Date.now(), {priority:'event'});", evento),
-    onkeydown = sprintf(paste0("if(event.key==='Enter'||event.key===' '){",
-                               "event.preventDefault();Shiny.setInputValue('%s',",
-                               "Date.now(),{priority:'event'});}"), evento),
-    racafeModulos::cajaValor_ui(ns(caja$id), icono = caja$icono,
-                              texto = caja$texto, mostrar_boton = FALSE, color_kpi = "#344054")
-  )
+  racafeModulos::cajaValor_ui(ns(caja$id), icono = caja$icono, texto = caja$texto,
+    mostrar_boton = TRUE, label_boton = "Abrir módulo", color_kpi = "#000000", compact = TRUE)
 }
 
 # Preloader ----
@@ -197,9 +188,9 @@ ResumenEjecutivo <- function(id, valores = NULL) {
             }
             actual$valor
           })
-          racafeModulos::cajaValor_server(actual$id, valor_r = valor_r,
+          modulo <- racafeModulos::cajaValor_server(actual$id, valor_r = valor_r,
                                         formato = actual$formato)
-          shiny::observeEvent(input[[paste0("nav_", actual$id)]], {
+          shiny::observeEvent(modulo$click_detalle(), {
             bs4Dash::updateTabItems(session = session$rootScope(),
                                     inputId = "menu_principal", selected = actual$tab)
           }, ignoreInit = TRUE)
