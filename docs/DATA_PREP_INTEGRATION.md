@@ -2,6 +2,8 @@
 
 Revisión del 6 de noviembre de 2026 sobre CRM_Nacional `21de5d5ce4d565b613b6d1105d0d71bf65fd33a8`.
 Se revisaron los 58 scripts R de la revisión original, incluidos sus ejemplos y pruebas.
+La resolución de conflictos incorpora el ETL de `main` en `9ed885903fdd73fad19cb5b5995811d8f2ba446b`,
+conservando sus proyecciones, trazabilidad, auditorías y exportación maestra.
 
 ## Fuentes revisadas
 
@@ -14,8 +16,16 @@ Se revisaron los 58 scripts R de la revisión original, incluidos sus ejemplos y
 ## Contrato de datos
 
 - `data` conserva las 67 columnas comprobadas por DataPrep. No se sustituyen ni se agregan hechos financieros.
-- La exportación usa `save(list = objetos_app)`; mantiene los objetos anteriores y agrega `ultimo_periodo_pyg`
-  y `crm_detalle_operaciones`. No guarda el entorno completo ni borra los objetos de la sesión del ETL.
+- El RData conserva exactamente dos objetos: `crm_maestro` y `homologaciones`, con compresión xz.
+  Se agregan dentro de `homologaciones` cuatro referencias ya calculadas por el ETL: `clientes_sistema`,
+  `facturacion`, `margenes_pyg` y `lotes`. No se agregan consultas ni se modifica su cálculo.
+- El cargador adapta el maestro a las vistas usadas por los módulos. `data` contiene los 67 campos originales
+  y solo registros de ejecución; las proyecciones se conservan sin cambios en `crm_maestro`.
+  El cierre se obtiene de `FechaCortePyG`. Las exportaciones planas anteriores siguen siendo compatibles.
+- La conciliación conserva fuentes independientes: facturas reales y PyG provienen de sus referencias,
+  no se reconstruyen ambas a partir de la misma base financiera.
+- La primera compra por NIT utiliza `FecPrimerFact` de la facturación independiente, enlazada con los lotes;
+  se limita al universo histórico que define el nuevo ETL.
 - `APP/misc/data_contract.R` comparte el contrato entre el ETL y la app. La carga valida nombres, fechas,
   cierre PyG y claves dimensionales antes de publicar los objetos en el entorno de la app.
 - Los cruces rechazan dimensiones duplicadas. Las órdenes de compra se consolidan por lote conservando sus textos.
@@ -28,11 +38,12 @@ Se revisaron los 58 scripts R de la revisión original, incluidos sus ejemplos y
 
 ## Detalle operativo del encabezado
 
-`crm_detalle_operaciones` parte de `base_operativa`, agrega la cantidad de cada línea de pedido y cruza la
-facturación acumulada por lote. Mantiene pedidos sin lote. Las cantidades operativas con unidad 62.5 se
-convierten a sacos equivalentes de 70 kg; `SacosFact` ya llega convertido y no se convierte otra vez.
-Las fechas centinela 1753-01-01 se dejan vacías. Este objeto se pasa explícitamente a `HeaderClientesServer`.
-Debe verificarse con ejemplos reales de ambas unidades en staging.
+`crm_detalle_operaciones` se deriva del maestro, con una fila por combinación pedido/línea/lote y
+facturación independiente acumulada por lote. Conserva pedidos proyectados sin lote sin incorporarlos
+como ejecución financiera. Reutiliza `SacosLote70`, `SacosProducidos70`, `SacosDespachados70` y
+`SacosPedido70Linea`: no aplica nuevamente UMeFac. La fecha de despacho es `FechaDespachoReal`,
+sin confundirla con la instrucción de despacho. Este objeto se pasa explícitamente a `HeaderClientesServer`.
+Debe verificarse con ejemplos reales de las unidades disponibles en staging.
 
 ## Componentes
 
@@ -58,15 +69,16 @@ Verificado en este entorno:
 
 - Compatibilidad estática de argumentos de 843 llamadas a racafeForms, racafeModulos, racafeShiny y racafeCore
   frente a sus fuentes y exportaciones revisadas: sin incompatibilidades detectadas.
-- Balance léxico de paréntesis, llaves y corchetes en los 60 scripts R resultantes.
+- Parseo real de los 60 scripts R con R 4.5.0.
+- 821 comprobaciones de contrato y regresión con dplyr 1.1.4, datos ficticios y stubs.
 - `git diff --check` y comprobación de sintaxis JavaScript con Node.
 - Integridad de los archivos compartidos frente a sus blobs de origen.
 
-No se ejecutó R: este entorno no tiene R/Rscript. El acceso de red del shell falla al conectar con su proxy;
-los archivos se obtuvieron mediante el conector de GitHub. Tampoco están incluidos el RData real ni las
-credenciales de las fuentes de negocio. La revisión estática no sustituye el parseo de R ni una prueba de Shiny.
+Se habilitó un R aislado dentro del workspace, sin cambiar la instalación del sistema.
+No se ejecutó el ETL contra servicios de negocio ni la aplicación Shiny completa: no se dispone del RData real
+ni de las credenciales de las fuentes. Las pruebas no realizan consultas ni escrituras de negocio.
 
-Pruebas preparadas para ejecutar en un entorno con R y dplyr:
+Comandos de verificación con R y dplyr disponibles:
 
 ```sh
 Rscript -e 'invisible(lapply(list.files(".", "[.]R$", recursive = TRUE, full.names = TRUE), parse))'
@@ -75,7 +87,9 @@ Rscript tests/test_data_contract.R .
 
 El segundo comando comprueba conservación de filas/importes/fechas, rechazo de claves duplicadas,
 atributos de producto ambiguos, carga sin reemplazo parcial, detalle operativo, primera factura y ausencia
-de demos ejecutadas en el nivel global. Usa datos ficticios y stubs; no llama a servicios de negocio.
+de demos ejecutadas en el nivel global. También verifica la carga de exactamente dos objetos, la separación de
+proyecciones, los snapshots de productos, las fuentes independientes y las cantidades operativas sin doble conversión.
+Usa datos ficticios y stubs; no llama a servicios de negocio.
 Las pruebas existentes de UI/navegador siguen pendientes de ejecución con sus dependencias instaladas.
 
 Antes de publicar: regenerar la exportación, ejecutar las pruebas R, iniciar Shiny y comprobar filtros,

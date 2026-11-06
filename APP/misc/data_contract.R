@@ -70,6 +70,10 @@
   if (!file.exists(ruta)) stop("No existe data/data.RData. Ejecute DataPrep.R antes de iniciar el CRM.", call. = FALSE)
   datos <- new.env(parent = emptyenv())
   load(ruta, envir = datos)
+  if (any(c("crm_maestro", "homologaciones") %in% ls(datos))) {
+    .crm_validar_maestro(datos$crm_maestro, datos$homologaciones)
+    datos <- .crm_adaptar_maestro(datos$crm_maestro, datos$homologaciones)
+  }
   .crm_validar_exportacion(datos)
   list2env(as.list(datos, all.names = TRUE), envir = destino)
   invisible(TRUE)
@@ -154,4 +158,129 @@
     resultado[[columna]] <- dplyr::coalesce(resultado[[columna]], resultado[[paste0(columna, "Fallback")]])
   }
   dplyr::select(resultado, -dplyr::ends_with("Fallback"))
+}
+
+# Exportación maestra de main ----
+.crm_columnas_maestro <- c(.crm_columnas_data, "IdRegistroCRM", "EstadoFinanciero", "FechaCortePyG",
+                           "SacosLote70", "SacosProducidos70", "SacosDespachados70", "SacosPedido70Linea",
+                           "FechaCreacionPedido", "FechaProduccion", "FechaDespachoReal",
+                           "CodigoMarcaLote", "CodigoNombreComercialLote")
+
+.crm_validar_tabla <- function(dat, columnas, nombre) {
+  if (!is.data.frame(dat) || !all(columnas %in% names(dat))) {
+    stop(sprintf("Exportación incompatible: %s. Ejecute DataPrep.R actualizado.", nombre), call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
+.crm_validar_maestro <- function(maestro, homologaciones) {
+  .crm_validar_tabla(maestro, .crm_columnas_maestro, "crm_maestro")
+  requeridas <- c("clientes", "clientes_historico", "nit_principal", "segmentos", "productos", "ordenes_compra",
+                  "clientes_sistema", "facturacion", "margenes_pyg", "lotes")
+  if (!is.list(homologaciones) || !all(requeridas %in% names(homologaciones))) {
+    stop("homologaciones no contiene las referencias necesarias. Ejecute DataPrep.R actualizado.", call. = FALSE)
+  }
+  .crm_validar_clave(maestro, "IdRegistroCRM", "crm_maestro")
+  for (columna in c("FecMes", "FecFact", "FechaCortePyG")) {
+    if (!inherits(maestro[[columna]], "Date")) stop(paste("crm_maestro:", columna, "debe ser Date."), call. = FALSE)
+  }
+  cierres <- unique(maestro$FechaCortePyG)
+  if (length(cierres) != 1L || is.na(cierres) || !is.finite(as.numeric(cierres))) {
+    stop("crm_maestro debe declarar una única fecha de cierre válida.", call. = FALSE)
+  }
+  estados <- c("CERRADO", "FACTURADO_ABIERTO", "PENDIENTE", "PROYECTADO")
+  if (anyNA(maestro$EstadoFinanciero) || any(!maestro$EstadoFinanciero %in% estados)) {
+    stop("crm_maestro contiene estados financieros desconocidos.", call. = FALSE)
+  }
+  proyectados <- maestro$EstadoFinanciero == "PROYECTADO"
+  if (any(!is.na(maestro$SacosFact[proyectados])) || any(!is.na(maestro$Margen[proyectados]))) {
+    stop("Las proyecciones no pueden contener facturación o margen ejecutado.", call. = FALSE)
+  }
+  for (nombre in c("clientes", "clientes_historico")) {
+    .crm_validar_tabla(homologaciones[[nombre]], c("CliNitPpal", "LinNegCod", "Segmento", "Asesor"), nombre)
+  }
+  .crm_validar_tabla(homologaciones$clientes_sistema, .crm_contrato_exportacion$n_cliente, "clientes_sistema")
+  .crm_validar_tabla(homologaciones$facturacion, .crm_contrato_exportacion$fact, "facturacion")
+  .crm_validar_tabla(homologaciones$margenes_pyg, .crm_contrato_exportacion$margenes_pyg, "margenes_pyg")
+  .crm_validar_tabla(homologaciones$productos, .crm_contrato_exportacion$productos_snap, "productos")
+  .crm_validar_tabla(homologaciones$segmentos, .crm_contrato_exportacion$segmentaciones_actual, "segmentos")
+  .crm_validar_tabla(homologaciones$nit_principal, c("PerCod", "CliNitPpal"), "nit_principal")
+  .crm_validar_tabla(homologaciones$ordenes_compra, c("Lote", "OrdenCompra"), "ordenes_compra")
+  .crm_validar_tabla(homologaciones$lotes, c("CLLotCod", "CLCliNit"), "lotes")
+  .crm_validar_clave(homologaciones$lotes, "CLLotCod", "lotes")
+  .crm_validar_clave(homologaciones$facturacion, c("CLLotCod", "FecMesFact"), "facturacion")
+  invisible(TRUE)
+}
+
+.crm_snapshot_productos <- function(productos) {
+  claves <- c("LinNegCod", "LinProCod", "MCCod", "MrcCod")
+  if ("FecProceso" %in% names(productos)) {
+    # Escoger el registro más reciente por clave, incluso si todo el grupo carece de fecha.
+    productos <- productos %>%
+      dplyr::group_by(dplyr::across(dplyr::all_of(claves))) %>%
+      dplyr::arrange(dplyr::desc(FecProceso), .by_group = TRUE) %>%
+      dplyr::slice_head(n = 1L) %>% dplyr::ungroup()
+  }
+  .crm_validar_clave(productos, claves, "productos")
+  productos
+}
+
+.crm_operaciones_maestro <- function(maestro, productos, facturacion) {
+  acumulada <- facturacion %>%
+    dplyr::group_by(CLLotCod) %>%
+    dplyr::summarise(SacosFact = sum(SacosFact, na.rm = TRUE), FecFact = max(FecFact), .groups = "drop")
+  # Las cantidades ya están convertidas a 70 kg en el maestro; no volver a aplicar UMeFac.
+  operaciones <- maestro %>%
+    dplyr::filter(!is.na(CLPdcCod), !is.na(CLPdcLin)) %>%
+    dplyr::arrange(EstadoFinanciero == "PROYECTADO", dplyr::desc(FecFact)) %>%
+    dplyr::distinct(CLPdcCod, CLPdcLin, CLLotCod, .keep_all = TRUE) %>%
+    dplyr::mutate(MCCod = dplyr::coalesce(MCCod, CodigoNombreComercialLote),
+                  MrcCod = dplyr::coalesce(MrcCod, CodigoMarcaLote)) %>%
+    dplyr::select(-dplyr::any_of(c("SacosFact", "FecFact"))) %>%
+    .crm_enriquecer_productos(productos) %>%
+    dplyr::left_join(acumulada, by = "CLLotCod", na_matches = "never") %>%
+    dplyr::transmute(CLCliNit, LinNegCod, CLPdcCod, CLPdcLin, CLLotCod, LinProCod,
+                     ProductoComercial = dplyr::coalesce(Producto, LinProNom),
+                     PdcFecCre = FechaCreacionPedido, SacosPedido = SacosPedido70Linea,
+                     SacLote = SacosLote70, SacProd = SacosProducidos70, SacDesp = SacosDespachados70,
+                     FecProd = FechaProduccion, FecDesp = FechaDespachoReal, SacosFact, FecFact,
+                     FuenteFactura = ifelse(!is.na(FecFact), "FACTURACIÓN", NA_character_))
+  operaciones
+}
+
+.crm_adaptar_maestro <- function(maestro, homologaciones) {
+  .crm_validar_maestro(maestro, homologaciones)
+  h <- homologaciones
+  datos <- new.env(parent = emptyenv())
+  datos$crm_maestro <- maestro
+  datos$homologaciones <- h
+  # Las proyecciones se conservan en crm_maestro y se excluyen de la base de ejecución de los módulos existentes.
+  datos$data <- maestro %>%
+    dplyr::filter(EstadoFinanciero != "PROYECTADO") %>% dplyr::select(dplyr::all_of(.crm_columnas_data))
+  datos$n_cliente <- h$clientes_sistema
+  datos$clientes_actual <- h$clientes
+  datos$clientes_hist <- h$clientes_historico
+  datos$clientes_raw <- h$clientes_historico
+  datos$clientes_snap <- h$clientes
+  datos$nit_ppal <- h$nit_principal
+  datos$fact <- h$facturacion
+  datos$margenes_pyg <- h$margenes_pyg
+  datos$segmentaciones_actual <- h$segmentos
+  datos$productos_snap <- .crm_snapshot_productos(h$productos)
+  datos$ultimo_periodo_pyg <- unique(maestro$FechaCortePyG)[[1]]
+  datos$ord_cmp <- h$ordenes_compra %>%
+    dplyr::transmute(CLLotCod = as.numeric(Lote), OrdenCompra = trimws(as.character(OrdenCompra))) %>%
+    dplyr::filter(!is.na(CLLotCod), CLLotCod != 0) %>%
+    dplyr::group_by(CLLotCod) %>%
+    dplyr::summarise(OrdenCompra = paste(sort(unique(OrdenCompra[!is.na(OrdenCompra) & nzchar(OrdenCompra)])),
+                                        collapse = ", "), .groups = "drop")
+  datos$fact_cliente <- h$facturacion %>%
+    dplyr::left_join(dplyr::select(h$lotes, CLLotCod, CLCliNit), by = "CLLotCod", na_matches = "never") %>%
+    dplyr::filter(!is.na(CLCliNit), !is.na(FecPrimerFact), !is.na(FecFact)) %>%
+    dplyr::group_by(FctNit = CLCliNit) %>%
+    dplyr::summarise(MinFecFact = min(FecPrimerFact), UltFecFact = max(FecFact),
+                     SacosFact = sum(SacosFact, na.rm = TRUE), .groups = "drop")
+  datos$crm_detalle_operaciones <- .crm_operaciones_maestro(maestro, datos$productos_snap, h$facturacion)
+  .crm_validar_exportacion(datos)
+  datos
 }

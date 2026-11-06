@@ -111,6 +111,100 @@ primera <- data.frame(FctNit = c(10, 10), MinFecFact = as.Date(c("2025-01-05", "
 .check(env$detectar_conversion_leads(facturas = primera) == 1L)
 .check(escrituras$CRMNALLEADCLIENTE$FechaConversion[[1]] == as.Date("2025-01-05"))
 
+# Exportación de dos objetos: mantener ejecución y proyección separadas ----
+maestro <- dat
+maestro$IdRegistroCRM <- 1:3
+maestro$EstadoFinanciero <- c("CERRADO", "CERRADO", "FACTURADO_ABIERTO")
+maestro$FechaCortePyG <- as.Date("2026-02-01")
+maestro$CLPdcCod <- c(1, 1, 2)
+maestro$CLPdcLin <- 1
+maestro$CLCliNit <- c(10, 10, 20)
+maestro$UMeFac <- c(62.5, 62.5, 70)
+maestro$SacosLote70 <- c(62.5, 62.5, 20)
+maestro$SacosProducidos70 <- c(50, 50, 10)
+maestro$SacosDespachados70 <- c(25, 25, 5)
+maestro$SacosPedido70Linea <- c(62.5, 62.5, 20)
+maestro$FechaCreacionPedido <- as.Date("2026-01-01")
+maestro$FechaProduccion <- as.Date("2026-01-10")
+maestro$FechaInstruccionDespacho <- as.Date("2026-01-05")
+maestro$FechaDespachoReal <- as.Date("2026-01-20")
+maestro$CodigoMarcaLote <- 1
+maestro$CodigoNombreComercialLote <- 1
+maestro$SacosProyectados <- NA_real_
+proyectado <- maestro[3, ]
+proyectado$IdRegistroCRM <- 4L
+proyectado$EstadoFinanciero <- "PROYECTADO"
+proyectado$CLPdcCod <- 3
+proyectado$CLLotCod <- NA_real_
+proyectado$FecFact <- as.Date(NA)
+proyectado$SacosFact <- NA_real_
+proyectado$Margen <- NA_real_
+proyectado$SacosProyectados <- 40
+proyectado$SacosPedido70Linea <- 40
+proyectado$SacosLote70 <- NA_real_
+proyectado$SacosProducidos70 <- NA_real_
+proyectado$SacosDespachados70 <- NA_real_
+maestro <- bind_rows(maestro, proyectado)
+referencia <- data.frame(CLLotCod = c(100, 100, 200), LinNegCod = c(10000, 10000, 21000),
+                        FecMesFact = as.Date(c("2026-01-01", "2026-02-01", "2026-03-01")),
+                        FecPrimerFact = as.Date(c("2026-01-05", "2026-02-05", "2026-03-05")),
+                        FecFact = as.Date(c("2026-01-15", "2026-02-15", "2026-03-15")), SacosFact = c(2, 3, 5))
+productos_actuales <- mutate(productos, FecProceso = as.Date("2026-02-01"))
+productos_anteriores <- mutate(productos_actuales[1, ], FecProceso = as.Date("2025-01-01"), Producto = "ANTERIOR")
+homologaciones <- list(clientes = destino$clientes_snap, clientes_historico = destino$clientes_snap,
+                      nit_principal = data.frame(PerCod = c(10, 20), CliNitPpal = c(10, 20)),
+                      segmentos = segmentos, productos = bind_rows(productos_anteriores, productos_actuales),
+                      ordenes_compra = data.frame(Lote = c(100, 100, 200), OrdenCompra = c("OC1", "OC2", "OC3")),
+                      clientes_sistema = destino$n_cliente, facturacion = referencia,
+                      margenes_pyg = destino$margenes_pyg,
+                      lotes = data.frame(CLLotCod = c(100, 200), CLCliNit = c(10, 20)))
+.check(.crm_validar_maestro(maestro, homologaciones))
+adaptados <- .crm_adaptar_maestro(maestro, homologaciones)
+.check(nrow(adaptados$data) == 3L)
+.check(identical(names(adaptados$data), .crm_columnas_data))
+.check(identical(adaptados$data$SacosFact, dat$SacosFact))
+.check(identical(adaptados$data$Margen, dat$Margen))
+.check(identical(adaptados$crm_maestro, maestro))
+.check(identical(adaptados$fact, referencia))
+.check(adaptados$fact_cliente$MinFecFact[adaptados$fact_cliente$FctNit == 10] == as.Date("2026-01-05"))
+.check(adaptados$ord_cmp$OrdenCompra[adaptados$ord_cmp$CLLotCod == 100] == "OC1, OC2")
+.check(!"ANTERIOR" %in% adaptados$productos_snap$Producto)
+operativo_maestro <- adaptados$crm_detalle_operaciones
+.check(nrow(operativo_maestro) == 3L)
+.check(operativo_maestro$SacLote[operativo_maestro$CLLotCod == 100 & !is.na(operativo_maestro$CLLotCod)] == 62.5)
+.check(all(operativo_maestro$FecDesp == as.Date("2026-01-20")))
+.check(any(is.na(operativo_maestro$CLLotCod) & operativo_maestro$SacosPedido == 40))
+mal <- maestro
+mal$SacosFact[mal$EstadoFinanciero == "PROYECTADO"] <- 40
+.error(.crm_validar_maestro(mal, homologaciones), "proyecciones")
+mal <- maestro
+mal$IdRegistroCRM[4] <- 1L
+.error(.crm_validar_maestro(mal, homologaciones), "duplicadas")
+homologaciones_incompletas <- homologaciones
+homologaciones_incompletas$facturacion <- NULL
+.error(.crm_validar_maestro(maestro, homologaciones_incompletas), "referencias necesarias")
+ruta <- tempfile(fileext = ".RData")
+# El artefacto contiene exactamente los dos objetos publicados por el nuevo ETL.
+save(maestro, homologaciones, file = ruta)
+ruta_correcta <- tempfile(fileext = ".RData")
+crm_maestro <- maestro
+save(crm_maestro, homologaciones, file = ruta_correcta)
+.check(identical(sort(load(ruta_correcta, envir = new.env())), c("crm_maestro", "homologaciones")))
+nueva_carga <- new.env(parent = emptyenv())
+.crm_cargar_exportacion(ruta_correcta, nueva_carga)
+.check(identical(nueva_carga$crm_maestro, maestro))
+.check(identical(nueva_carga$data$SacosFact, dat$SacosFact))
+.error(.crm_cargar_exportacion(ruta, nueva_carga), "crm_maestro")
+.check(identical(nueva_carga$data$SacosFact, dat$SacosFact))
+unlink(c(ruta, ruta_correcta))
+
+# El ETL conserva exactamente dos objetos en el archivo de salida ----
+guardados <- Filter(function(x) is.call(x) && identical(x[[1]], as.name("save")),
+                     as.list(parse(file.path(root, "DataPrep.R"))))
+.check(length(guardados) == 1L)
+.check(identical(as.character(guardados[[1]][[2]]), "crm_maestro") &&
+         identical(as.character(guardados[[1]][[3]]), "homologaciones"))
+
 # Los módulos no asignan ui/server globales ni lanzan demos durante el arranque ----
 for (ruta in list.files(file.path(root, "APP/misc/modules"), "[.]R$", recursive = TRUE, full.names = TRUE)) {
   for (expresion in parse(ruta)) {

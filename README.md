@@ -22,8 +22,11 @@ CajaValor como alias opcionales; el resumen ejecutivo llama directamente a racaf
 ## Integración con la exportación actual
 
 Después de instalar las dependencias, ejecutar `DataPrep.R` en el entorno que ya tiene acceso a las fuentes.
-La app requiere regenerar `APP/data/data.RData`: ahora se valida antes de cargarlo y se exportan también
-`ultimo_periodo_pyg` y `crm_detalle_operaciones`. `data` mantiene sus 67 columnas y sus hechos financieros.
+La app requiere regenerar `APP/data/data.RData`. Se conservan los dos objetos de la nueva exportación:
+`crm_maestro` y `homologaciones`. Este último incluye las referencias de clientes, facturación, PyG y lotes
+necesarias para los módulos. La carga valida ambos objetos y deriva las vistas que consumen los módulos;
+`data` conserva sus 67 columnas de ejecución y excluye las filas proyectadas del maestro.
+Las proyecciones y sus métricas permanecen disponibles en `crm_maestro`.
 
 Los controles de acciones y prospección utilizan racafeForms; las tablas, menús y cajas se llaman desde
 racafeModulos. Los recursos de Compartido 1.1.0 están incluidos en `APP/vendor/Compartido` y se sirven localmente.

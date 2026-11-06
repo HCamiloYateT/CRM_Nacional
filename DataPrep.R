@@ -15,35 +15,33 @@ REQUIRED_PACKAGES <- c("racafeCore", "racafeBD", "racafeDrive", "tidyverse",
                        "future", "furrr", "gdata", "janitor", "tictoc")
 racafeCore::Loadpkg(REQUIRED_PACKAGES)
 
-
 # Funciones ----
 
 ## Lotes ----
 .lotes_full_sql <- function() {
-  racafeBD::ConsultaSistema(
-    "syscafe",
-    query = "SELECT CLSucCod, CLLotCod, CLPdcCod, CLPdcLin,
-                    CLPdcAnoEm*100 + CLPdcMesEm AS Periodo,
-                    CLPdcCntCl, CLLotCan AS SacLote, CLLotFec AS FecAsignLote,
-                    CLotrCod AS CodOrdTril, CLOTrFec AS FecOrdTril,
-                    CLLotSacPr AS SacProd, CLLotFecPr AS FecProd,
-                    CLIDeCod AS CodDesp, CLIDeFec AS FecDesp, CLLotSacDe AS SacDesp,
-                    CLPdcFctAD, CLLotSacFa AS SacFact, CLPdcCanFa, CLLinNegCo,
-                    CLLotSacXP, CLLotPenXD, CLLotDesXF, CLCliNit, CLCliRazSo,
-                    CLLinNegCo AS LinNegCod, CLLinNegNo,
-                    CLLinProCo AS LinProCod, CLLinProNo,
-                    CLMCCod AS MCCod, CLMCNom, CLMrcCod AS MrcCod, CLMrcNom
-             FROM   EXPCUALO
-             WHERE  CiaCod = 10
-               AND  (CLLinNegCo = 21000 OR
+  racafeBD::ConsultaSistema("syscafe",
+                            query = "SELECT  CLSucCod, CLLotCod, CLPdcCod, CLPdcLin,
+                   CLPdcAnoEm*100 + CLPdcMesEm AS Periodo,
+                   CLPdcCntCl, CLLotCan AS SacLote, CLLotFec AS FecAsignLote,
+                   CLotrCod AS CodOrdTril, CLOTrFec AS FecOrdTril,
+                   CLLotSacPr AS SacProd, CLLotFecPr AS FecProd,
+                   CLIDeCod AS CodDesp, CLIDeFec AS FecDesp,
+                   CLLotFchDe AS FecDespachoReal, CLLotSacDe AS SacDesp,
+                   CLPdcFctAD, CLLotSacFa AS SacFact, CLPdcCanFa, CLLinNegCo,
+                   CLLotSacXP, CLLotPenXD, CLLotDesXF, CLCliNit, CLCliRazSo,
+                   CLLinNegCo AS LinNegCod, CLLinNegNo,
+                   CLLinProCo AS LinProCod, CLLinProNo,
+                   CLMCCod AS MCCod, CLMCNom, CLMrcCod AS MrcCod, CLMrcNom
+             FROM  EXPCUALO
+             WHERE CiaCod = 10
+               AND (CLLinNegCo = 21000 OR
                         (CLLinNegCo = 10000
                            AND CLLinProCo IN (90030, 90040, 40050, 40100, 90025, 40150, 40200, 40010, 90035, 40250)
                         )
                     )
                AND  CLCliNit <> 32
                AND  CLLinNegCo IN (10000, 21000)
-               AND  CLLotCan > 0"
-  )
+               AND  CLLotCan > 0")
 }
 .lotes_activos_sql <- function(anho_corte) {
   racafeBD::ConsultaSistema(
@@ -54,7 +52,8 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
               CLPdcCntCl, CLLotCan AS SacLote, CLLotFec AS FecAsignLote,
               CLotrCod AS CodOrdTril, CLOTrFec AS FecOrdTril,
               CLLotSacPr AS SacProd, CLLotFecPr AS FecProd,
-              CLIDeCod AS CodDesp, CLIDeFec AS FecDesp, CLLotSacDe AS SacDesp,
+              CLIDeCod AS CodDesp, CLIDeFec AS FecDesp,
+                   CLLotFchDe AS FecDespachoReal, CLLotSacDe AS SacDesp,
               CLPdcFctAD, CLLotSacFa AS SacFact, CLPdcCanFa, CLLinNegCo,
               CLLotSacXP, CLLotPenXD, CLLotDesXF, CLCliNit, CLCliRazSo,
               CLLinNegCo AS LinNegCod, CLLinNegNo,
@@ -83,9 +82,6 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
   anho_corte    <- lubridate::year(Sys.Date()) - 1L
   lotes_activos <- .lotes_activos_sql(anho_corte)
   
-  # Congelados: todo lo del cache que la consulta activa no cubre.
-  # El anti_join es suficiente: .lotes_activos_sql ya trae todos los lotes
-  # con FecAsignLote >= anho_corte, por lo que el complemento es siempre anterior.
   lotes_congelados <- datos_previos %>%
     anti_join(lotes_activos, by = "CLLotCod")
   
@@ -144,36 +140,19 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
              GROUP BY F1.FctLot, F2.FctFec"
   )
   
-  dplyr::bind_rows(
-    fact_sys_nal,
-    fact_sys_ext
-  ) %>%
-    dplyr::mutate(
-      CLLotCod = suppressWarnings(as.numeric(CLLotCod)),
-      FecFact = as.Date(FecFact),
-      FecMesFact = lubridate::floor_date(FecFact, "month"),
-      SacosFact = suppressWarnings(as.numeric(SacosFact))
-    ) %>%
-    dplyr::filter(
-      !is.na(CLLotCod),
-      !is.na(FecFact),
-      FecFact >= as.Date("2020-01-01")
-    ) %>%
-    dplyr::group_by(
-      CLLotCod,
-      FecMesFact
-    ) %>%
-    dplyr::summarise(
-      FecPrimerFact = min(FecFact, na.rm = TRUE),
-      FecFact = max(FecFact, na.rm = TRUE),
-      SacosFact = sum(SacosFact, na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    dplyr::mutate(
-      Facturado = TRUE
-    )
+  dplyr::bind_rows(fact_sys_nal, fact_sys_ext) %>%
+    dplyr::mutate(CLLotCod = suppressWarnings(as.numeric(CLLotCod)),
+                  FecFact = as.Date(FecFact),
+                  FecMesFact = lubridate::floor_date(FecFact, "month"),
+                  SacosFact = suppressWarnings(as.numeric(SacosFact))) %>%
+    dplyr::filter(!is.na(CLLotCod), !is.na(FecFact), FecFact >= fecha_inicio_analisis) %>%
+    dplyr::group_by(CLLotCod, FecMesFact) %>%
+    dplyr::summarise(FecPrimerFact = min(FecFact, na.rm = TRUE),
+                     FecFact = max(FecFact, na.rm = TRUE),
+                     SacosFact = sum(SacosFact, na.rm = TRUE),
+                     .groups = "drop") %>%
+    dplyr::mutate(Facturado = TRUE)
 }
-
 
 ## Márgenes ----
 .seleccionar_hoja_base <- function(hojas) {
@@ -233,17 +212,7 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
     resultado[es_fecha] <- suppressWarnings(
       lubridate::parse_date_time(
         x[es_fecha],
-        orders = c(
-          "Ymd",
-          "Y-m-d",
-          "dmy",
-          "d/m/Y",
-          "dmY",
-          "m/d/Y",
-          "mdY",
-          "Ymd HMS",
-          "Y-m-d HMS"
-        ),
+        orders = c("Ymd", "Y-m-d", "dmy", "d/m/Y", "dmY", "m/d/Y", "mdY", "Ymd HMS", "Y-m-d HMS"),
         quiet = TRUE
       ) %>%
         as.Date()
@@ -259,13 +228,11 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
   
   df <- .limpiar_nombres_marlot(df)
   
-  equivalencias <- c(
-    "LIN_NEG" = "LINNEG",
-    "FEC_FACTURA" = "FECFACTURA",
-    "PRODUCTO_SEGUN_MARCA" = "PRODUCTO",
-    "SS_70_KLS" = "SACOS70",
-    "MNFCC" = "MARGEN"
-  )
+  equivalencias <- c("LIN_NEG" = "LINNEG",
+                     "FEC_FACTURA" = "FECFACTURA",
+                     "PRODUCTO_SEGUN_MARCA" = "PRODUCTO",
+                     "SS_70_KLS" = "SACOS70",
+                     "MNFCC" = "MARGEN")
   
   for (actual in names(equivalencias)) {
     nuevo <- unname(equivalencias[[actual]])
@@ -312,13 +279,11 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
         if (!columna %in% names(df)) {
           return("ausente")
         }
-        
         clase <- class(df[[columna]])[[1L]]
         
         if (is.null(clase) || length(clase) == 0L) {
           return("unknown")
         }
-        
         clase
       }
     )
@@ -376,7 +341,6 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
   datos
 }
 .cargar_margenes_onedrive <- function(usuario, id_carpeta_raiz) {
-  # Selección del año ----
   anho <- racafeDrive::ListarContenidoCarpetaId(usuario, id_carpeta_raiz) %>%
     dplyr::filter(stringr::str_detect(nombre, "^AÑO\\s\\d{4}$")) %>%
     dplyr::mutate(anho_num = as.integer(gsub("^AÑO (\\d{4})$", "\\1", nombre))) %>%
@@ -388,7 +352,6 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
     return(NULL)
   }
   
-  # Selección de meses ----
   meses <- racafeDrive::ListarContenidoCarpetaId(usuario, anho$id[[1L]]) %>%
     dplyr::filter(grepl("^\\d{2}\\.", nombre)) %>%
     dplyr::mutate(mes_num = as.integer(sub("^(\\d{2})\\. .*$", "\\1", nombre))) %>%
@@ -400,7 +363,6 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
     return(NULL)
   }
   
-  # Búsqueda de archivos PYG ----
   mes <- NULL
   archivos_pyg <- NULL
   
@@ -448,16 +410,12 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
   }
   
   if (is.null(mes)) {
-    message(
-      "No se encontraron meses con archivos PYG de Coproductos y A la Medida en: ",
-      anho$nombre[[1L]]
-    )
+    message("No se encontraron meses con archivos PYG de Coproductos y A la Medida en: ", anho$nombre[[1L]])
     return(NULL)
   }
   
   message("PYG seleccionado: ", anho$nombre[[1L]], " / ", mes$nombre[[1L]])
   
-  # Lectura de archivos ----
   resultados <- purrr::map(
     seq_len(nrow(archivos_pyg)),
     function(i) {
@@ -500,12 +458,7 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
       # Normalización de datos ----
       tryCatch(
         {
-          datos_raw <- readxl::read_excel(
-            ruta,
-            sheet = hoja_sel,
-            col_names = FALSE,
-            .name_repair = "minimal"
-          )
+          datos_raw <- readxl::read_excel(ruta, sheet = hoja_sel, col_names = FALSE, .name_repair = "minimal")
           
           nombres <- datos_raw[1L, ] %>%
             unlist(use.names = FALSE) %>%
@@ -521,29 +474,18 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
           datos_raw <- datos_raw[-1L, , drop = FALSE] %>%
             dplyr::select(!dplyr::matches("^COLUMNA_[0-9]+$")) %>%
             .normalizar_base_margen() %>%
-            dplyr::mutate(
-              ANHO = as.integer(anho$anho_num[[1L]]),
-              CLASE = as.character(archivo$clase[[1L]])
-            )
+            dplyr::mutate(ANHO = as.integer(anho$anho_num[[1L]]), CLASE = as.character(archivo$clase[[1L]]))
           
           datos_raw
         },
         error = function(e) {
-          message(
-            "Error datos ",
-            archivo$nombre[[1L]],
-            " / ",
-            hoja_sel,
-            ": ",
-            e$message
-          )
+          message("Error datos ", archivo$nombre[[1L]], " / ", hoja_sel, ": ", e$message)
           NULL
         }
       )
     }
   )
   
-  # Homologación de resultados ----
   resultados <- .homologar_tipos_margenes(resultados)
   
   if (length(resultados) == 0L) {
@@ -553,27 +495,21 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
   dplyr::bind_rows(resultados)
 }
 
-
 ## Imputación ----
-
-# Imputa una columna numerica en cascada
 .imputar_cascada <- function(data_in, valor_col, niveles) {
   for (grupo_vars in niveles) {
     
-    # Nivel global (sin agrupar): promedio general como ultimo recurso
     if (length(grupo_vars) == 0L) {
       media_global <- mean(data_in[[valor_col]], na.rm = TRUE)
       data_in[[valor_col]] <- ifelse(is.na(data_in[[valor_col]]), media_global, data_in[[valor_col]])
       next
     }
     
-    # Promedio del valor en el nivel de agregacion actual (solo filas validas)
     medias_nivel <- data_in %>%
       filter(!is.na(.data[[valor_col]])) %>%
       group_by(across(all_of(grupo_vars))) %>%
       summarise(.media_tmp = mean(.data[[valor_col]], na.rm = TRUE), .groups = "drop")
     
-    # Union por join: solo se completan los NA restantes en este nivel
     data_in <- data_in %>%
       left_join(medias_nivel, by = grupo_vars) %>%
       mutate(across(all_of(valor_col), ~ ifelse(is.na(.), .media_tmp, .))) %>%
@@ -600,7 +536,6 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
     dplyr::group_by(Id, CliNitPpal, LinNegCod, Date) %>%
     dplyr::summarise(Price = sum(SacosFact, na.rm = TRUE), .groups = "drop")
 }
-
 .procesar_clv <- function(fecha_corte, base_clv, unidad = "week") {
   base_trans <- base_clv %>%
     dplyr::filter(Date < fecha_corte) %>%
@@ -663,14 +598,12 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
   
   resultado
 }
-
 .cargar_historico_segmentacion <- function(tabla) {
   tryCatch(
     racafeBD::CargarDatos(tabla) %>% dplyr::mutate(FecProceso = as.Date(FecProceso)),
     error = function(e) data.frame()
   )
 }
-
 .fechas_pendientes <- function(fechas, historico, fecha_proceso = identity) {
   if (length(fechas) == 0L || nrow(historico) == 0L || !"FecProceso" %in% names(historico)) {
     return(fechas)
@@ -702,7 +635,6 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
   
   paste0(prefijo, formatC(consecutivo, width = 3L, flag = "0"))
 }
-
 .derivar_etapa_actual <- function(contactos = NULL) {
   if (is.null(contactos)) {
     contactos <- racafeBD::CargarDatos("CRMNALCONTACTO")
@@ -739,6 +671,7 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
     ) %>%
     select(-EtapaUltimaTransicion)
 }
+
 ## Contactos clientes ----
 .asegurar_contactos_clientes <- function(clientes, usuario = "SISTEMA") {
   contactos <- tryCatch(
@@ -860,13 +793,7 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
   
   if (any(faltantes)) {
     resultado[faltantes] <- suppressWarnings(
-      readr::parse_number(
-        x[faltantes],
-        locale = readr::locale(
-          decimal_mark = ",",
-          grouping_mark = "."
-        )
-      )
+      readr::parse_number(x[faltantes], locale = readr::locale(decimal_mark = ",", grouping_mark = "."))
     )
   }
   
@@ -877,7 +804,6 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
 
 ## Márgenes ----
 print("Cargando datos de margenes...")
-
 USUARIO_MARGENES <- "wmunozs"
 ID_CARPETA_INFORMES <- "014N3L2U2EH7DJE5B6V5AK6USIEW5IJH2N"
 
@@ -890,10 +816,7 @@ margenes_hist <- tryCatch(
         !is.na(FECFACTURA),
         year(FECFACTURA) < year(Sys.Date())
       ) %>%
-      mutate(
-        ANHO = as.integer(ANHO),
-        CLASE = as.character(CLASE)
-      )
+      mutate(ANHO = as.integer(ANHO), CLASE = as.character(CLASE))
   },
   error = function(e) {
     message("Error margenes historicos: ", e$message)
@@ -904,10 +827,7 @@ margenes_hist <- tryCatch(
 # Datos del año corriente desde OneDrive
 margenes_nuevos <- tryCatch(
   {
-    .cargar_margenes_onedrive(
-      USUARIO_MARGENES,
-      ID_CARPETA_INFORMES
-    )
+    .cargar_margenes_onedrive(USUARIO_MARGENES, ID_CARPETA_INFORMES)
   },
   error = function(e) {
     message("Error margenes OneDrive: ", e$message)
@@ -919,35 +839,20 @@ margenes_nuevos <- tryCatch(
 if (!is.null(margenes_nuevos) && nrow(margenes_nuevos) > 0L) {
   tryCatch(
     {
-      margenes_lista <- .homologar_tipos_margenes(
-        list(
-          margenes_hist,
-          margenes_nuevos
-        )
-      )
+      margenes_lista <- .homologar_tipos_margenes(list(margenes_hist, margenes_nuevos))
       
       margenes <- bind_rows(margenes_lista) %>%
-        mutate(
-          ANHO = as.integer(ANHO),
-          CLASE = as.character(CLASE)
-        )
+        mutate(ANHO = as.integer(ANHO), CLASE = as.character(CLASE))
       
       if (!all(c("ANHO", "CLASE") %in% names(margenes))) {
         stop("CRMNALMARLOT debe contener las variables ANHO y CLASE")
       }
       
-      racafeBD::EscribirDatos(
-        margenes,
-        "CRMNALMARLOT"
-      )
+      racafeBD::EscribirDatos(margenes, "CRMNALMARLOT")
       
       message(
         "Margenes guardados OK: ",
-        format(
-          nrow(margenes),
-          big.mark = ".",
-          decimal.mark = ","
-        ),
+        format(nrow(margenes), big.mark = ".", decimal.mark = ","),
         " registros y ",
         ncol(margenes),
         " variables"
@@ -960,7 +865,6 @@ if (!is.null(margenes_nuevos) && nrow(margenes_nuevos) > 0L) {
 } else {
   message("Sin datos nuevos de margenes; se conserva lo existente")
 }
-
 
 ## Datos principales ----
 print("Cargando datos principales...")
@@ -986,6 +890,21 @@ margenes_pyg <- racafeBD::CargarDatos("CRMNALMARLOT") %>%
 if (nrow(margenes_pyg) == 0L) {
   stop("CRMNALMARLOT no contiene registros con FECFACTURA valida")
 }
+
+# PERIODO HISTORICO ----
+fecha_inicio_analisis <- max(
+  as.Date("2020-01-01"),
+  lubridate::floor_date(min(margenes_pyg$FecMes, na.rm = TRUE), "year")
+)
+
+margenes_pyg <- margenes_pyg %>%
+  dplyr::filter(FecMes >= fecha_inicio_analisis)
+
+if (nrow(margenes_pyg) == 0L) {
+  stop("No hay margenes disponibles desde el inicio del periodo de analisis")
+}
+
+message("Inicio del universo comercial: ", format(fecha_inicio_analisis, "%Y-%m-%d"))
 
 ultimo_periodo_pyg <- max(margenes_pyg$FecMes, na.rm = TRUE)
 
@@ -1031,11 +950,7 @@ local_hist <- racafeBD::CargarDatos("CRMNALLOCAL") %>%
 clientes_hist <- personas %>%
   left_join(
     local_hist,
-    by = c(
-      "FecMes",
-      "Usr",
-      "CliNitPpal"
-    )
+    by = c("FecMes", "Usr", "CliNitPpal")
   ) %>%
   arrange(FecMes, LinNegCod, CLCliNit)
 
@@ -1093,43 +1008,28 @@ n_cliente <- racafeBD::ConsultaSistema(
     by = "PerCod"
   ) %>%
   mutate(
-    CliNitPpal = ifelse(
-      is.na(CliNitPpal),
-      PerCod,
-      CliNitPpal
-    ),
-    across(
-      where(is.character),
-      \(x) ifelse(
-        x %in% c("", "."),
-        NA,
-        x
-      )
-    )
+    CliNitPpal = ifelse(is.na(CliNitPpal), PerCod, CliNitPpal),
+    across(where(is.character), \(x) ifelse(x %in% c("", "."), NA, x))
   )
 
 ## Contactos ----
 contactos_clientes <- .asegurar_contactos_clientes(
   cliente_actual_map %>%
-    left_join(
-      n_cliente %>%
-        transmute(CliNitPpal = suppressWarnings(as.numeric(PerCod)), PerRazSoc),
-      by = "CliNitPpal")
-)
+    left_join(n_cliente %>% transmute(CliNitPpal = suppressWarnings(as.numeric(PerCod)), PerRazSoc),
+              by = "CliNitPpal"))
 
 contactos_raw <- contactos_clientes
 
-
-
-  
-
 # Pedidos activos de venta nacional
+# PEDIDOS ----
 ped <- racafeBD::ConsultaSistema(
   "syscafe",
   query = "SELECT p1.PdcCod,
                   pd.PdcCntCli AS PdcRefCli,
                   pd.PdcFecCre,
                   p1.PdcLin,
+                  p1.PdcFecCie,
+                  p1.PdcFecEst,
                   p1.PdcCan,
                   pd.PdcUsu AS Usuario,
                   um.UMeFac,
@@ -1139,21 +1039,30 @@ ped <- racafeBD::ConsultaSistema(
                   pd.PdcEst,
                   p1.LinNegCod,
                   p1.LinProCod
-           FROM   EXPPEDI1 p1
-           INNER JOIN EXPPEDID pd ON p1.PdcCod = pd.PdcCod
+           FROM   EXPPEDID pd
+           INNER JOIN EXPPEDI1 p1
+             ON p1.PdcCod = pd.PdcCod
+            AND p1.CiaCod = pd.CiaCod
            LEFT JOIN NUNIMEDI um ON pd.UMeCod = um.UMeCod
-           WHERE p1.CiaCod = 10
-             AND pd.CiaCod = 10
+           WHERE pd.CiaCod = 10
              AND pd.CliNit <> 32
              AND pd.PdcVtaNal = 1"
 ) %>%
   mutate(
     PdcFecCre = as.Date(PdcFecCre),
+    PdcFecCie = as.Date(PdcFecCie),
+    PdcFecEst = as.Date(PdcFecEst),
+    PdcFecCie = na_if(PdcFecCie, as.Date("1753-01-01")),
+    PdcFecEst = na_if(PdcFecEst, as.Date("1753-01-01")),
     PdcCod = as.numeric(PdcCod),
     PdcLin = as.numeric(PdcLin),
     CLCliNit = as.numeric(CLCliNit),
     LinNegCod = as.numeric(LinNegCod),
-    LinProCod = as.numeric(LinProCod)
+    LinProCod = as.numeric(LinProCod),
+    PdcCan = as.numeric(PdcCan),
+    UMeFac = as.numeric(UMeFac),
+    PdcEst = trimws(as.character(PdcEst)),
+    SacosPedido = if_else(is.finite(PdcCan) & is.finite(UMeFac) & UMeFac > 0, PdcCan * UMeFac / 70, NA_real_)
   )
 
 # Cuadro de lotes con carga incremental (activos + congelados del cache)
@@ -1207,81 +1116,46 @@ fact <- .cargar_fact() %>%
     by = "CLLotCod"
   )
 
-# NOTA: se mantiene la consulta independiente de FACT (por cliente) tal
-# como estaba. Se detecto que esta consulta NO filtra facturas anuladas de
-# exportacion (FctLotAnu <> 'S'), a diferencia de .cargar_fact() que si lo
-# hace. Consolidarla desde 'fact' + el mapeo lote->cliente eliminaria un
-# roundtrip completo a FCTFACN1/FCTFACC2, pero cambiaria el resultado por
-# esa inconsistencia de filtro. Se deja igual para no alterar comportamiento
-# sin confirmacion explicita.
-fact_cliente <- bind_rows(
-  racafeBD::ConsultaSistema(
-    "syscafe",
-    query = "SELECT F2.FctNit,
-                    MIN(F2.FcnFec) AS MinFecFact,
-                    MAX(F2.FcnFec) AS UltFecFact,
-                    SUM(
-                      CASE
-                        WHEN UM.UMeFac = 62.5 THEN F1.FcnSacLot * 62.5 / 70.0
-                        ELSE F1.FcnSacLot
-                      END
-                    ) AS SacosFact
-             FROM FCTFACN1 F1
-             INNER JOIN FCTFACNA F2
-               ON F1.FcnNum = F2.FcnNum
-              AND F1.CiaCod = F2.CiaCod
-             LEFT JOIN EXPPEDID PD
-               ON F1.PdcCod = PD.PdcCod
-              AND F1.CiaCod = PD.CiaCod
-             LEFT JOIN NUNIMEDI UM
-               ON PD.UMeCod = UM.UMeCod
-             WHERE F1.CiaCod = 10
-               AND F2.FcnEtd = 'C'
-             GROUP BY F2.FctNit"
-  ),
-  racafeBD::ConsultaSistema(
-    "syscafe",
-    query = "SELECT F2.FctNit,
-                    MIN(F2.FctFec) AS MinFecFact,
-                    MAX(F2.FctFec) AS UltFecFact,
-                    SUM(
-                      CASE
-                        WHEN UM.UMeFac = 62.5 THEN F1.FctSacEmb * 62.5 / 70.0
-                        ELSE F1.FctSacEmb
-                      END
-                    ) AS SacosFact
-             FROM FCTFACC2 F1
-             INNER JOIN FCTFACCA F2
-               ON F1.FctNum = F2.FctNum
-              AND F1.CiaCod = F2.CiaCod
-             LEFT JOIN EXPPEDID PD
-               ON F2.PdcCod = PD.PdcCod
-              AND F2.CiaCod = PD.CiaCod
-             LEFT JOIN NUNIMEDI UM
-               ON PD.UMeCod = UM.UMeCod
-             WHERE F1.CiaCod = 10
-             GROUP BY F2.FctNit"
-  )
-) %>%
-  group_by(FctNit) %>%
-  summarise(
-    MinFecFact = min(MinFecFact, na.rm = TRUE),
-    UltFecFact = max(UltFecFact, na.rm = TRUE),
-    SacosFact = sum(SacosFact, na.rm = TRUE),
-    .groups = "drop"
+# UNIVERSO HISTORICO DE PEDIDOS ----
+pedidos_con_facturacion_historica <- lotes_raw %>%
+  dplyr::select(CLPdcCod, CLPdcLin, CLLotCod) %>%
+  dplyr::semi_join(
+    dplyr::bind_rows(
+      fact %>%
+        dplyr::filter(FecFact >= fecha_inicio_analisis) %>%
+        dplyr::select(CLLotCod),
+      margenes_pyg %>%
+        dplyr::transmute(CLLotCod = .convertir_numero_margen(LOTE))
+    ) %>%
+      dplyr::filter(!is.na(CLLotCod)) %>%
+      dplyr::distinct(),
+    by = "CLLotCod"
   ) %>%
-  left_join(
-    n_cliente %>%
-      select(
-        PerCod,
-        PerRazSoc
-      ) %>%
-      distinct(),
-    by = c(
-      "FctNit" = "PerCod"
-    )
+  dplyr::distinct(CLPdcCod, CLPdcLin)
+
+pedidos_excluidos_historicos <- ped %>%
+  dplyr::filter(
+    !dplyr::coalesce(PdcFecCre >= fecha_inicio_analisis, FALSE) &
+      !dplyr::coalesce(PdcFecEst >= fecha_inicio_analisis, FALSE)
   ) %>%
-  left_join(creacion, by = c("FctNit" = "PerCod"))
+  dplyr::anti_join(pedidos_con_facturacion_historica,
+                   by = c("PdcCod" = "CLPdcCod", "PdcLin" = "CLPdcLin"))
+
+ped <- ped %>%
+  dplyr::filter(
+    dplyr::coalesce(PdcFecCre >= fecha_inicio_analisis, FALSE) |
+      dplyr::coalesce(PdcFecEst >= fecha_inicio_analisis, FALSE)
+  ) %>%
+  dplyr::bind_rows(
+    ped %>%
+      dplyr::semi_join(pedidos_con_facturacion_historica,
+                       by = c("PdcCod" = "CLPdcCod", "PdcLin" = "CLPdcLin"))
+  ) %>%
+  dplyr::distinct(PdcCod, PdcLin, .keep_all = TRUE)
+
+message("Lineas historicas excluidas sin actividad financiera desde ",
+        format(fecha_inicio_analisis, "%Y-%m-%d"), ": ",
+        nrow(pedidos_excluidos_historicos))
 
 # Construccion del cuadro de datos principal
 
@@ -1292,10 +1166,7 @@ fact_cliente <- bind_rows(
     dplyr::filter(n > 1L)
   
   if (nrow(duplicados) > 0L) {
-    stop(
-      "La fuente ", nombre, " tiene ", nrow(duplicados),
-      " claves duplicadas: ", paste(claves, collapse = ", ")
-    )
+    stop("La fuente ", nombre, " tiene ", nrow(duplicados), " claves duplicadas: ", paste(claves, collapse = ", "))
   }
   
   invisible(TRUE)
@@ -1364,21 +1235,39 @@ data_pyg <- margenes_pyg %>%
     PendFacturar = 0
   ) %>%
   mutate(
-    CLLotCod = ifelse(
-      is.na(CLLotCod) | CLLotCod == 0,
-      NA_real_,
-      CLLotCod
-    ),
-    LinNegCod = ifelse(
-      LinNegCod == 20000L,
-      21000L,
-      LinNegCod
-    ),
-    FechaEmbarque = coalesce(
-      FechaEmbarque,
-      FecMes
-    )
+    CLLotCod = ifelse(is.na(CLLotCod) | CLLotCod == 0, NA_real_, CLLotCod),
+    LinNegCod = ifelse(LinNegCod == 20000L, 21000L, LinNegCod),
+    FechaEmbarque = coalesce(FechaEmbarque, FecMes)
   )
+
+# Validación de pedidos ----
+.verificar_clave_unica(ped, c("PdcCod", "PdcLin"), "EXPPEDI1/EXPPEDID")
+
+if (any(is.na(ped$PdcCod) | is.na(ped$PdcLin))) {
+  stop("Hay pedidos sin identificador o sin linea de embarque")
+}
+
+ped_sin_conversion <- ped %>%
+  filter(PdcEst == "A", !is.finite(SacosPedido) | SacosPedido < 0)
+
+if (nrow(ped_sin_conversion) > 0L) {
+  warning("Pedidos activos sin conversion valida PdcCan x UMeFac / 70: ",
+          nrow(ped_sin_conversion), " lineas. Quedan sin proyeccion numerica")
+}
+
+ped_sin_fecha <- ped %>%
+  filter(PdcEst == "A", is.na(PdcFecEst))
+
+if (nrow(ped_sin_fecha) > 0L) {
+  message("Pedidos activos sin fecha estimada (PdcFecEst vacia): ",
+          nrow(ped_sin_fecha), " lineas. Se excluyen de la proyeccion")
+}
+
+pedidos_fechas_distintas <- ped %>%
+  group_by(PdcCod) %>%
+  filter(n_distinct(PdcFecEst, na.rm = TRUE) > 1L) %>%
+  ungroup() %>%
+  arrange(PdcCod, PdcFecEst, PdcLin)
 
 pedido_mapa <- ped %>%
   transmute(
@@ -1387,6 +1276,8 @@ pedido_mapa <- ped %>%
     PdcPrecioKilo,
     PdcRefCli,
     PdcFecCre,
+    PdcFecCie,
+    PdcFecEst,
     Usuario,
     UMeFac,
     CLCliNitPedido = CLCliNit,
@@ -1399,22 +1290,25 @@ pedido_mapa <- ped %>%
 .verificar_clave_unica(lotes_raw, "CLLotCod", "lotes_raw")
 .verificar_clave_unica(fact, c("CLLotCod", "FecMesFact"), "fact")
 
-pedido_sin_lote <- pedido_mapa %>%
-  anti_join(
-    lotes_raw %>% select(CLPdcCod, CLPdcLin) %>% distinct(),
-    by = c("CLPdcCod", "CLPdcLin")
-  )
+# INTEGRIDAD PEDIDO LOTE ----
+lotes_sin_pedido <- lotes_raw %>%
+  anti_join(pedido_mapa, by = c("CLPdcCod", "CLPdcLin"))
 
-base_operativa <- bind_rows(
-  lotes_raw %>%
-    left_join(pedido_mapa, by = c("CLPdcCod", "CLPdcLin")),
-  pedido_sin_lote %>%
-    left_join(lotes_raw, by = c("CLPdcCod", "CLPdcLin"))
-) %>%
+if (nrow(lotes_sin_pedido) > 0L) {
+  warning("Lotes sin linea de pedido nacional: ", nrow(lotes_sin_pedido),
+          ". Permanecen en lotes_raw y se excluyen de la base operativa")
+}
+
+pedido_sin_lote <- pedido_mapa %>%
+  anti_join(lotes_raw, by = c("CLPdcCod", "CLPdcLin"))
+
+base_operativa <- pedido_mapa %>%
+  left_join(lotes_raw, by = c("CLPdcCod", "CLPdcLin"),
+            relationship = "one-to-many") %>%
   mutate(
-    CLCliNit = coalesce(CLCliNit, CLCliNitPedido),
-    LinNegCod = coalesce(LinNegCod, LinNegCodPedido),
-    LinProCod = coalesce(LinProCod, LinProCodPedido),
+    CLCliNit = coalesce(CLCliNitPedido, CLCliNit),
+    LinNegCod = coalesce(LinNegCodPedido, LinNegCod),
+    LinProCod = coalesce(LinProCodPedido, LinProCod),
     PdcRefCli = coalesce(PdcRefCli, CLPdcCntCl),
     CLLinNegNo = case_when(
       CLLinNegNo == "DIFERENCIADOS" ~ "A LA MEDIDA",
@@ -1424,8 +1318,15 @@ base_operativa <- bind_rows(
       TRUE ~ NA_character_
     ),
     LinNegCod = ifelse(LinNegCod == 20000L, 21000L, LinNegCod),
-    FechaEmbarque = suppressWarnings(as.Date(paste0(Periodo, "01"), "%Y%m%d"))
+    FechaEmbarque = coalesce(
+      suppressWarnings(as.Date(paste0(Periodo, "01"), "%Y%m%d")),
+      PdcFecEst
+    )
   )
+
+if (n_distinct(base_operativa$CLPdcCod, base_operativa$CLPdcLin) != nrow(pedido_mapa)) {
+  stop("La base operativa no conserva todas las lineas de pedido")
+}
 
 .verificar_clave_unica(
   base_operativa %>% filter(!is.na(CLLotCod)),
@@ -1434,9 +1335,7 @@ base_operativa <- bind_rows(
 )
 
 fact_abierto <- fact %>%
-  filter(
-    FecMesFact >= fecha_inicio_operativo
-  )
+  filter(FecMesFact >= fecha_inicio_operativo)
 
 fact_sin_lote_base <- fact_abierto %>%
   anti_join(
@@ -1454,11 +1353,7 @@ if (nrow(fact_sin_lote_base) > 0L) {
 
 fact_lote_acum <- fact %>%
   group_by(CLLotCod) %>%
-  summarise(
-    SacosFactAcum = sum(SacosFact, na.rm = TRUE),
-    FecUltimaFact = max(FecFact, na.rm = TRUE),
-    .groups = "drop"
-  )
+  summarise(SacosFactAcum = sum(SacosFact, na.rm = TRUE), FecUltimaFact = max(FecFact, na.rm = TRUE), .groups = "drop")
 
 data_fact_abierta <- base_operativa %>%
   inner_join(
@@ -1469,31 +1364,12 @@ data_fact_abierta <- base_operativa %>%
   mutate(
     FecMes = as.Date(FecMesFact),
     ANHO = lubridate::year(FecMes),
-    MES = toupper(
-      format(
-        FecMes,
-        "%B"
-      )
-    ),
+    MES = toupper(format(FecMes, "%B")),
     CLASE = NA_character_,
     SegmentacionClientePYG = NA_character_,
     Margen = NA_real_,
-    PendProducir = ifelse(
-      is.na(CLLotCod),
-      NA_real_,
-      pmax(
-        SacLote - coalesce(SacProd, 0),
-        0
-      )
-    ),
-    PendDespachar = ifelse(
-      is.na(CLLotCod),
-      NA_real_,
-      pmax(
-        SacLote - pmax(coalesce(SacDesp, 0), 0),
-        0
-      )
-    ),
+    PendProducir = NA_real_,
+    PendDespachar = NA_real_,
     PendFacturar = NA_real_
   ) %>%
   select(
@@ -1542,61 +1418,136 @@ data_fact_abierta <- base_operativa %>%
     PendFacturar
   )
 
-data_pendiente <- base_operativa %>%
-  left_join(
-    fact_lote_acum,
-    by = "CLLotCod"
-  ) %>%
+# Facturación cerrada conciliada por lote ----
+pyg_fact_lote <- data_pyg %>%
+  filter(!is.na(CLLotCod)) %>%
+  group_by(CLLotCod) %>%
+  summarise(SacosCerrados = sum(SacosFact, na.rm = TRUE), .groups = "drop")
+
+# Facturación abierta por lote ----
+fact_abierta_lote <- fact %>%
+  filter(FecMesFact > ultimo_periodo_pyg) %>%
+  group_by(CLLotCod) %>%
+  summarise(SacosAbiertos = sum(SacosFact, na.rm = TRUE), .groups = "drop")
+
+# AUDITORIA CIERRE OPERATIVO ----
+# Facturación operacional cerrada de respaldo para lotes sin PYG identificable ----
+fact_cerrada_lote <- fact %>%
+  filter(FecMesFact <= ultimo_periodo_pyg) %>%
+  group_by(CLLotCod) %>%
+  summarise(SacosOperativosCerrados = sum(SacosFact, na.rm = TRUE),
+            .groups = "drop")
+
+auditoria_cierre_operativo <- full_join(
+  pyg_fact_lote,
+  fact_cerrada_lote,
+  by = "CLLotCod"
+) %>%
   mutate(
-    PendProducir = ifelse(
-      is.na(CLLotCod),
-      NA_real_,
-      pmax(
-        SacLote - coalesce(SacProd, 0),
-        0
-      )
-    ),
-    PendDespachar = ifelse(
-      is.na(CLLotCod),
-      NA_real_,
-      pmax(
-        SacLote - pmax(coalesce(SacDesp, 0), 0),
-        0
-      )
-    ),
-    PendFacturar = ifelse(
-      is.na(CLLotCod),
-      NA_real_,
-      pmax(
-        SacLote -
-          pmax(coalesce(SacDesp, 0), 0) -
-          coalesce(SacosFactAcum, 0),
-        0
-      )
+    SacosCerradosPYG = coalesce(SacosCerrados, 0),
+    SacosCerradosSYSCAFE = coalesce(SacosOperativosCerrados, 0),
+    DiferenciaSacos = SacosCerradosSYSCAFE - SacosCerradosPYG,
+    EstadoConciliacion = case_when(
+      is.na(SacosCerrados) ~ "SIN_PYG",
+      is.na(SacosOperativosCerrados) ~ "SIN_SYSCAFE",
+      abs(DiferenciaSacos) > 0.01 ~ "DIFERENCIA",
+      TRUE ~ "CONCILIADO"
     )
+  )
+
+if (any(auditoria_cierre_operativo$EstadoConciliacion != "CONCILIADO")) {
+  warning("Existen diferencias entre SYSCAFE y CRMNALMARLOT en meses cerrados; ",
+          "se conserva exclusivamente el volumen financiero de CRMNALMARLOT")
+}
+
+# Relación única entre lote y línea ----
+relacion_lote_linea <- lotes_raw %>%
+  transmute(
+    CLLotCod,
+    PdcCod = CLPdcCod,
+    PdcLin = CLPdcLin,
+    SacLote = as.numeric(SacLote),
+    SacProd = as.numeric(SacProd),
+    SacDesp = as.numeric(SacDesp)
   ) %>%
-  filter(
-    PdcEst == "A",
-    is.na(CLLotCod) |
-      coalesce(PendProducir, 0) > 0 |
-      coalesce(PendDespachar, 0) > 0 |
-      coalesce(PendFacturar, 0) > 0
-  ) %>%
+  filter(!is.na(CLLotCod), !is.na(PdcCod), !is.na(PdcLin))
+
+.verificar_clave_unica(relacion_lote_linea, "CLLotCod", "relacion_lote_linea")
+
+# Un lote puede contener movimientos en varios meses; se cuenta una sola vez ----
+resumen_lotes_linea <- relacion_lote_linea %>%
+  left_join(pyg_fact_lote, by = "CLLotCod") %>%
+  left_join(fact_abierta_lote, by = "CLLotCod") %>%
   mutate(
-    FecMes = mes_actual,
-    ANHO = lubridate::year(FecMes),
-    MES = toupper(
-      format(
-        FecMes,
-        "%B"
-      )
-    ),
-    CLASE = NA_character_,
-    SegmentacionClientePYG = NA_character_,
-    FecFact = as.Date(NA),
-    SacosFact = NA_real_,
-    Margen = NA_real_
+    SacosCerrados = coalesce(SacosCerrados, 0),
+    SacosAbiertos = coalesce(SacosAbiertos, 0),
+    SacosFacturados = SacosCerrados + SacosAbiertos
   ) %>%
+  group_by(PdcCod, PdcLin) %>%
+  summarise(
+    NumLotes = n(),
+    CantidadAsignadaOrigen = sum(SacLote, na.rm = TRUE),
+    CantidadProducidaOrigen = sum(SacProd, na.rm = TRUE),
+    CantidadDespachadaOrigen = sum(SacDesp, na.rm = TRUE),
+    SacosFacturados = sum(SacosFacturados, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+.verificar_clave_unica(resumen_lotes_linea, c("PdcCod", "PdcLin"),
+                       "resumen_lotes_linea")
+
+# AUDITORIA UNIDADES LOTES ----
+resumen_lotes_linea <- resumen_lotes_linea %>%
+  mutate(
+    UnidadLoteValidada = FALSE,
+    SacosAsignados = NA_real_,
+    SacosProducidos = NA_real_,
+    SacosDespachados = NA_real_
+  )
+
+lineas_pendientes <- ped %>%
+  left_join(resumen_lotes_linea, by = c("PdcCod", "PdcLin")) %>%
+  transmute(
+    CLPdcCod = PdcCod,
+    CLPdcLin = PdcLin,
+    SacosPedido,
+    SacosFacturadosLinea = coalesce(SacosFacturados, 0),
+    SacosPendientesLinea = if_else(
+      is.finite(SacosPedido),
+      pmax(SacosPedido - SacosFacturadosLinea, 0),
+      NA_real_
+    )
+  )
+
+.verificar_clave_unica(lineas_pendientes, c("CLPdcCod", "CLPdcLin"),
+                       "lineas_pendientes")
+
+
+data_pendiente <- base_operativa %>%
+  left_join(lineas_pendientes %>%
+              select(CLPdcCod, CLPdcLin, SacosPendientesLinea),
+            by = c("CLPdcCod", "CLPdcLin"), relationship = "many-to-one") %>%
+  group_by(CLPdcCod, CLPdcLin) %>%
+  mutate(
+    FilaSaldo = row_number(),
+    PendProducir = NA_real_,
+    PendDespachar = NA_real_,
+    PendFacturar = if_else(FilaSaldo == 1L, SacosPendientesLinea, 0)
+  ) %>%
+  ungroup() %>%
+  filter(PdcEst == "A", coalesce(SacosPendientesLinea > 0, FALSE)) %>%
+# MES OPERATIVO ----
+mutate(
+  FecMes = pmax(coalesce(lubridate::floor_date(PdcFecEst, "month"),
+                         mes_actual), fecha_inicio_operativo),
+  ANHO = lubridate::year(FecMes),
+  MES = toupper(format(FecMes, "%B")),
+  CLASE = NA_character_,
+  SegmentacionClientePYG = NA_character_,
+  FecFact = as.Date(NA),
+  SacosFact = NA_real_,
+  Margen = NA_real_
+) %>%
   select(
     FecMes,
     ANHO,
@@ -1643,10 +1594,7 @@ data_pendiente <- base_operativa %>%
     PendFacturar
   )
 
-data_operativo <- bind_rows(
-  data_fact_abierta,
-  data_pendiente
-)
+data_operativo <- bind_rows(data_fact_abierta, data_pendiente)
 
 if (any(data_operativo$FecMes <= ultimo_periodo_pyg, na.rm = TRUE)) {
   stop("Los datos operativos contienen registros en meses cerrados")
@@ -1694,17 +1642,11 @@ data <- bind_rows(
   ) %>%
   left_join(
     nit_ppal %>%
-      rename(
-        CLCliNit = PerCod,
-        CliNitPpalActual = CliNitPpal
-      ),
+      rename(CLCliNit = PerCod, CliNitPpalActual = CliNitPpal),
     by = "CLCliNit"
   ) %>%
   mutate(
-    CliNitPpal = coalesce(
-      CliNitPpalActual,
-      CLCliNit
-    )
+    CliNitPpal = coalesce(CliNitPpalActual, CLCliNit)
   ) %>%
   select(
     -CliNitPpalActual
@@ -1715,28 +1657,17 @@ data <- bind_rows(
   ) %>%
   left_join(
     sucs,
-    by = c(
-      "CLSucCod" = "SucCod"
-    )
+    by = c("CLSucCod" = "SucCod")
   ) %>%
   left_join(
     n_cliente %>%
-      select(
-        -CliNitPpal
-      ),
-    by = c(
-      "CliNitPpal" = "PerCod"
-    )
+      select(-CliNitPpal),
+    by = c("CliNitPpal" = "PerCod")
   ) %>%
   left_join(
     n_cliente %>%
-      select(
-        PerCod,
-        RazonSocialCliNit = PerRazSoc
-      ),
-    by = c(
-      "CLCliNit" = "PerCod"
-    )
+      select(PerCod, RazonSocialCliNit = PerRazSoc),
+    by = c("CLCliNit" = "PerCod")
   ) %>%
   left_join(
     contactos_raw,
@@ -1757,36 +1688,16 @@ data <- bind_rows(
     niveles = NIVELES_MARGEN
   ) %>%
   mutate(
-    Margen = ifelse(
-      FecMes > ultimo_periodo_pyg &
-        !is.na(SacosFact) &
-        !is.na(MarSaco),
-      SacosFact * MarSaco,
-      Margen
+    MarSaco = if_else(
+      FecMes <= ultimo_periodo_pyg &
+        !(is.finite(SacosFact) & SacosFact != 0 & is.finite(Margen)),
+      NA_real_, MarSaco
     ),
-    across(
-      contains("Fec"),
-      ~ if_else(
-        as.Date(.) == as.Date("1753-01-01"),
-        as.Date(NA),
-        as.Date(.)
-      )
-    ),
-    CliNitPpal = ifelse(
-      is.na(CliNitPpal),
-      CLCliNit,
-      CliNitPpal
-    ),
-    CLLinNegNo = ifelse(
-      CLLinNegNo == "DIFERENCIADOS",
-      "A LA MEDIDA",
-      CLLinNegNo
-    ),
-    LinNegCod = ifelse(
-      LinNegCod == 20000L,
-      21000L,
-      LinNegCod
-    )
+    Margen = ifelse(FecMes > ultimo_periodo_pyg & !is.na(SacosFact) & !is.na(MarSaco), SacosFact * MarSaco, Margen),
+    across(contains("Fec"), ~ if_else(as.Date(.) == as.Date("1753-01-01"), as.Date(NA), as.Date(.))),
+    CliNitPpal = ifelse(is.na(CliNitPpal), CLCliNit, CliNitPpal),
+    CLLinNegNo = ifelse(CLLinNegNo == "DIFERENCIADOS", "A LA MEDIDA", CLLinNegNo),
+    LinNegCod = ifelse(LinNegCod == 20000L, 21000L, LinNegCod)
   ) %>%
   select(
     FecMes,
@@ -1857,12 +1768,7 @@ data <- bind_rows(
     PendDespachar,
     PendFacturar
   ) %>%
-  mutate(
-    across(
-      where(is.character),
-      ~ replace_na(., "SIN DATO")
-    )
-  )
+  mutate(across(where(is.character), ~ replace_na(., "SIN DATO")))
 
 # Validación de integridad financiera ----
 if (nrow(data) != filas_financieras + filas_operativas) {
@@ -1872,11 +1778,7 @@ if (nrow(data) != filas_financieras + filas_operativas) {
 fuente_cerrada <- margenes_pyg %>%
   transmute(
     FecMes,
-    LinNegCod = ifelse(
-      .convertir_numero_margen(LINNEG) == 20000,
-      21000,
-      .convertir_numero_margen(LINNEG)
-    ),
+    LinNegCod = ifelse(.convertir_numero_margen(LINNEG) == 20000, 21000, .convertir_numero_margen(LINNEG)),
     SacosFact = .convertir_numero_margen(SACOS70),
     Margen = .convertir_numero_margen(MARGEN)
   ) %>%
@@ -1946,7 +1848,6 @@ COLUMNAS_DATA <- c(
 if (!identical(names(data), COLUMNAS_DATA)) {
   stop("La estructura final de data cambio respecto al contrato de 67 variables")
 }
-
 
 ## Segmentaciones ----
 es_primer_dia <- lubridate::day(Sys.Date()) == 1L
@@ -2214,27 +2115,15 @@ clv_hist <- racafeBD::CargarDatos("CRMNALCLV") %>%
 segmentaciones_hist <- segmentos_hist_mes %>%
   full_join(
     rfm_hist_s,
-    by = c(
-      "FecMes",
-      "CliNitPpal",
-      "LinNegCod"
-    )
+    by = c("FecMes", "CliNitPpal", "LinNegCod")
   ) %>%
   full_join(
     rfm_hist_m,
-    by = c(
-      "FecMes",
-      "CliNitPpal",
-      "LinNegCod"
-    )
+    by = c("FecMes", "CliNitPpal", "LinNegCod")
   ) %>%
   full_join(
     clv_hist,
-    by = c(
-      "FecMes",
-      "CliNitPpal",
-      "LinNegCod"
-    )
+    by = c("FecMes", "CliNitPpal", "LinNegCod")
   ) %>%
   arrange(
     CliNitPpal,
@@ -2262,6 +2151,348 @@ segmentaciones_actual <- segmentaciones_hist %>%
   slice_tail(n = 1L) %>%
   ungroup()
 
+# Proyección comercial por línea de embarque ----
+
+fecha_actualizacion_operativa <- Sys.time()
+fecha_actualizacion_pyg <- Sys.time()
+
+# Imputación de margen con historia financiera exclusivamente cerrada ----
+margenes_entrenamiento <- data %>%
+  filter(
+    FecMes <= ultimo_periodo_pyg,
+    is.finite(SacosFact), SacosFact > 0,
+    is.finite(Margen)
+  ) %>%
+  group_by(CLCliNit, LinNegCod, LinProCod) %>%
+  summarise(
+    SacosEntrenamiento = sum(SacosFact),
+    MargenEntrenamiento = sum(Margen),
+    NumOperaciones = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(MarSacoCliente = MargenEntrenamiento / SacosEntrenamiento)
+
+margenes_producto <- data %>%
+  filter(
+    FecMes <= ultimo_periodo_pyg,
+    is.finite(SacosFact), SacosFact > 0,
+    is.finite(Margen)
+  ) %>%
+  group_by(LinNegCod, LinProCod) %>%
+  summarise(MarSacoProducto = sum(Margen) / sum(SacosFact), .groups = "drop")
+
+margenes_linea <- data %>%
+  filter(
+    FecMes <= ultimo_periodo_pyg,
+    is.finite(SacosFact), SacosFact > 0,
+    is.finite(Margen)
+  ) %>%
+  group_by(LinNegCod) %>%
+  summarise(MarSacoLinea = sum(Margen) / sum(SacosFact), .groups = "drop")
+
+margen_global <- data %>%
+  filter(
+    FecMes <= ultimo_periodo_pyg,
+    is.finite(SacosFact), SacosFact > 0,
+    is.finite(Margen)
+  ) %>%
+  summarise(MarSacoGlobal = sum(Margen) / sum(SacosFact)) %>%
+  pull(MarSacoGlobal)
+
+if (length(margen_global) != 1L || !is.finite(margen_global)) {
+  margen_global <- NA_real_
+}
+
+# Proyección activa e histórico de pedidos ----
+pedidos_integrados <- ped %>%
+  left_join(resumen_lotes_linea, by = c("PdcCod", "PdcLin")) %>%
+  mutate(
+    NumLotes = coalesce(NumLotes, 0L),
+    SacosAsignados = coalesce(SacosAsignados, 0),
+    SacosProducidos = coalesce(SacosProducidos, 0),
+    SacosDespachados = coalesce(SacosDespachados, 0),
+    SacosFacturados = coalesce(SacosFacturados, 0),
+    CantidadAsignadaOrigen = coalesce(CantidadAsignadaOrigen, 0),
+    CantidadProducidaOrigen = coalesce(CantidadProducidaOrigen, 0),
+    CantidadDespachadaOrigen = coalesce(CantidadDespachadaOrigen, 0),
+    UnidadLoteValidada = coalesce(UnidadLoteValidada, FALSE),
+    SacosPendientes = if_else(is.finite(SacosPedido), pmax(SacosPedido - SacosFacturados, 0), NA_real_),
+    FechaFactProbable = PdcFecEst,
+    FecMesProbable = floor_date(PdcFecEst, "month"),
+    FechaEstimadaVencida = !is.na(PdcFecEst) & PdcFecEst < Sys.Date(),
+    FechaVencida = FechaEstimadaVencida &
+      coalesce(SacosPendientes > 0, FALSE),
+    Proyectar = PdcEst == "A" & !is.na(PdcFecEst) &
+      coalesce(SacosPendientes > 0, FALSE)
+  ) %>%
+  left_join(margenes_entrenamiento,
+            by = c("CLCliNit", "LinNegCod", "LinProCod")) %>%
+  left_join(margenes_producto, by = c("LinNegCod", "LinProCod")) %>%
+  left_join(margenes_linea, by = "LinNegCod") %>%
+  mutate(
+    MarSacoEstimado = coalesce(
+      if_else(coalesce(NumOperaciones, 0L) >= 3L,
+              MarSacoCliente, NA_real_),
+      MarSacoProducto,
+      MarSacoLinea,
+      margen_global
+    ),
+    MetodoMargen = case_when(
+      coalesce(NumOperaciones, 0L) >= 3L &
+        is.finite(MarSacoCliente) ~ "CLIENTE_PRODUCTO",
+      is.finite(MarSacoProducto) ~ "PRODUCTO",
+      is.finite(MarSacoLinea) ~ "LINEA_NEGOCIO",
+      is.finite(margen_global) ~ "GLOBAL",
+      TRUE ~ "SIN_ESTIMACION"
+    ),
+    MargenEstimado = if_else(Proyectar & is.finite(MarSacoEstimado), SacosPendientes * MarSacoEstimado, NA_real_),
+    IngresoEstimado = if_else(
+      Proyectar & is.finite(PdcPrecioKilo) & is.finite(SacosPendientes),
+      SacosPendientes * 70 * PdcPrecioKilo,
+      NA_real_
+    ),
+    FechaCorteOperativo = as.Date(fecha_actualizacion_operativa)
+  )
+
+.verificar_clave_unica(pedidos_integrados, c("PdcCod", "PdcLin"),
+                       "pedidos_integrados")
+
+# Alertas de conciliación ----
+alertas_proyeccion <- pedidos_integrados %>%
+  mutate(
+    Alerta = case_when(
+      is.na(SacosPedido) ~ "UNIDAD_SIN_CONVERSION",
+      PdcEst == "A" & is.na(PdcFecEst) ~ "SIN_FECHA_ESTIMADA",
+      SacosFacturados > SacosPedido + 0.01 ~ "FACTURACION_SUPERA_PEDIDO",
+      UnidadLoteValidada & SacosAsignados > SacosPedido + 0.01 ~ "LOTES_SUPERAN_PEDIDO",
+      FechaVencida ~ "FECHA_VENCIDA",
+      Proyectar & !is.finite(MarSacoEstimado) ~ "SIN_MARGEN",
+      !UnidadLoteValidada & NumLotes > 0 ~ "UNIDAD_LOTE_SIN_VALIDAR",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(Alerta)) %>%
+  select(PdcCod, PdcLin, PdcEst, Alerta, PdcFecCie, PdcFecEst,
+         SacosPedido, SacosAsignados, SacosFacturados, SacosPendientes)
+
+# La fecha probable no se fuerza al mes abierto aunque ya haya vencido ----
+proyecciones_comerciales <- pedidos_integrados %>%
+  filter(Proyectar) %>%
+  transmute(
+    CLPdcCod = PdcCod,
+    CLPdcLin = PdcLin,
+    CLCliNit,
+    LinNegCod,
+    LinProCod,
+    PdcEst,
+    PdcFecCre,
+    PdcFecCie,
+    PdcFecEst,
+    FechaFactProbable,
+    FecMesProbable,
+    FechaVencida,
+    NumLotes,
+    SacosPedido,
+    SacosAsignados,
+    SacosFacturados,
+    SacosProyectados = SacosPendientes,
+    PdcPrecioKilo,
+    IngresoEstimado,
+    MarSacoEstimado,
+    MargenEstimado,
+    MetodoMargen,
+    OrigenDato = "PEDIDO",
+    EstadoFinanciero = "PROYECTADO",
+    FechaCorteOperativo
+  )
+
+if (anyDuplicated(proyecciones_comerciales[c("CLPdcCod", "CLPdcLin")])) {
+  stop("La proyeccion multiplica lineas de pedido")
+}
+
+if (any(!is.finite(proyecciones_comerciales$SacosProyectados) |
+        proyecciones_comerciales$SacosProyectados <= 0)) {
+  stop("La proyeccion contiene volumen no positivo o no finito")
+}
+
+# Fuente analítica extendida: no modifica los 67 campos originales de data ----
+# ESTADOS FINANCIEROS ----
+fechas_pedido_linea <- ped %>%
+  transmute(CLPdcCod = PdcCod, CLPdcLin = PdcLin,
+            PdcFecEst, FecMesEstimado = floor_date(PdcFecEst, "month"))
+
+.verificar_clave_unica(fechas_pedido_linea, c("CLPdcCod", "CLPdcLin"),
+                       "fechas_pedido_linea")
+
+data_crm <- bind_rows(
+  data %>%
+    left_join(fechas_pedido_linea, by = c("CLPdcCod", "CLPdcLin"),
+              relationship = "many-to-one") %>%
+    mutate(
+      TipoRegistro = if_else(!is.na(FecFact), "FACTURADO", "PENDIENTE"),
+      OrigenDato = case_when(
+        !is.na(FecFact) & FecMes <= ultimo_periodo_pyg ~ "PYG",
+        !is.na(FecFact) ~ "SYSCAFE",
+        TRUE ~ "PEDIDO"
+      ),
+      EstadoFinanciero = case_when(
+        !is.na(FecFact) & FecMes <= ultimo_periodo_pyg ~ "CERRADO",
+        !is.na(FecFact) ~ "FACTURADO_ABIERTO",
+        TRUE ~ "PENDIENTE"
+      ),
+      FechaFactProbable = if_else(is.na(FecFact), PdcFecEst, as.Date(NA)),
+      FecMesProbable = if_else(is.na(FecFact), FecMesEstimado, as.Date(NA)),
+      FechaVencida = !is.na(PdcFecEst) & PdcFecEst < Sys.Date() & is.na(FecFact),
+      FecMesAnalisis = if_else(!is.na(FecFact), FecMes, FecMesEstimado),
+      SacosProyectados = NA_real_,
+      MargenEstimado = NA_real_,
+      IngresoEstimado = NA_real_,
+      MargenContable = if_else(EstadoFinanciero == "CERRADO", Margen, NA_real_),
+      MargenAbiertoEstimado = if_else(
+        EstadoFinanciero == "FACTURADO_ABIERTO", Margen, NA_real_
+      ),
+      MargenProyectado = NA_real_,
+      FuenteFinanciera = case_when(
+        EstadoFinanciero == "CERRADO" ~ "CRMNALMARLOT",
+        EstadoFinanciero == "FACTURADO_ABIERTO" ~ "SYSCAFE_ESTIMADO",
+        TRUE ~ "SIN_EJECUCION"
+      )
+    ),
+  proyecciones_comerciales %>%
+    mutate(
+      TipoRegistro = "PROYECTADO",
+      FecMes = FecMesProbable,
+      FecMesEstimado = FecMesProbable,
+      FecMesAnalisis = FecMesProbable,
+      FecFact = as.Date(NA),
+      SacosFact = NA_real_,
+      Margen = NA_real_,
+      MargenContable = NA_real_,
+      MargenAbiertoEstimado = NA_real_,
+      MargenProyectado = MargenEstimado,
+      FuenteFinanciera = "PROYECCION_PEDIDO"
+    )
+) %>%
+  mutate(
+    MargenKg = if_else(is.finite(SacosFact) & SacosFact > 0 &
+                         is.finite(Margen), Margen / (SacosFact * 70), NA_real_),
+    MargenKgProyectado = if_else(is.finite(SacosProyectados) &
+                                   SacosProyectados > 0 &
+                                   is.finite(MargenProyectado),
+                                 MargenProyectado / (SacosProyectados * 70),
+                                 NA_real_)
+  )
+
+if (nrow(data_crm) != nrow(data) + nrow(proyecciones_comerciales)) {
+  stop("La base data_crm tiene un numero inesperado de registros")
+}
+
+# INDICADORES DE PEDIDOS ----
+indicadores_pedidos <- pedidos_integrados %>%
+  transmute(
+    PdcCod, PdcLin, CLCliNit, LinNegCod, LinProCod, PdcEst,
+    PdcFecCre, PdcFecEst, FecMesEstimado = FecMesProbable,
+    FechaVencida, NumLotes, UnidadLoteValidada,
+    SacosPedido, SacosFacturados, SacosPendientes,
+    CantidadAsignadaOrigen, CantidadProducidaOrigen,
+    CantidadDespachadaOrigen,
+    MargenEstimado, MetodoMargen,
+    PedidoSinLote = NumLotes == 0L,
+    PedidoConFechaEstimada = !is.na(PdcFecEst)
+  )
+
+.verificar_clave_unica(indicadores_pedidos, c("PdcCod", "PdcLin"),
+                       "indicadores_pedidos")
+
+indicadores_pedidos_mes <- indicadores_pedidos %>%
+  filter(PdcEst == "A", !is.na(FecMesEstimado)) %>%
+  group_by(FecMesEstimado, LinNegCod) %>%
+  summarise(
+    LineasPedido = n(),
+    LineasSinLote = sum(PedidoSinLote),
+    LineasVencidas = sum(FechaVencida),
+    SacosComprometidos = sum(SacosPedido, na.rm = TRUE),
+    SacosPendientes = sum(SacosPendientes, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# CONTROL DE FUENTES FINANCIERAS ----
+if (any(data_crm$EstadoFinanciero == "PROYECTADO" &
+        !is.na(data_crm$SacosFact), na.rm = TRUE)) {
+  stop("Los registros proyectados no pueden tener sacos facturados")
+}
+
+if (any(data_crm$EstadoFinanciero == "PENDIENTE" &
+        !is.na(data_crm$Margen), na.rm = TRUE)) {
+  stop("Los pedidos pendientes no pueden tener margen ejecutado")
+}
+
+# AUDITORIA FINANCIERA MENSUAL ----
+control_pyg_mensual <- margenes_pyg %>%
+  transmute(
+    CLLotCod = .convertir_numero_margen(LOTE),
+    FecMes = as.Date(FecMes),
+    SacosPYG = .convertir_numero_margen(SACOS70),
+    MargenPYG = .convertir_numero_margen(MARGEN)
+  ) %>%
+  filter(!is.na(CLLotCod), CLLotCod != 0) %>%
+  group_by(CLLotCod, FecMes) %>%
+  summarise(
+    SacosPYG = sum(SacosPYG, na.rm = TRUE),
+    MargenPYG = sum(MargenPYG, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+control_syscafe_mensual <- fact %>%
+  filter(FecMesFact <= ultimo_periodo_pyg) %>%
+  group_by(CLLotCod, FecMes = FecMesFact) %>%
+  summarise(SacosSYSCAFE = sum(SacosFact, na.rm = TRUE), .groups = "drop")
+
+auditoria_financiera_mensual <- full_join(
+  control_pyg_mensual,
+  control_syscafe_mensual,
+  by = c("CLLotCod", "FecMes")
+) %>%
+  mutate(
+    DiferenciaSacos = coalesce(SacosSYSCAFE, 0) - coalesce(SacosPYG, 0),
+    EstadoConciliacion = case_when(
+      is.na(SacosPYG) ~ "SIN_PYG",
+      is.na(SacosSYSCAFE) ~ "SIN_SYSCAFE",
+      abs(DiferenciaSacos) > 0.01 ~ "DIFERENCIA",
+      TRUE ~ "CONCILIADO"
+    ),
+    FuenteVerdad = "CRMNALMARLOT"
+  )
+
+# Indicadores de calidad ----
+validaciones_etl <- tibble(
+  FechaProceso = Sys.time(),
+  UltimoPeriodoPYG = ultimo_periodo_pyg,
+  FechaInicioAnalisis = fecha_inicio_analisis,
+  PedidosHistoricosExcluidos = nrow(pedidos_excluidos_historicos),
+  PedidosLineas = nrow(ped),
+  PedidosSinLote = nrow(pedido_sin_lote),
+  LotesSinPedido = nrow(lotes_sin_pedido),
+  PedidosConFechasDistintas = n_distinct(pedidos_fechas_distintas$PdcCod),
+  PedidosActivosSinFecha = nrow(ped_sin_fecha),
+  PedidosActivosSinConversion = nrow(ped_sin_conversion),
+  LineasProyectadas = nrow(proyecciones_comerciales),
+  LineasVencidas = sum(indicadores_pedidos$FechaVencida),
+  LineasSinLoteActivas = sum(indicadores_pedidos$PdcEst == "A" &
+                               indicadores_pedidos$PedidoSinLote),
+  LineasConLoteSinUnidadValidada = sum(indicadores_pedidos$NumLotes > 0L &
+                                         !indicadores_pedidos$UnidadLoteValidada),
+  SacosPendientesSinLote = sum(indicadores_pedidos$SacosPendientes[
+    indicadores_pedidos$PdcEst == "A" & indicadores_pedidos$PedidoSinLote
+  ], na.rm = TRUE),
+  LineasConAlertas = nrow(alertas_proyeccion),
+  RegistrosPYG = nrow(data_pyg),
+  RegistrosFacturaAbierta = nrow(data_fact_abierta),
+  LotesConDiferenciaCierre = sum(auditoria_cierre_operativo$EstadoConciliacion != "CONCILIADO"),
+  LoteMesConDiferencia = sum(auditoria_financiera_mensual$EstadoConciliacion != "CONCILIADO")
+)
+
+print(validaciones_etl)
 
 # Persistencia ----
 ruta_lotes_cache <- "APP/data/lotes_raw.rds"
@@ -2272,181 +2503,290 @@ if (!dir.exists(dirname(ruta_lotes_cache))) {
 
 saveRDS(lotes_raw, ruta_lotes_cache)
 
-# Exportaciones ----
+# EXPORTACION MAESTRA ----
 
-## Datos Shiny ----
-.snapshot_max <- function(dat, ...) {
-  grp_vars <- rlang::enquos(...)
-  
-  dat %>%
-    group_by(
-      !!!grp_vars
-    ) %>%
-    arrange(desc(FecProceso), .by_group = TRUE) %>%
-    slice_head(n = 1L) %>%
-    ungroup()
-}
-.process_rfm <- function(dat, suffix) {
-  COLS_RFM <- c(
-    "SegmentoAnalitica", "rfm_score", "transaction_count",
-    "recency_days", "amount", "recency_score", "frequency_score",
-    "monetary_score"
-  )
-  
-  dat %>%
-    mutate(
-      FecProceso = as.Date(FecProceso)
-    ) %>%
-    .snapshot_max(
-      LinNegCod,
-      CliNitPpal
-    ) %>%
-    select(
-      LinNegCod,
-      CliNitPpal,
-      all_of(COLS_RFM)
-    ) %>%
-    rename_with(~ paste0(.x, suffix), all_of(COLS_RFM))
+.normalizar_fecha_crm <- function(x) {
+  x <- as.Date(x)
+  x[!is.na(x) & x <= as.Date("1753-01-01")] <- as.Date(NA)
+  x
 }
 
-clientes_raw <- clientes_hist %>%
-  mutate(
-    LinNegocio = ifelse(
-      LinNegCod == 10000,
-      "CONVENCIONALES",
-      "A LA MEDIDA"
-    ),
-    across(
-      where(is.numeric),
-      ~ ifelse(
-        is.na(.),
-        0,
-        .
-      )
-    ),
-    across(
-      where(is.character),
-      ~ ifelse(
-        is.na(.) | . == "N/A",
-        "",
-        .
-      )
-    )
-  )
+# HOMOLOGACIONES ----
+lin_neg <- racafeBD::ConsultaSistema(
+  "syscafe", "SELECT LinNegCod, LinNegNom AS LinNeg FROM NLINEANE WHERE CiaCod = 10"
+) %>% distinct(LinNegCod, .keep_all = TRUE)
 
-clientes_snap <- clientes_raw %>%
-  group_by(
-    LinNegCod,
-    CliNitPpal
-  ) %>%
-  filter(
-    FecMes == max(FecMes, na.rm = TRUE)
-  ) %>%
-  slice_tail(n = 1L) %>%
-  ungroup()
+lin_pro <- racafeBD::ConsultaSistema(
+  "syscafe", "SELECT LinProCod, LinProNom FROM NTIPPROD WHERE CiaCod = 10"
+) %>% distinct(LinProCod, .keep_all = TRUE)
 
-clientes_sin_lote <- clientes_snap %>%
-  select(
-    LinNegCod,
-    PerCod = CLCliNit,
-    Segmento
-  ) %>%
-  distinct()
+n_marcom <- racafeBD::ConsultaSistema(
+  "syscafe", "SELECT MCCod, MCNom FROM NMARCOM"
+) %>% distinct(MCCod, .keep_all = TRUE)
 
-pend <- racafeBD::ConsultaSistema(
-  "syscafe",
-  "SELECT CLSucCod, CLLotCod, CLLotSacPr, CLLotSacDe, CLLotSacFa
-   FROM EXPCUALO
-   WHERE CiaCod = 10 AND CLPdcVtaNa = 1
-     AND CLCliNit <> 32 AND CLLinNegCo <> 0 AND CLLotCan > 0"
+n_marcas <- racafeBD::ConsultaSistema(
+  "syscafe", "SELECT MrcCod, MrcNom AS Marca FROM NMARCAS"
+) %>% distinct(MrcCod, .keep_all = TRUE)
+
+productos_hom <- racafeBD::CargarDatos("CRMNALPRODS")
+ordenes_hom <- racafeBD::CargarDatos("CRMNALORDCMP")
+
+homologaciones <- list(
+  clientes = clientes_actual,
+  clientes_historico = clientes_hist,
+  nit_principal = nit_ppal,
+  contactos = contactos_clientes,
+  segmentos = segmentaciones_actual,
+  segmentos_historico = segmentaciones_hist,
+  lineas_negocio = lin_neg,
+  tipos_producto = lin_pro,
+  nombres_comerciales = n_marcom,
+  marcas = n_marcas,
+  productos = productos_hom,
+  ordenes_compra = ordenes_hom,
+  sucursales = sucs,
+  clientes_sistema = n_cliente,
+  facturacion = fact,
+  margenes_pyg = margenes_pyg,
+  lotes = lotes_raw
 )
 
-segmentos_snap <- segmentaciones_actual %>%
-  select(LinNegCod, CliNitPpal, SegmentoRacafe)
-
-rfm_snap <- segmentaciones_actual %>%
-  select(LinNegCod, CliNitPpal, ends_with("S"))
-
-rfmm_snap <- segmentaciones_actual %>%
-  select(LinNegCod, CliNitPpal, ends_with("M"))
-
-clv_snap <- segmentaciones_actual %>%
-  select(LinNegCod, CliNitPpal, Churn, SacosPred)
-
-productos_snap <- racafeBD::CargarDatos("CRMNALPRODS") %>%
-  mutate(
-    FecProceso = as.Date(FecProceso)
+# TRAZABILIDAD FACTURAS ----
+.facturas_referencia <- function() {
+  sql_nal <- paste(
+    "SELECT F1.FcnLot AS CLLotCod, F2.FcnFec AS FecFact,",
+    "F1.FcnNum AS NumeroFactura, 'NACIONAL' AS TipoFactura",
+    "FROM FCTFACN1 F1 INNER JOIN FCTFACNA F2",
+    "ON F1.CiaCod = F2.CiaCod AND F1.FcnNum = F2.FcnNum",
+    "WHERE F1.CiaCod = 10 AND F2.FcnEtd = 'C'",
+    sprintf("AND F2.FcnFec >= '%s'",
+            format(fecha_inicio_analisis, "%Y-%m-%d"))
+  )
+  sql_ext <- paste(
+    "SELECT F1.FctLot AS CLLotCod, F2.FctFec AS FecFact,",
+    "F1.FctNum AS NumeroFactura, 'EXTERIOR' AS TipoFactura",
+    "FROM FCTFACC2 F1 INNER JOIN FCTFACCA F2",
+    "ON F1.CiaCod = F2.CiaCod AND F1.FctNum = F2.FctNum",
+    "WHERE F1.CiaCod = 10 AND F1.FctLotAnu <> 'S'",
+    sprintf("AND F2.FctFec >= '%s'",
+            format(fecha_inicio_analisis, "%Y-%m-%d"))
+  )
+  bind_rows(
+    racafeBD::ConsultaSistema("syscafe", sql_nal),
+    racafeBD::ConsultaSistema("syscafe", sql_ext)
   ) %>%
-  .snapshot_max(LinNegCod, LinProCod, MCCod, MrcCod)
+    mutate(
+      CLLotCod = as.numeric(CLLotCod),
+      FecMes = floor_date(as.Date(FecFact), "month"),
+      ReferenciaFactura = paste0(TipoFactura, ":", NumeroFactura)
+    ) %>%
+    filter(!is.na(CLLotCod), !is.na(FecMes)) %>%
+    group_by(CLLotCod, FecMes) %>%
+    summarise(
+      FacturasSYSCAFE = paste(sort(unique(ReferenciaFactura)), collapse = "; "),
+      NumFacturasSYSCAFE = n_distinct(ReferenciaFactura),
+      .groups = "drop"
+    )
+}
 
-# Una fila por lote conserva todas sus órdenes sin duplicar ventas al cruzar en Shiny.
-ord_cmp <- racafeBD::CargarDatos("CRMNALORDCMP") %>%
-  transmute(CLLotCod = as.numeric(Lote), OrdenCompra = trimws(as.character(OrdenCompra))) %>%
-  filter(!is.na(CLLotCod), CLLotCod != 0) %>%
-  group_by(CLLotCod) %>%
-  summarise(OrdenCompra = paste(sort(unique(OrdenCompra[!is.na(OrdenCompra) & nzchar(OrdenCompra)])),
-                                collapse = ", "), .groups = "drop")
+referencias_factura <- .facturas_referencia()
+.verificar_clave_unica(referencias_factura, c("CLLotCod", "FecMes"),
+                       "referencias_factura")
 
-fact_lote <- fact %>%
-  group_by(CLLotCod) %>%
-  summarise(
-    FecPrimerFact = if (all(is.na(FecPrimerFact))) as.Date(NA) else min(FecPrimerFact, na.rm = TRUE),
-    FecFact = if (all(is.na(FecFact))) as.Date(NA) else max(FecFact, na.rm = TRUE),
-    SacosFact = sum(SacosFact, na.rm = TRUE),
-    Facturado = any(coalesce(Facturado, FALSE)),
-    .groups = "drop"
+# DATOS MAESTROS ----
+if (!"FecDespachoReal" %in% names(lotes_raw)) {
+  lotes_raw$FecDespachoReal <- as.Date(NA)
+}
+
+mapa_lotes <- lotes_raw %>%
+  transmute(
+    CLLotCod = as.numeric(CLLotCod),
+    PedidoLote = as.numeric(CLPdcCod),
+    LineaLote = as.numeric(CLPdcLin),
+    SucursalLote = as.numeric(CLSucCod),
+    SacosLoteOrigen = as.numeric(SacLote),
+    SacosProducidosOrigen = as.numeric(SacProd),
+    SacosDespachadosOrigen = as.numeric(SacDesp),
+    FechaAsignacionLote = .normalizar_fecha_crm(FecAsignLote),
+    FechaOrdenTrilla = .normalizar_fecha_crm(FecOrdTril),
+    FechaProduccion = .normalizar_fecha_crm(FecProd),
+    FechaInstruccionDespacho = .normalizar_fecha_crm(FecDesp),
+    FechaDespachoReal = .normalizar_fecha_crm(FecDespachoReal),
+    CodigoOrdenTrilla = as.numeric(CodOrdTril),
+    CodigoDespacho = as.numeric(CodDesp),
+    CodigoMarcaLote = as.numeric(MrcCod),
+    CodigoNombreComercialLote = as.numeric(MCCod)
   ) %>%
-  full_join(
-    margenes_pyg %>%
-      transmute(
-        CLLotCod = .convertir_numero_margen(LOTE),
-        Margen = .convertir_numero_margen(MARGEN),
-        SacosPYG = .convertir_numero_margen(SACOS70)
-      ) %>%
-      filter(!is.na(CLLotCod), CLLotCod != 0) %>%
-      group_by(CLLotCod) %>%
-      summarise(
-        Margen = sum(Margen, na.rm = TRUE),
-        SacosPYG = sum(SacosPYG, na.rm = TRUE),
-        .groups = "drop"
-      ),
-    by = "CLLotCod"
+  distinct(CLLotCod, .keep_all = TRUE)
+
+.verificar_clave_unica(mapa_lotes, "CLLotCod", "mapa_lotes")
+
+mapa_pedidos <- ped %>%
+  transmute(
+    CLPdcCod = as.numeric(PdcCod),
+    CLPdcLin = as.numeric(PdcLin),
+    EstadoPedido = PdcEst,
+    FechaCreacionPedido = .normalizar_fecha_crm(PdcFecCre),
+    FechaCierrePedido = .normalizar_fecha_crm(PdcFecCie),
+    FechaEstimadaPedido = .normalizar_fecha_crm(PdcFecEst),
+    CantidadPedidoOrigen = as.numeric(PdcCan),
+    UnidadKgPedido = as.numeric(UMeFac),
+    SacosPedido70Linea = as.numeric(SacosPedido),
+    PrecioKiloPedido = as.numeric(PdcPrecioKilo)
   )
 
+.verificar_clave_unica(mapa_pedidos, c("CLPdcCod", "CLPdcLin"),
+                       "mapa_pedidos")
 
-lin_neg <- racafeBD::ConsultaSistema("syscafe", "SELECT LinNegCod, LinNegNom AS LinNeg FROM NLINEANE WHERE CiaCod = 10")
+saldos_lineas <- pedidos_integrados %>%
+  transmute(
+    CLPdcCod = as.numeric(PdcCod),
+    CLPdcLin = as.numeric(PdcLin),
+    NumLotesLinea = as.integer(NumLotes),
+    SacosCerradosYAbiertos70Linea = as.numeric(SacosFacturados),
+    SacosPendientes70Linea = as.numeric(SacosPendientes),
+    MargenProyectadoLinea = as.numeric(MargenEstimado),
+    MetodoMargenLinea = as.character(MetodoMargen),
+    FechaVencidaLinea = as.logical(FechaVencida)
+  )
 
-lin_pro <- racafeBD::ConsultaSistema("syscafe", "SELECT LinProCod, LinProNom FROM NTIPPROD WHERE CiaCod = 10")
+.verificar_clave_unica(saldos_lineas, c("CLPdcCod", "CLPdcLin"),
+                       "saldos_lineas")
 
-n_marcom <- racafeBD::ConsultaSistema("syscafe", "SELECT MCCod, MCNom FROM NMARCOM")
+crm_maestro <- data_crm %>%
+  mutate(
+    CLPdcCod = as.numeric(CLPdcCod),
+    CLPdcLin = as.numeric(CLPdcLin),
+    CLLotCod = as.numeric(CLLotCod)
+  ) %>%
+  left_join(mapa_lotes, by = "CLLotCod", relationship = "many-to-one") %>%
+  mutate(
+    CLPdcCod = coalesce(CLPdcCod, PedidoLote),
+    CLPdcLin = coalesce(CLPdcLin, LineaLote)
+  ) %>%
+  left_join(mapa_pedidos, by = c("CLPdcCod", "CLPdcLin"),
+            relationship = "many-to-one") %>%
+  left_join(saldos_lineas, by = c("CLPdcCod", "CLPdcLin"),
+            relationship = "many-to-one") %>%
+  left_join(referencias_factura, by = c("CLLotCod", "FecMes"),
+            relationship = "many-to-one") %>%
+  mutate(
+    PdcFecEst = coalesce(FechaEstimadaPedido, PdcFecEst),
+    PdcFecEst = .normalizar_fecha_crm(PdcFecEst),
+    FechaVencida = !is.na(PdcFecEst) & PdcFecEst < Sys.Date() &
+      coalesce(SacosPendientes70Linea > 0, FALSE),
+    FactorSacos70 = if_else(is.finite(UnidadKgPedido) &
+                              UnidadKgPedido > 0, UnidadKgPedido / 70, NA_real_),
+    SacosLote70 = SacosLoteOrigen * FactorSacos70,
+    SacosProducidos70 = SacosProducidosOrigen * FactorSacos70,
+    SacosDespachados70 = SacosDespachadosOrigen * FactorSacos70,
+    FuentePedidos = if_else(!is.na(FechaCreacionPedido), "EXPPEDID/EXPPEDI1", NA_character_),
+    FuenteLote = if_else(!is.na(PedidoLote), "EXPCUALO", NA_character_),
+    FuenteFacturas = if_else(!is.na(FacturasSYSCAFE),
+                             "FCTFACN1/FCTFACNA/FCTFACC2/FCTFACCA", NA_character_),
+    MetricaSacosCerrados70 = if_else(EstadoFinanciero == "CERRADO",
+                                     coalesce(SacosFact, 0), 0),
+    MetricaMargenContable = if_else(EstadoFinanciero == "CERRADO",
+                                    coalesce(MargenContable, 0), 0),
+    MetricaSacosAbiertos70 = if_else(EstadoFinanciero == "FACTURADO_ABIERTO",
+                                     coalesce(SacosFact, 0), 0),
+    MetricaMargenAbiertoEstimado = if_else(
+      EstadoFinanciero == "FACTURADO_ABIERTO",
+      coalesce(MargenAbiertoEstimado, 0), 0
+    ),
+    MetricaSacosProyectados70 = if_else(EstadoFinanciero == "PROYECTADO",
+                                        coalesce(SacosProyectados, 0), 0),
+    MetricaMargenProyectado = if_else(EstadoFinanciero == "PROYECTADO",
+                                      coalesce(MargenProyectado, 0), 0),
+    MetricaSacosFacturados70 = MetricaSacosCerrados70 + MetricaSacosAbiertos70,
+    MetricaMargenEscenario = MetricaMargenContable +
+      MetricaMargenAbiertoEstimado + MetricaMargenProyectado
+  ) %>%
+  group_by(CLPdcCod, CLPdcLin) %>%
+  mutate(
+    FilaIndicadorPedido = row_number() == which.max(
+      EstadoFinanciero == "PROYECTADO"
+    ) & !is.na(CLPdcLin),
+    MetricaSacosPedido70 = if_else(FilaIndicadorPedido,
+                                   coalesce(SacosPedido70Linea, 0), 0),
+    MetricaSacosPendientes70 = if_else(FilaIndicadorPedido,
+                                       coalesce(SacosPendientes70Linea, 0), 0)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    IdRegistroCRM = row_number(),
+    FechaCortePyG = ultimo_periodo_pyg,
+    FechaInicioHistorico = fecha_inicio_analisis,
+    FechaActualizacion = Sys.time()
+  )
 
-n_marcas <- racafeBD::ConsultaSistema("syscafe", "SELECT MrcCod, MrcNom AS Marca FROM NMARCAS")
+primer_lote <- !is.na(crm_maestro$CLLotCod) &
+  !duplicated(ifelse(is.na(crm_maestro$CLLotCod),
+                     paste0("SIN_", seq_len(nrow(crm_maestro))),
+                     crm_maestro$CLLotCod))
 
-lotes_asig <- racafeBD::ConsultaSistema("syscafe", "SELECT PdcCod, PdcLin FROM EXPLOT1")
+crm_maestro <- crm_maestro %>%
+  mutate(
+    MetricaSacosLote70 = if_else(primer_lote, coalesce(SacosLote70, 0), 0),
+    MetricaSacosProducidos70 = if_else(primer_lote,
+                                       coalesce(SacosProducidos70, 0), 0),
+    MetricaSacosDespachados70 = if_else(primer_lote,
+                                        coalesce(SacosDespachados70, 0), 0)
+  )
 
-leads <- racafeBD::CargarDatos("CRMNALLEAD") %>%
-  mutate(AutorizaTD = "SI", LinNegocio = ifelse(LinNegCod == 10000, "CONVENCIONALES", "A LA MEDIDA"))
+# VALIDACIONES FINALES ----
+if (nrow(crm_maestro) != nrow(data_crm)) {
+  stop("crm_maestro: los cruces de homologacion multiplicaron registros")
+}
 
-oportunidades <- racafeBD::CargarDatos("CRMNALCLOPT") %>%
-  mutate(LinNegocio = ifelse(LinNegCod == 10000, "CONVENCIONALES", "A LA MEDIDA"))
+if (any(crm_maestro$EstadoFinanciero == "CERRADO" &
+        crm_maestro$FuenteFinanciera != "CRMNALMARLOT", na.rm = TRUE)) {
+  stop("crm_maestro: existen registros cerrados sin fuente CRMNALMARLOT")
+}
 
-competencia <- racafeBD::CargarDatos("CRMNALCOMPETENCIA")
-notas <- racafeBD::CargarDatos("CRMNALNOTAS")
+control_maestro <- crm_maestro %>%
+  filter(EstadoFinanciero == "CERRADO") %>%
+  group_by(FecMes, LinNegCod) %>%
+  summarise(Sacos = sum(MetricaSacosCerrados70, na.rm = TRUE),
+            Margen = sum(MetricaMargenContable, na.rm = TRUE),
+            .groups = "drop")
 
-# Exportación explícita y validada ----
-objetos_app <- c("data", "n_cliente", "fact_cliente", "contactos_raw", "contactos_clientes", "cliente_actual_map",
-                 "clientes_raw", "clientes_hist", "clientes_actual", "clientes_snap", "clientes_sin_lote", "pend",
-                 "segmentos_raw", "segmentos_hist_mes", "segmentos_snap", "segmentaciones_hist",
-                 "segmentaciones_actual", "rfm_snap", "rfmm_snap", "clv_snap", "fact", "nit_ppal", "margenes_pyg",
-                 "productos_snap", "ord_cmp", "fact_lote", "lin_neg", "lin_pro", "n_marcom", "n_marcas",
-                 "lotes_asig", "leads", "oportunidades", "competencia", "notas", "ultimo_periodo_pyg",
-                 "crm_detalle_operaciones")
+control_pyg <- margenes_pyg %>%
+  group_by(FecMes, LinNegCod = if_else(
+    .convertir_numero_margen(LINNEG) == 20000, 21000,
+    .convertir_numero_margen(LINNEG)
+  )) %>%
+  summarise(Sacos = sum(.convertir_numero_margen(SACOS70), na.rm = TRUE),
+            Margen = sum(.convertir_numero_margen(MARGEN), na.rm = TRUE),
+            .groups = "drop")
 
-sys.source("APP/misc/data_contract.R", envir = environment())
-crm_detalle_operaciones <- .crm_preparar_operaciones(base_operativa, ped, fact_lote, productos_snap)
-.crm_validar_exportacion(environment())
+diferencias <- full_join(control_pyg, control_maestro,
+                         by = c("FecMes", "LinNegCod"),
+                         suffix = c("PYG", "Maestro")) %>%
+  mutate(
+    DiferenciaSacos = coalesce(SacosMaestro, 0) - coalesce(SacosPYG, 0),
+    DiferenciaMargen = coalesce(MargenMaestro, 0) - coalesce(MargenPYG, 0)
+  )
 
+if (any(abs(diferencias$DiferenciaSacos) > 0.01 |
+        abs(diferencias$DiferenciaMargen) > 1, na.rm = TRUE)) {
+  stop("crm_maestro: la ejecucion cerrada no concilia con CRMNALMARLOT")
+}
+
+cat("\nCRM MAESTRO | Registros:", nrow(crm_maestro),
+    "| Sacos PyG:", sum(crm_maestro$MetricaSacosCerrados70),
+    "| Sacos abiertos:", sum(crm_maestro$MetricaSacosAbiertos70),
+    "| Sacos proyectados:", sum(crm_maestro$MetricaSacosProyectados70),
+    "| Ultimo cierre:", as.character(ultimo_periodo_pyg), "\n")
+
+# PERSISTENCIA ----
 if (!dir.exists("APP/data")) dir.create("APP/data", recursive = TRUE)
-save(list = objetos_app, file = "APP/data/data.RData")
+
+# Validar el contrato compartido sin cambiar los dos objetos publicados.
+sys.source("APP/misc/data_contract.R", envir = environment())
+.crm_validar_maestro(crm_maestro, homologaciones)
+
+save(crm_maestro, homologaciones, file = "APP/data/data.RData",
+     compress = "xz")
 
 tictoc::toc()
