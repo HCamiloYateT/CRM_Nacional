@@ -34,11 +34,10 @@ server <- function(input, output, session) {
     output$auditoria_base <- renderUI(p("Datos ficticios de prueba, sin consultas ni guardados"))
     for (key in financial_ids) local({
       current <- key
-      racafeModulos::CajaModal(current, valor = shiny::reactive(0), texto = current,
+      widgets$.crm_caja(current, valor = shiny::reactive(if (current == "kpi_cuadre") 1 else 0),
+        texto = current, formato = if (current == "kpi_cuadre") "porcentaje" else "entero",
         contenido_modal = function() p(paste("Detalle financiero simulado", current)),
         titulo_modal = paste("Detalle", current), icono_modal = "circle-info")
-      racafeModulos::cajaValor_server(current, valor_r = shiny::reactive(if (current == "kpi_cuadre") 1 else 0),
-        formato = if (current == "kpi_cuadre") "porcentaje" else "entero", id_boton = "btn_abrir")
     })
   })
 }

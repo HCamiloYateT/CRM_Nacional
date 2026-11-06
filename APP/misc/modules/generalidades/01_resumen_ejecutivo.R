@@ -104,8 +104,8 @@
 }
 
 .resumen_ejecutivo_caja_ui <- function(ns, caja) {
-  racafeModulos::cajaValor_ui(ns(caja$id), icono = caja$icono, texto = caja$texto,
-    mostrar_boton = TRUE, label_boton = "Abrir módulo", color_kpi = "#000000", compact = TRUE)
+  .crm_caja_ui(ns(caja$id), icono = caja$icono, texto = caja$texto,
+                mostrar_boton = TRUE, tooltip = paste("Abrir", caja$texto))
 }
 
 # Preloader ----

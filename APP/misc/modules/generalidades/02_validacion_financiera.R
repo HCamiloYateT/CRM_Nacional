@@ -16,8 +16,7 @@ ValidacionFinancieraUI <- function(id) {
   
   .kpi_ui <- function(id_kpi, texto, icono) {
     shiny::tags$div(class = "vf-kpi-accion",
-      racafeModulos::cajaValor_ui(ns(id_kpi), texto = texto, icono = icono,
-        mostrar_boton = TRUE, label_boton = "Ver detalle", id_boton = "btn_abrir", compact = TRUE))
+      .crm_caja_output(ns(id_kpi)))
   }
   
   .tarjetas <- list(
@@ -32,7 +31,7 @@ ValidacionFinancieraUI <- function(id) {
   )
 
   ids_carga <- c(
-    ns("tabla_extraccion_pyg"), ns("auditoria_base"),
+    ns("tabla_extraccion_pyg"),
     vapply(.tarjetas, function(x) ns(paste0(x[[1]], "-valor_display")), "")
   )
   ids_js <- jsonlite::toJSON(unname(ids_carga), auto_unbox = FALSE)
@@ -181,8 +180,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     }
     
     .gt_base <- function(datos, rowname_col = NULL) {
-      gt::gt(datos, rowname_col = rowname_col) %>%
-        racafeShiny::gt_minimal_style() %>%
+      .crm_tabla_vancouver(datos, row_padding = 4) %>%
         gt::tab_options(
           table.width = gt::pct(100),
           table_body.hlines.style = "none",
@@ -493,74 +491,27 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
       niveles <- c("PEQUEÑO", "MEDIANO", "GRANDE", "SIN SEGMENTO")
       matriz <- .segmento_matriz(datos, fila, columna, metrica)
       
-      encabezado <- shiny::tags$tr(
-        shiny::tags$th(fila_label),
-        lapply(
-          niveles,
-          function(x) {
-            shiny::tags$th(x)
-          }
-        )
-      )
-      
-      filas <- lapply(
-        seq_along(niveles),
-        function(i) {
-          origen <- niveles[[i]]
-          
-          celdas <- lapply(
-            seq_along(niveles),
-            function(j) {
-              destino <- niveles[[j]]
-              celda <- matriz %>%
-                dplyr::filter(Fila == origen, Columna == destino)
-              
-              valor <- celda$Valor[[1L]]
-              etiqueta <- .segmento_formato_valor(valor, metrica)
-              
-              contenido <- if (valor != 0) {
-                shiny::actionLink(
-                  inputId = ns(paste0("seg_", prefijo, "_", i, "_", j)),
-                  label = etiqueta
-                )
-              } else {
-                shiny::span(etiqueta)
-              }
-              
-              shiny::tags$td(contenido)
-            }
-          )
-          
-          shiny::tags$tr(
-            shiny::tags$th(origen),
-            celdas
-          )
-        }
-      )
-      
+      # Conservar los IDs de selección de cada celda con el componente de tabla corporativo.
+      datos_tabla <- data.frame(Segmento = niveles, check.names = FALSE)
+      names(datos_tabla)[[1]] <- fila_label
+      for (j in seq_along(niveles)) {
+        datos_tabla[[niveles[[j]]]] <- vapply(seq_along(niveles), function(i) {
+          celda <- matriz %>% dplyr::filter(Fila == niveles[[i]], Columna == niveles[[j]])
+          valor <- celda$Valor[[1L]]
+          etiqueta <- .segmento_formato_valor(valor, metrica)
+          if (valor == 0) return(as.character(shiny::span(etiqueta)))
+          as.character(shiny::actionLink(ns(paste0("seg_", prefijo, "_", i, "_", j)), label = etiqueta))
+        }, character(1))
+      }
+      alineacion <- stats::setNames(c("left", rep("right", length(niveles))), names(datos_tabla))
+      tabla <- racafeShiny::racafeCompactTable(datos_tabla, backend = "html", html_columns = niveles,
+                                               align = alineacion, font_size = 12, row_padding = 4)
+      tabla <- htmltools::tagQuery(tabla)$find("thead th")$
+        addAttrs(style = "border-bottom:1.5px solid #495057!important;")$allTags()
       shiny::tagList(
-        racafeShiny::FormatearTexto(
-          titulo,
-          negrita = TRUE,
-          tamano_pct = 0.85,
-          alineacion = "center"
-        ),
-        shiny::tags$table(
-          class = "table table-sm table-striped",
-          shiny::tags$thead(encabezado),
-          shiny::tags$tbody(filas)
-        ),
-        shiny::tags$div(
-          class = "caja-modal-footer",
-          paste0(
-            "Filas: ",
-            fila_label,
-            " | Columnas: ",
-            columna_label,
-            " | Métrica: ",
-            metrica
-          )
-        )
+        racafeForms::racafeDetailSection(titulo, tabla),
+        racafeForms::racafeFormMessage(paste0("Filas: ", fila_label, " | Columnas: ", columna_label,
+                                              " | Métrica: ", metrica), type = "info", size = "compact")
       )
     }
     
@@ -787,7 +738,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     
     output$tabla_extraccion_pyg <- gt::render_gt({
       tabla <- extraccion_pyg %>%
-        gt::gt(rowname_col = "Mes") %>%
+        .crm_tabla_vancouver(row_padding = 4) %>%
         gt::tab_header(
           title = "Extracción PyG financiero",
           subtitle = paste0("Año ", .VF_ANHO)
@@ -834,7 +785,6 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
             "Extracción independiente del PyG; meses sin movimientos se muestran en cero."
           )
         ) %>%
-        racafeShiny::gt_minimal_style() %>%
         gt::tab_options(
           table.width = gt::pct(100),
           table_body.hlines.style = "none",
@@ -859,9 +809,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         )
       
       if (nrow(diferencias) == 0L) {
-        return(
-          shiny::tags$p("Integridad de data frente a PyG: sin diferencias mensuales detectadas.")
-        )
+        return(NULL)
       }
       
       shiny::tagList(
@@ -1531,7 +1479,8 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     })
 
     # Cuadre mensual ----
-    racafeModulos::CajaModal(
+    # Cajas compactas ----
+    .crm_caja(
       id = "kpi_cuadre",
       valor = cuadre_valor_r,
       formato = "porcentaje",
@@ -1550,14 +1499,14 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         shiny::fluidRow(
           shiny::column(
             6,
-            racafeModulos::TablaReactable2UI(
+            .crm_tabla_ui(
               ns("tabla_cuadre_conv"),
               estilo = "minimal"
             )
           ),
           shiny::column(
             6,
-            racafeModulos::TablaReactable2UI(
+            .crm_tabla_ui(
               ns("tabla_cuadre_medida"),
               estilo = "minimal"
             )
@@ -1647,7 +1596,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     )
     
     .registrar_tabla_cuadre <- function(id, datos, titulo) {
-      racafeModulos::TablaReactable2(
+      .crm_tabla_servidor(
         id = id,
         data = datos,
         titulo = titulo,
@@ -1814,7 +1763,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         )
     })
     
-    racafeModulos::CajaModal(
+    .crm_caja(
       id = "kpi_lotes",
       valor = shiny::reactive(nrow(detalle_conciliacion())),
       formato = "entero",
@@ -1848,7 +1797,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         )
     })
     
-    racafeModulos::CajaModal(
+    .crm_caja(
       id = "kpi_fact_sin_pyg",
       valor = shiny::reactive(nrow(fact_sin_pyg())),
       texto = "Facturados sin PyG",
@@ -1880,7 +1829,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         )
     })
     
-    racafeModulos::CajaModal(
+    .crm_caja(
       id = "kpi_pyg_sin_fact",
       valor = shiny::reactive(nrow(pyg_sin_fact())),
       texto = "PyG sin factura",
@@ -1892,7 +1841,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     )
     
     # PyG sin lote ----
-    racafeModulos::CajaModal(
+    .crm_caja(
       id = "kpi_pyg_sin_lote",
       valor = shiny::reactive(nrow(pyg_sin_lote())),
       texto = "PyG sin lote",
@@ -1904,7 +1853,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     )
     
     # Línea de negocio ----
-    racafeModulos::CajaModal(
+    .crm_caja(
       id = "kpi_linea",
       valor = shiny::reactive(nrow(lineas_diferentes())),
       texto = "Línea de negocio",
@@ -1916,7 +1865,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     )
     
     # Segmentos ----
-    racafeModulos::CajaModal(
+    .crm_caja(
       id = "kpi_segmentos",
       valor = shiny::reactive(
         dplyr::n_distinct(segmentos_error()$CliNitPpal, na.rm = TRUE)
@@ -1931,7 +1880,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     )
     
     # Calidad ----
-    racafeModulos::CajaModal(
+    .crm_caja(
       id = "kpi_calidad",
       valor = shiny::reactive(nrow(calidad_pyg())),
       texto = "Calidad PyG",
@@ -1942,40 +1891,6 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
       footer = "Alertas internas por margen, sacos o inconsistencias dentro del PyG financiero."
     )
     
-    # Cajas compactas ----
-    racafeModulos::cajaValor_server(
-      "kpi_cuadre", valor_r = cuadre_valor_r, formato = "porcentaje", id_boton = "btn_abrir"
-    )
-    racafeModulos::cajaValor_server(
-      "kpi_lotes", valor_r = shiny::reactive(nrow(detalle_conciliacion())),
-      formato = "entero", id_boton = "btn_abrir"
-    )
-    racafeModulos::cajaValor_server(
-      "kpi_fact_sin_pyg", valor_r = shiny::reactive(nrow(fact_sin_pyg())),
-      formato = "entero", id_boton = "btn_abrir"
-    )
-    racafeModulos::cajaValor_server(
-      "kpi_pyg_sin_fact", valor_r = shiny::reactive(nrow(pyg_sin_fact())),
-      formato = "entero", id_boton = "btn_abrir"
-    )
-    racafeModulos::cajaValor_server(
-      "kpi_pyg_sin_lote", valor_r = shiny::reactive(nrow(pyg_sin_lote())),
-      formato = "entero", id_boton = "btn_abrir"
-    )
-    racafeModulos::cajaValor_server(
-      "kpi_linea", valor_r = shiny::reactive(nrow(lineas_diferentes())),
-      formato = "entero", id_boton = "btn_abrir"
-    )
-    racafeModulos::cajaValor_server(
-      "kpi_segmentos", valor_r = shiny::reactive(
-        dplyr::n_distinct(segmentos_error()$CliNitPpal, na.rm = TRUE)
-      ), formato = "entero", id_boton = "btn_abrir"
-    )
-    racafeModulos::cajaValor_server(
-      "kpi_calidad", valor_r = shiny::reactive(nrow(calidad_pyg())),
-      formato = "entero", id_boton = "btn_abrir"
-    )
-
     .fecha_resumen <- function(datos) {
       if ("Mes" %in% names(datos) && inherits(datos$Mes, "Date")) {
         return(as.Date(datos$Mes))
@@ -2050,7 +1965,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         })
       }
       
-      racafeModulos::CajaModal(
+      .crm_caja(
         id = paste0(prefijo, "_res_registros"),
         valor = shiny::reactive(valores()$registros),
         formato = "entero",
@@ -2060,7 +1975,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         footer = "Número de registros que cumplen esta condición en el rango filtrado."
       )
       
-      racafeModulos::CajaModal(
+      .crm_caja(
         id = paste0(prefijo, "_res_fact_acum"),
         valor = shiny::reactive(valores()$sacos_fact_acum),
         texto = "Sacos facturados acumulado",
@@ -2069,7 +1984,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         footer = "Suma de sacos facturados de todos los registros del detalle filtrado."
       )
       
-      racafeModulos::CajaModal(
+      .crm_caja(
         id = paste0(prefijo, "_res_fact_mes"),
         valor = shiny::reactive(valores()$sacos_fact_mes),
         texto = shiny::reactive(paste0("Sacos facturados ", valores()$mes_nombre)),
@@ -2078,7 +1993,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         footer = .footer_mes("Suma de sacos facturados")
       )
       
-      racafeModulos::CajaModal(
+      .crm_caja(
         id = paste0(prefijo, "_res_pyg_acum"),
         valor = shiny::reactive(valores()$sacos_pyg_acum),
         texto = "Sacos PyG acumulado",
@@ -2087,7 +2002,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         footer = "Suma de sacos reportados en PyG de todos los registros del detalle filtrado."
       )
       
-      racafeModulos::CajaModal(
+      .crm_caja(
         id = paste0(prefijo, "_res_pyg_mes"),
         valor = shiny::reactive(valores()$sacos_pyg_mes),
         texto = shiny::reactive(paste0("Sacos PyG ", valores()$mes_nombre)),
@@ -2096,7 +2011,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         footer = .footer_mes("Suma de sacos reportados en PyG")
       )
       
-      racafeModulos::CajaModal(
+      .crm_caja(
         id = paste0(prefijo, "_res_dif_acum"),
         valor = shiny::reactive(valores()$diferencia_acum),
         texto = "Diferencia acumulada",
@@ -2105,7 +2020,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         footer = "Sacos PyG acumulados menos sacos facturados acumulados."
       )
       
-      racafeModulos::CajaModal(
+      .crm_caja(
         id = paste0(prefijo, "_res_dif_mes"),
         valor = shiny::reactive(valores()$diferencia_mes),
         texto = shiny::reactive(paste0("Diferencia ", valores()$mes_nombre)),
@@ -2114,7 +2029,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         footer = .footer_mes("Sacos PyG menos sacos facturados")
       )
       
-      racafeModulos::CajaModal(
+      .crm_caja(
         id = paste0(prefijo, "_res_margen_acum"),
         valor = shiny::reactive(valores()$margen_acum),
         formato = "dinero",
@@ -2124,7 +2039,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         footer = "Suma del margen PyG de todos los registros del detalle filtrado."
       )
       
-      racafeModulos::CajaModal(
+      .crm_caja(
         id = paste0(prefijo, "_res_margen_mes"),
         valor = shiny::reactive(valores()$margen_mes),
         formato = "dinero",
@@ -2166,48 +2081,48 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
               shiny::fluidRow(
                 shiny::column(
                   12,
-                  racafeModulos::CajaModalUI(ns(paste0(prefijo, "_res_registros")))
+                  .crm_caja_output(ns(paste0(prefijo, "_res_registros")))
                 )
               ),
               shiny::fluidRow(
                 shiny::column(
                   6,
-                  racafeModulos::CajaModalUI(ns(paste0(prefijo, "_res_fact_acum")))
+                  .crm_caja_output(ns(paste0(prefijo, "_res_fact_acum")))
                 ),
                 shiny::column(
                   6,
-                  racafeModulos::CajaModalUI(ns(paste0(prefijo, "_res_fact_mes")))
+                  .crm_caja_output(ns(paste0(prefijo, "_res_fact_mes")))
                 )
               ),
               shiny::fluidRow(
                 shiny::column(
                   6,
-                  racafeModulos::CajaModalUI(ns(paste0(prefijo, "_res_pyg_acum")))
+                  .crm_caja_output(ns(paste0(prefijo, "_res_pyg_acum")))
                 ),
                 shiny::column(
                   6,
-                  racafeModulos::CajaModalUI(ns(paste0(prefijo, "_res_pyg_mes")))
+                  .crm_caja_output(ns(paste0(prefijo, "_res_pyg_mes")))
                 )
               ),
               shiny::fluidRow(
                 shiny::column(
                   6,
-                  racafeModulos::CajaModalUI(ns(paste0(prefijo, "_res_dif_acum")))
+                  .crm_caja_output(ns(paste0(prefijo, "_res_dif_acum")))
                 ),
                 shiny::column(
                   6,
-                  racafeModulos::CajaModalUI(ns(paste0(prefijo, "_res_dif_mes")))
+                  .crm_caja_output(ns(paste0(prefijo, "_res_dif_mes")))
                 )
               ),
               if ("MargenPYG" %in% names(detalle)) {
                 shiny::fluidRow(
                   shiny::column(
                     6,
-                    racafeModulos::CajaModalUI(ns(paste0(prefijo, "_res_margen_acum")))
+                    .crm_caja_output(ns(paste0(prefijo, "_res_margen_acum")))
                   ),
                   shiny::column(
                     6,
-                    racafeModulos::CajaModalUI(ns(paste0(prefijo, "_res_margen_mes")))
+                    .crm_caja_output(ns(paste0(prefijo, "_res_margen_mes")))
                   )
                 )
               }
@@ -2369,7 +2284,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
       "CRM comercial vs Creación de cliente"
     )
     
-    racafeModulos::CajaModal(
+    .crm_caja(
       id = "seg_res_clientes",
       valor = shiny::reactive(
         dplyr::n_distinct(
@@ -2387,7 +2302,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
       )
     )
     
-    racafeModulos::CajaModal(
+    .crm_caja(
       id = "seg_res_clientes_dif",
       valor = shiny::reactive(
         segmentos_validacion() %>%
@@ -2423,8 +2338,8 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
           )
         ),
         shiny::fluidRow(
-          shiny::column(6, racafeModulos::CajaModalUI(ns("seg_res_clientes"))),
-          shiny::column(6, racafeModulos::CajaModalUI(ns("seg_res_clientes_dif")))
+          shiny::column(6, .crm_caja_output(ns("seg_res_clientes"))),
+          shiny::column(6, .crm_caja_output(ns("seg_res_clientes_dif")))
         ),
         shiny::fluidRow(
           shiny::column(
