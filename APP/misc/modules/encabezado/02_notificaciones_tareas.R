@@ -1,3 +1,35 @@
+# PRESENTACION DE TAREAS DEL ENCABEZADO ----
+.tareas_lista_item <- function(fila, input_id) {
+  id <- as.character(fila$cons[[1]])
+  titulo <- .header_nombre(fila$titulo, "Sin título")
+  tipo <- if (identical(as.character(fila$Tipo[[1]]), "list")) "Tarea" else "Nota"
+  prioridad <- .header_nombre(fila$Prioridad, "Sin prioridad")
+  responsable <- .header_nombre(fila$Responsable, "Sin responsable")
+  vencimiento <- suppressWarnings(as.Date(fila$FechaCumplimiento[[1]]))
+  fecha <- if (is.na(vencimiento)) "Sin fecha" else format(vencimiento, "%d/%m/%Y")
+  estado <- if (isTRUE(as.numeric(fila$Archivado[[1]]) == 1)) {
+    "Archivada"
+  } else if (isTRUE(as.numeric(fila$Cumplido[[1]]) == 1)) {
+    "Cumplida"
+  } else "Pendiente"
+  actividades <- .tareas_actividades(fila)
+  n_actividades <- length(actividades$textos)
+  avance <- if (n_actividades) {
+    paste0(sum(actividades$cumplidas), "/", n_actividades, " actividades")
+  } else "Sin actividades"
+  badges <- list(
+    .header_lista_badge(tools::toTitleCase(tolower(prioridad)), .tareas_prioridad(prioridad)),
+    .header_lista_badge(estado, if (estado == "Pendiente") "warning" else "neutral")
+  )
+  metadata <- c(Vencimiento = fecha)
+  if (tipo == "Tarea") metadata <- c(metadata, Actividades = avance)
+  .header_lista_item(
+    titulo = titulo,
+    detalle = paste(tipo, "·", gsub("|", " · ", responsable, fixed = TRUE)),
+    metadata = metadata, badges = badges, id = input_id, value = id
+  )
+}
+
 # Helpers ----
 .tareas_partir <- function(x) {
   if (is.null(x) || !length(x) || is.na(x[[1]]) || !nzchar(x[[1]])) {
@@ -224,37 +256,7 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
         return(racafeShiny::racafeListGroup(empty_message = "CRMNALNOTAS no tiene registros."))
       }
       do.call(racafeShiny::racafeListGroup, lapply(seq_len(nrow(datos)), function(i) {
-        fila <- datos[i, , drop = FALSE]
-        id <- as.character(fila$cons[[1]])
-        titulo <- .header_nombre(fila$titulo, "Sin título")
-        tipo <- if (identical(as.character(fila$Tipo[[1]]), "list")) "Tarea" else "Nota"
-        prioridad <- .header_nombre(fila$Prioridad, "Sin prioridad")
-        responsable <- .header_nombre(fila$Responsable, "Sin responsable")
-        vencimiento <- suppressWarnings(as.Date(fila$FechaCumplimiento[[1]]))
-        fecha <- if (is.na(vencimiento)) "Sin fecha" else format(vencimiento, "%d/%m/%Y")
-        estado <- if (isTRUE(as.numeric(fila$Archivado[[1]]) == 1)) {
-          "Archivada"
-        } else if (isTRUE(as.numeric(fila$Cumplido[[1]]) == 1)) {
-          "Cumplida"
-        } else "Pendiente"
-        actividades <- .tareas_actividades(fila)
-        n_actividades <- length(actividades$textos)
-        avance <- if (n_actividades) {
-          paste0(sum(actividades$cumplidas), "/", n_actividades, " actividades")
-        } else "Sin actividades"
-        badges <- list(
-          .header_lista_badge(tipo, "neutral"),
-          .header_lista_badge(prioridad, .tareas_prioridad(prioridad)),
-          .header_lista_badge(estado, if (estado == "Pendiente") "warning" else "neutral")
-        )
-        if (tipo == "Tarea") {
-          badges <- c(badges, list(.header_lista_badge(avance, "neutral")))
-        }
-        .header_lista_item(
-          titulo = titulo,
-          detalle = paste(responsable, "·", fecha), badges = badges,
-          id = ns("abrir"), value = id
-        )
+        .tareas_lista_item(datos[i, , drop = FALSE], ns("abrir"))
       }))
     })
     

@@ -39,3 +39,17 @@ no se modificaron credenciales y no se desplegó la aplicación.
 Orden de integración: racafeModulos 0.3.0 y racafeShiny 1.3.1, después CRM Nacional. Los módulos nuevos de
 racafeModulos funcionan con racafeShiny >= 1.3.0; para alias de racafeShiny 1.3.1 instalar racafeModulos 0.3.0.
 No hay import obligatorio inverso de racafeShiny a racafeModulos.
+
+## Ajuste visual de encabezados — 2026-11-06
+
+- racafeModulos 0.3.1: 91 pruebas testthat correctas; instalación y construcción correctas.
+- R CMD check sin errores; conserva las 4 advertencias y 1 nota históricas descritas arriba.
+- CRM: 41 comprobaciones de SQL, funciones protegidas, comentarios y construcción de UI correctas.
+- Navegador: 48 comprobaciones de presentación en anchos 1440 y 390, con nombres largos y listas extensas.
+- Regresión de integración CRM: 15 comprobaciones correctas.
+- Regresión de la galería navbar: 30 comprobaciones correctas.
+
+Se verifican títulos a todo el ancho, NIT único, metadatos de actualización, dos badges por tarea,
+selección con menú abierto, una sola zona de desplazamiento, pie fijo, importes sin saltos y ausencia de
+desbordamiento horizontal y errores R/JavaScript. Se inspeccionaron capturas de clientes, tareas e indicadores.
+Se mantienen los alcances de staging y las restricciones de pruebas de negocio descritos arriba.

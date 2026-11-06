@@ -5,15 +5,15 @@ permanecen en CRM Nacional. No se instalan paquetes ni se ejecutan migraciones d
 
 ## Actualizar dependencias antes de desplegar
 
-Se requieren racafeForms >= 0.7.0, racafeShiny >= 1.3.0 y racafeModulos >= 0.3.0.
-Mientras se revisan los cambios usar `ref = "codex/crm-module-integration"` en las instalaciones de
-racafeShiny y racafeModulos; después de integrarlos puede omitirse ese argumento.
+Se requieren racafeForms >= 0.7.0, racafeShiny >= 1.3.0 y racafeModulos >= 0.3.1.
+Para el ajuste de presentación usar `ref = "codex/header-list-presentation"` al instalar racafeModulos
+mientras se revisa el PR; después de integrarlo puede omitirse ese argumento.
 
 ```r
 install.packages("remotes")
 remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeForms")
-remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeShiny", ref = "codex/crm-module-integration")
-remotes::install_github("HCamiloYateT/racafeModulos", ref = "codex/crm-module-integration")
+remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeShiny")
+remotes::install_github("HCamiloYateT/racafeModulos", ref = "codex/header-list-presentation")
 ```
 
 Instalar las librerías antes de actualizar los scripts del CRM. racafeShiny 1.3.1 conserva los nombres antiguos de
@@ -64,3 +64,14 @@ Resultados y limitaciones en [docs/VALIDATION.md](docs/VALIDATION.md).
 
 Antes del despliegue, validar en staging los guardados, permisos, transacciones y descarga PDF con los servicios
 reales. Este cambio no modifica datos, credenciales ni servicios FastAPI y no despliega la aplicación.
+
+## Listados de encabezados
+
+Los nombres y títulos ocupan el ancho del menú. NIT, línea, responsable, vencimiento y avance se muestran
+como texto secundario; solo prioridad y estado usan badges. La fecha de actualización de clientes antiguos
+es metadato y el NIT se presenta una sola vez. Los indicadores tienen mayor fuente/espaciado y sus importes
+se mantienen en una línea. El contenido usa una sola barra vertical; el footer permanece visible.
+
+Para revisar los casos de nombres largos, listas extensas, clientes antiguos e indicadores en escritorio y móvil,
+ejecutar `tests/ui` y `node tests/test-header-presentation.cjs`, con las mismas variables que la prueba anterior.
+Este cambio afecta presentación; conserva filtros, orden de datos, selección y operaciones comerciales.
