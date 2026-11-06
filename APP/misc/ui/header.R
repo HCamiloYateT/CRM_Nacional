@@ -2,7 +2,7 @@
 header <- bs4DashNavbar(status = "white", border = FALSE, sidebarIcon = icon("bars"),
                         title = dashboardBrand(title = "CRM Nacional",
                                                href = "https://analitica.racafe.com/PortalAnalitica/",
-                                               image = "racafe-shared-1-1-0-img/logo2.png"
+                                               image = paste0(.url_compartido, "/img/logo2.png")
                                                ),
                         controlbarIcon = icon("gears"),
                         leftUi = tagList(tags$li(class = "dropdown",

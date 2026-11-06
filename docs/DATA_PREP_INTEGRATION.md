@@ -11,7 +11,7 @@ conservando sus proyecciones, trazabilidad, auditorías y exportación maestra.
 | --- | --- |
 | racafeModulos | `a13fd7e06b628c8ef72c4e1c201a3d9084c78aa8` — 0.5.1 |
 | Libreria-Racafe | `61c7efda5f468c91f8185ac49adfa604901b5843` — racafeForms 0.7.0 |
-| Compartido | `19f6811293da08779a9392e9eb8c59f1b5fef61d` — ASSETS_VERSION 1.1.0 |
+| Compartido | Rama `main`, recursos enlazados por URL al arrancar |
 
 ## Contrato de datos
 
@@ -56,7 +56,7 @@ Debe verificarse con ejemplos reales de las unidades disponibles en staging.
 | generalidades | Referencias a racafeCore/racafeShiny; descargas y selector compatibles con racafeForms |
 | prospeccion | Selectores, radio, descargas y modales racafeForms; llamadas explícitas a racafeModulos |
 | gestion_comercial | Revisado: ya consume SacosFact/Margen y completa las dimensiones opcionales; recibe el cierre exportado |
-| global / UI | Validación de versiones y datos, estilos/scripts/logos locales de Compartido |
+| global / UI | Validación de versiones y datos, estilos/scripts/logos enlazados a Compartido/main |
 
 Las confirmaciones de escritura siguen usando `racafeShiny::MostrarModalConfirmacion` y sus observers existentes.
 El campo Calidades conserva selectize porque admite valores nuevos; el picker de racafeForms no ofrece esa operación.
@@ -70,9 +70,12 @@ Verificado en este entorno:
 - Compatibilidad estática de argumentos de 843 llamadas a racafeForms, racafeModulos, racafeShiny y racafeCore
   frente a sus fuentes y exportaciones revisadas: sin incompatibilidades detectadas.
 - Parseo real de los 60 scripts R con R 4.5.0.
-- 821 comprobaciones de contrato y regresión con dplyr 1.1.4, datos ficticios y stubs.
+- 820 comprobaciones de contrato y regresión con dplyr 1.1.4, datos ficticios y stubs.
 - `git diff --check` y comprobación de sintaxis JavaScript con Node.
-- Integridad de los archivos compartidos frente a sus blobs de origen.
+- Lectura real con Shiny del CSS y los cuatro scripts desde Compartido/main, y generación del HTML.
+- Descarga del logo del PDF desde el mismo repositorio y verificación de su cabecera PNG.
+  Se retiró la copia local de vendor y la llamada racafeSharedAssets, que solo acepta carpetas locales.
+  Los recursos remotos se incluyen con includeCSS/includeScript, evitando depender del MIME de los scripts en el navegador.
 
 Se habilitó un R aislado dentro del workspace, sin cambiar la instalación del sistema.
 No se ejecutó el ETL contra servicios de negocio ni la aplicación Shiny completa: no se dispone del RData real
