@@ -5,7 +5,7 @@ library(shiny)
 library(bs4Dash)
 source(file.path(root, "tests/helpers.R"))
 env <- .crm_ui_env(root)
-base_ref <- if (length(args) > 1L) args[[2]] else "4e338012efb626b0860a81e01d06b6e0b6841d97"
+base_ref <- if (length(args) > 1L) args[[2]] else "f71acf7e4f604c94b5a3ac064184c303916a7b8b"
 checks <- 0L
 .check <- function(condition) {
   stopifnot(condition)
@@ -17,10 +17,23 @@ paths <- c(list.files(file.path(root, "APP/misc/modules/controlbar"), "[.]R$", f
   file.path(root, "APP/misc/ui/header.R"))
 .collect <- function(tree) {
   result <- character()
-  protected <- c(".header_resumen_cliente", ".header_historial_comercial", ".tareas_modificar_bd",
+  protected <- c(".tareas_modificar_bd",
     ".tareas_pendientes", ".tareas_actividades", ".tareas_prioridad", "guardar_registro", "construir_payload",
     "ultimo_registro", "crear_formulario", ".registrar_o_comentar", ".obtener_fpg_cliente", ".validar_formulario",
     ".crear_tabla_pdf", ".crear_tabla_encabezado", ".obtener_datos_productos")
+  presentation_data <- c("datos", "nombre", "linea", "ids", "ops", "pedidos", "lotes", "por_producto",
+    "detalle", "sin_pedido", "sin_operacion", "registros", "actual", "campos", "nombre_padre", "nombres", "padre",
+    "mostrar", "tabla")
+  collect_math <- function(node) {
+    if (is.call(node)) {
+      if (identical(node[[1]], as.name("<-")) && is.symbol(node[[2]]) &&
+          as.character(node[[2]]) %in% presentation_data) {
+        result <<- c(result, paste(deparse(node, width.cutoff = 500L), collapse = "\n"))
+      }
+      lapply(as.list(node)[-1L], collect_math)
+    } else if (is.expression(node) || is.pairlist(node)) lapply(as.list(node), collect_math)
+    invisible(NULL)
+  }
   visit <- function(node) {
     if (is.character(node) && length(node) == 1L && grepl(
         "^\\s*(SELECT|INSERT|UPDATE|DELETE|MERGE|BEGIN|COMMIT|ROLLBACK|WITH)\\b", node, ignore.case = TRUE)) {
@@ -28,6 +41,10 @@ paths <- c(list.files(file.path(root, "APP/misc/modules/controlbar"), "[.]R$", f
     }
     if (is.call(node)) {
       head <- paste(deparse(node[[1]]), collapse = "")
+      if (head == "<-" && length(node) == 3L && is.symbol(node[[2]]) &&
+          as.character(node[[2]]) %in% c(".header_resumen_cliente", ".header_historial_comercial")) {
+        collect_math(node[[3]])
+      }
       if (head == "<-" && length(node) == 3L && is.symbol(node[[2]]) && as.character(node[[2]]) %in% protected) {
         result <<- c(result, paste(deparse(node, width.cutoff = 500L), collapse = "\n"))
       }
@@ -82,4 +99,6 @@ html <- htmltools::renderTags(env$.tareas_lista_item(tarea, "abrir"))$html
 .check(grepl("Actividades: 1/2 actividades", html, fixed = TRUE))
 .check(grepl("ANA · LUIS", html, fixed = TRUE))
 .check(grepl("&lt;texto&gt;", html, fixed = TRUE))
+.check(is.na(env$.header_numero(c(NA_real_, NA_real_))))
+.check(identical(env$.header_numero(c("0", "2", NA)), 2))
 cat(checks, "comprobaciones de SQL, comentarios y UI correctas; no se ejecutaron servidores ni operaciones BD.\n")

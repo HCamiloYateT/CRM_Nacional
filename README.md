@@ -5,15 +5,15 @@ permanecen en CRM Nacional. No se instalan paquetes ni se ejecutan migraciones d
 
 ## Actualizar dependencias antes de desplegar
 
-Se requieren racafeForms >= 0.7.0, racafeShiny >= 1.3.0 y racafeModulos >= 0.3.1.
-Para el ajuste de presentación usar `ref = "codex/header-list-presentation"` al instalar racafeModulos
-mientras se revisa el PR; después de integrarlo puede omitirse ese argumento.
+Se requieren racafeForms >= 0.7.0, racafeShiny >= 1.4.0 y racafeModulos >= 0.4.0.
+Mientras se revisan estos cambios, usar `ref = "codex/client-detail-vancouver"` para racafeShiny y
+racafeModulos. Tras integrar los PR puede omitirse ese argumento.
 
 ```r
 install.packages("remotes")
 remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeForms")
-remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeShiny")
-remotes::install_github("HCamiloYateT/racafeModulos", ref = "codex/header-list-presentation")
+remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeShiny", ref = "codex/client-detail-vancouver")
+remotes::install_github("HCamiloYateT/racafeModulos", ref = "codex/client-detail-vancouver")
 ```
 
 Instalar las librerías antes de actualizar los scripts del CRM. racafeShiny 1.3.1 conserva los nombres antiguos de
@@ -43,7 +43,7 @@ No convierten tareas síncronas en asíncronas.
 Rscript tests/check_ui.R .
 ```
 
-Compara SQL, llamadas a BD y funciones comerciales protegidas con el commit base `4e33801`, y verifica
+Compara SQL, llamadas a BD y funciones comerciales protegidas con el commit base `f71acf7`, y verifica
 conservación de comentarios y construcción de UI. Puede indicarse otra referencia como segundo argumento.
 No carga global.R ni ejecuta servidores de negocio. Requiere shiny, bs4Dash y los paquetes corporativos instalados.
 
@@ -75,3 +75,22 @@ se mantienen en una línea. El contenido usa una sola barra vertical; el footer 
 Para revisar los casos de nombres largos, listas extensas, clientes antiguos e indicadores en escritorio y móvil,
 ejecutar `tests/ui` y `node tests/test-header-presentation.cjs`, con las mismas variables que la prueba anterior.
 Este cambio afecta presentación; conserva filtros, orden de datos, selección y operaciones comerciales.
+
+## Modal de clientes y tablas Vancouver
+
+El modal usa el tamaño corporativo ventana (hasta 1200px, adaptable a móvil). Las seis cajas de clientes
+sin información usan cajaValor_ui/server con iconos y borde rojo, conservando fechas y cantidades.
+Los servidores se registran una sola vez y reciben los valores del resumen reactivo compartido.
+Una cantidad desconocida muestra — y cero conserva su valor numérico.
+
+Productos, detalle e historial usan racafeTableVancouver. El detalle tiene ancho mínimo de 1500px y scroll
+horizontal dentro de su contenedor para evitar cortes de identificadores y fechas. La altura de contenido
+continúa adaptándose al viewport con desplazamiento vertical del cuerpo del modal.
+
+```r
+shiny::runApp("tests/client-detail", port = 4092, launch.browser = FALSE)
+```
+
+La prueba usa helpers y UI reales con datos ficticios y no inicia los servidores comerciales ni operaciones BD.
+Ejecutar `tests/test-client-detail.cjs` con `CRM_TEST_URL`, `CHROMIUM_PATH` y Playwright disponibles, igual que
+las otras pruebas de navegador. Revisa totales, alineación, bordes, cajas, cambio de cliente y vista móvil.

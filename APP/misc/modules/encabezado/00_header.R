@@ -1,9 +1,37 @@
+# MODAL AMPLIO DEL CLIENTE ----
+.header_cliente_modal_ui <- function(titulo, fila, identidad, antiguo = FALSE) {
+  racafeForms::racafeModalDetail(
+    title = titulo, size = "ventana",
+    if (antiguo) shiny::tagList(
+      shiny::tags$div(style = "display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap;",
+                      .header_badge("NIT:", identidad$nit),
+                      .header_badge("Línea:", .header_nombre(
+                        fila$CLLinNegNo, as.character(identidad$linneg_cod)))),
+      shiny::uiOutput("resumen_cli_ant_modal"),
+      .header_formulario_ui("mod_form_cli_ant")
+    ) else shiny::tagList(
+      shiny::uiOutput("resumen_cli_modal"),
+      .header_formulario_ui("mod_form_cli")
+    ),
+    footer = racafeForms::racafeModalFooter(
+      racafeForms::racafeButtonCancel(
+        "header_cliente_cerrar", "Cerrar", size = "xs")
+    )
+  )
+}
+
 # Helpers ----
 .header_valor <- function(x) {
   x <- suppressWarnings(as.numeric(x))
   if (!length(x) || all(is.na(x))) return("—")
   format(sum(x, na.rm = TRUE), big.mark = SEP_MILES, decimal.mark = SEP_DECIMAL,
          trim = TRUE, scientific = FALSE)
+}
+
+.header_numero <- function(x) {
+  x <- suppressWarnings(as.numeric(x))
+  if (!length(x) || all(is.na(x))) return(NA_real_)
+  sum(x, na.rm = TRUE)
 }
 
 .header_fecha <- function(x) {
@@ -24,16 +52,29 @@
   racafeForms::racafeDataBadge(sub("[[:space:]:]+$", "", nombre), valor, variant = "neutral", size = "xs")
 }
 
-.header_tarjeta <- function(nombre, valor, detalle = NULL) {
-  racafeForms::racafeMetric(
-    value = valor, label = nombre, detail = detalle, padding = "compact"
-  )
+.header_tarjeta <- function(nombre, id, icono, detalle = NULL) {
+  racafeModulos::cajaValor_ui(id, icono = icono, texto = nombre, mostrar_boton = FALSE,
+    color_borde = "#DA291C", color_icono = "#DA291C",
+    detalle = if (is.null(detalle)) shiny::tags$span(`aria-hidden` = "true", "\u00a0") else detalle)
 }
 
-.header_tabla <- function(datos) {
-  racafeShiny::racafeCompactTable(datos, backend = "html", max_height = "190px")
+.header_tabla <- function(datos, min_width = NULL) {
+  cifras <- grepl("^Sacos|^Lotes$|^Producidos$|^Despachados$|^Facturados$|^Meses para recuperar$", names(datos))
+  align <- stats::setNames(ifelse(cifras | vapply(datos, is.numeric, logical(1)), "right", "left"), names(datos))
+  if ("Año" %in% names(datos)) align[["Año"]] <- "left"
+  racafeShiny::racafeTableVancouver(datos, min_width = min_width, align = align, decimals = NULL,
+    font_size = 12, row_padding = 6)
 }
 
+# INDICADORES REACTIVOS DEL CLIENTE ----
+.header_kpis_server <- function(resumen) {
+  keys <- c("pedidos", "lotes", "produccion", "despachos", "asignados", "facturacion")
+  stats::setNames(lapply(keys, function(key) {
+    racafeModulos::cajaValor_server(paste0("header_cli_", key), valor_r = shiny::reactive({
+      attr(resumen(), "header_kpis")[[key]]
+    }), formato = if (key %in% c("pedidos", "lotes")) "entero" else "numero", empty = "—")
+  }), keys)
+}
 
 
 .header_resumen_cliente <- function(identidad, data_c, crm, antigua = FALSE,
@@ -136,20 +177,20 @@
     dplyr::filter(!is.na(FecFact) & (is.na(FecProd) | is.na(FecDesp))) %>%
     nrow()
   
-  shiny::tags$div(
+  contenido <- shiny::tags$div(
     style = "padding:0 2px 8px;",
     shiny::tags$div(style = "margin:8px 0;",
                     .header_badge("NIT:", identidad$nit),
                     .header_badge("Línea:", linea)),
     racafeForms::racafeMetricGrid(
-      .header_tarjeta("Pedidos", nrow(pedidos),
-                      paste("Creación:", .header_fecha(pedidos$PdcFecCre))),
-      .header_tarjeta("Lotes", nrow(lotes)),
-      .header_tarjeta("Producción (sacos)", .header_valor(lotes$SacProd)),
-      .header_tarjeta("Despachos (sacos)", .header_valor(lotes$SacDesp)),
-      .header_tarjeta("Sacos asignados", .header_valor(lotes$SacLote)),
-      .header_tarjeta("Facturación (sacos)", .header_valor(lotes$SacosFact),
-                      paste("Última:", .header_fecha(lotes$FecFact)))
+      .header_tarjeta("Pedidos", "header_cli_pedidos", "cart-shopping",
+        paste("Creación:", .header_fecha(pedidos$PdcFecCre))),
+      .header_tarjeta("Lotes", "header_cli_lotes", "boxes-stacked"),
+      .header_tarjeta("Producción (sacos)", "header_cli_produccion", "industry"),
+      .header_tarjeta("Despachos (sacos)", "header_cli_despachos", "truck"),
+      .header_tarjeta("Sacos asignados", "header_cli_asignados", "weight-hanging"),
+      .header_tarjeta("Facturación (sacos)", "header_cli_facturacion", "file-invoice-dollar",
+        paste("Última:", .header_fecha(lotes$FecFact)))
     ),
     shiny::tags$div(
       style = "font-size:10px;color:#64748b;text-align:right;margin:4px 0 10px;",
@@ -168,13 +209,17 @@
     ),
     racafeShiny::racafeCollapsible(
       id = "header_detalle_pedidos", title = "Detalle de pedidos, lotes y fechas", open = FALSE,
-      .header_tabla(detalle),
+      .header_tabla(detalle, min_width = "1500px"),
       shiny::tags$div(
         style = "font-size:10px;color:#64748b;text-align:right;margin:4px 0 8px;",
         "Cantidades expresadas en sacos equivalentes de 70 kg."
       )
     )
   )
+  attr(contenido, "header_kpis") <- list(pedidos = nrow(pedidos), lotes = nrow(lotes),
+    produccion = .header_numero(lotes$SacProd), despachos = .header_numero(lotes$SacDesp),
+    asignados = .header_numero(lotes$SacLote), facturacion = .header_numero(lotes$SacosFact))
+  contenido
 }
 
 # Historial comercial ----
@@ -500,12 +545,15 @@ HeaderClientesServer <- function(data_c, datos_rv, clientes_raw, usuario,
     shiny::removeModal()
   }, ignoreInit = TRUE)
   
-  output$resumen_cli_modal <- shiny::renderUI({
+  resumen_nuevo <- shiny::reactive({
     .header_resumen_cliente(identidad_nueva(), datos_rv(), clientes_raw(),
                             ncliente = ncliente(), por_clinit = TRUE,
                             operaciones = get0("crm_detalle_operaciones", envir = .GlobalEnv))
   })
   
+  .header_kpis_server(resumen_nuevo)
+  output$resumen_cli_modal <- shiny::renderUI(resumen_nuevo())
+
   output$resumen_cli_ant_modal <- shiny::renderUI({
     .header_historial_comercial(identidad_antigua(), clientes_raw(),
                                 ncliente = ncliente())
@@ -526,24 +574,7 @@ HeaderClientesServer <- function(data_c, datos_rv, clientes_raw, usuario,
                       linneg_cod = fila$LinNegCod[[1]])
     if (antiguo) identidad_antigua(identidad) else identidad_nueva(identidad)
     titulo <- .header_nombre(fila$PerRazSoc, paste("NIT", identidad$nit))
-    shiny::showModal(racafeForms::racafeModalDetail(
-      title = titulo, size = "subventana2",
-      if (antiguo) shiny::tagList(
-        shiny::tags$div(style = "display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap;",
-                        .header_badge("NIT:", identidad$nit),
-                        .header_badge("Línea:", .header_nombre(
-                          fila$CLLinNegNo, as.character(identidad$linneg_cod)))),
-        shiny::uiOutput("resumen_cli_ant_modal"),
-        .header_formulario_ui("mod_form_cli_ant")
-      ) else shiny::tagList(
-        shiny::uiOutput("resumen_cli_modal"),
-        .header_formulario_ui("mod_form_cli")
-      ),
-      footer = racafeForms::racafeModalFooter(
-        racafeForms::racafeButtonCancel(
-          "header_cliente_cerrar", "Cerrar", size = "xs")
-      )
-    ))
+    shiny::showModal(.header_cliente_modal_ui(titulo, fila, identidad, antiguo))
   }
   
   shiny::observeEvent(sesion$input$header_cliente_cerrar, {
