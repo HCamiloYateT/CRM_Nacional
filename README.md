@@ -5,15 +5,15 @@ permanecen en CRM Nacional. No se instalan paquetes ni se ejecutan migraciones d
 
 ## Actualizar dependencias antes de desplegar
 
-Se requieren racafeForms >= 0.7.0, racafeShiny >= 1.4.0 y racafeModulos >= 0.4.0.
-Mientras se revisan estos cambios, usar `ref = "codex/client-detail-vancouver"` para racafeShiny y
+Se requieren racafeForms >= 0.7.0, racafeShiny >= 1.4.1 y racafeModulos >= 0.4.1.
+Mientras se revisan estos cambios, usar `ref = "codex/compact-client-cards"` para racafeShiny y
 racafeModulos. Tras integrar los PR puede omitirse ese argumento.
 
 ```r
 install.packages("remotes")
 remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeForms")
-remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeShiny", ref = "codex/client-detail-vancouver")
-remotes::install_github("HCamiloYateT/racafeModulos", ref = "codex/client-detail-vancouver")
+remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeShiny", ref = "codex/compact-client-cards")
+remotes::install_github("HCamiloYateT/racafeModulos", ref = "codex/compact-client-cards")
 ```
 
 Instalar las librerías antes de actualizar los scripts del CRM. racafeShiny 1.3.1 conserva los nombres antiguos de
@@ -94,3 +94,6 @@ shiny::runApp("tests/client-detail", port = 4092, launch.browser = FALSE)
 La prueba usa helpers y UI reales con datos ficticios y no inicia los servidores comerciales ni operaciones BD.
 Ejecutar `tests/test-client-detail.cjs` con `CRM_TEST_URL`, `CHROMIUM_PATH` y Playwright disponibles, igual que
 las otras pruebas de navegador. Revisa totales, alineación, bordes, cajas, cambio de cliente y vista móvil.
+
+Las cajas del cliente usan `compact = TRUE`: padding de 8px y separación vertical de 3px.
+Las tablas del modal usan padding de fila de 3px y línea roja de encabezado de 1px.

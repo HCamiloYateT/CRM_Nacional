@@ -88,3 +88,15 @@ componen ahora las UI se comparan las transformaciones de datos y cálculos orig
 exclusivamente su presentación. Se conserva el trabajo previo de main y sus cambios de formulación.
 No se ejecutaron servidores comerciales, consultas, guardados, transacciones ni PDF. Mantener la revisión
 con servicios y permisos reales en staging antes del despliegue.
+
+## Compactación de cajas y línea fina
+
+Versiones: racafeModulos 0.4.1 y racafeShiny 1.4.1. Las cajas del cliente activan compact: padding 8px,
+gap vertical 3px, icono/valor/detalle reducidos. El tamaño anterior se conserva por defecto en otras cajas.
+Vancouver usa línea inferior de encabezado de 1px por defecto; CRM la solicita explícitamente y reduce
+el padding de fila a 3px. No hay cambios de consultas, cálculos ni módulos de servidor.
+
+Validación: 98 pruebas de racafeModulos, 19 de Vancouver, 43 comprobaciones estáticas/UI del CRM y 30
+comprobaciones de navegador correctas. Se verifica altura uniforme inferior a 100px, línea roja de 1px,
+actualización entre clientes, totales, scroll y vista móvil. Paquetes instalados y ayuda roxygen2 actualizada.
+No se ejecutaron operaciones BD ni se desplegó la aplicación.

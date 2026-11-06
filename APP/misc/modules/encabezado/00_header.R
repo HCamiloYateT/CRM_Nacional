@@ -54,7 +54,7 @@
 
 .header_tarjeta <- function(nombre, id, icono, detalle = NULL) {
   racafeModulos::cajaValor_ui(id, icono = icono, texto = nombre, mostrar_boton = FALSE,
-    color_borde = "#DA291C", color_icono = "#DA291C",
+    color_borde = "#DA291C", color_icono = "#DA291C", compact = TRUE,
     detalle = if (is.null(detalle)) shiny::tags$span(`aria-hidden` = "true", "\u00a0") else detalle)
 }
 
@@ -63,7 +63,7 @@
   align <- stats::setNames(ifelse(cifras | vapply(datos, is.numeric, logical(1)), "right", "left"), names(datos))
   if ("Año" %in% names(datos)) align[["Año"]] <- "left"
   racafeShiny::racafeTableVancouver(datos, min_width = min_width, align = align, decimals = NULL,
-    font_size = 12, row_padding = 6)
+    font_size = 12, row_padding = 3, header_width = 1)
 }
 
 # INDICADORES REACTIVOS DEL CLIENTE ----
