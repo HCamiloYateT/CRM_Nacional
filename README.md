@@ -32,6 +32,11 @@ Los controles de acciones y prospección utilizan racafeForms; las tablas, menú
 racafeModulos. Los recursos de Compartido 1.1.0 están incluidos en `APP/vendor/Compartido` y se sirven localmente.
 Las apps de prueba de los módulos se abren mediante funciones `Demo*()`; no se ejecutan durante el arranque.
 
+Iniciar con `shiny::runApp("APP")` desde la raíz del repositorio o con `shiny::runApp(".")` desde `APP`.
+El despliegue debe incluir `APP/vendor/Compartido` completo. La ruta se resuelve respecto a APP; para usar
+una copia externa puede definir `RACAFE_SHARED_PATH` o `options(racafeForms.shared_path = "/ruta/Compartido")`.
+
+
 Prueba de contrato y enriquecimiento con datos ficticios, sin conexiones de negocio:
 
 ```sh

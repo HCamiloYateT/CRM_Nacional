@@ -122,7 +122,32 @@ racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", 
 stopifnot(utils::packageVersion("racafeForms") >= "0.7.0",
           utils::packageVersion("racafeShiny") >= "1.4.1",
           utils::packageVersion("racafeModulos") >= "0.5.1")
-.recursos_compartidos <- racafeForms::racafeSharedAssets("vendor/Compartido", version = "1.1.0")
+# Resolver APP desde la raíz del repositorio o desde el directorio de la aplicación.
+.crm_ruta_app <- function(inicio = getwd()) {
+  candidatas <- c(inicio, file.path(inicio, "APP"))
+  validas <- vapply(candidatas, function(ruta) {
+    file.exists(file.path(ruta, "global.R")) && file.exists(file.path(ruta, "misc", "data_contract.R"))
+  }, logical(1))
+  if (!any(validas)) stop("No se encontró APP. Inicie con shiny::runApp('APP') desde el repositorio.", call. = FALSE)
+  normalizePath(candidatas[which(validas)[[1]]], winslash = "/", mustWork = TRUE)
+}
+
+.crm_ruta_compartido <- function(ruta_app, ruta = getOption("racafeForms.shared_path",
+                                                           Sys.getenv("RACAFE_SHARED_PATH", unset = ""))) {
+  if (!is.character(ruta) || length(ruta) != 1L || is.na(ruta)) {
+    stop("La ruta de Compartido debe ser una cadena de texto válida.", call. = FALSE)
+  }
+  if (!nzchar(trimws(ruta))) ruta <- file.path(ruta_app, "vendor", "Compartido")
+  if (!file.exists(file.path(ruta, "ASSETS_VERSION"))) {
+    stop(paste0("No se encontró Compartido en: ", ruta,
+                ". Copie la carpeta APP/vendor/Compartido completa al despliegue o configure RACAFE_SHARED_PATH."),
+         call. = FALSE)
+  }
+  normalizePath(ruta, winslash = "/", mustWork = TRUE)
+}
+
+.ruta_app <- .crm_ruta_app()
+.recursos_compartidos <- racafeForms::racafeSharedAssets(.crm_ruta_compartido(.ruta_app), version = "1.1.0")
 
 # Impresiones ----
 tit_app <- "Análisis de Ofertas"
@@ -130,11 +155,11 @@ tit_app <- "Análisis de Ofertas"
 badge_estado <- "staging"
 
 # Datos ----
-sys.source("misc/data_contract.R", envir = globalenv())
-.crm_cargar_exportacion("data/data.RData")
+sys.source(file.path(.ruta_app, "misc", "data_contract.R"), envir = globalenv())
+.crm_cargar_exportacion(file.path(.ruta_app, "data", "data.RData"))
 
 # Constantes ----
 uid <- Sys.getenv("SYS_UID")
 pwd <- Sys.getenv("SYS_PWD")
 # Sources ----
-racafeCore::load_modules(verbose = verbose)
+racafeCore::load_modules(path = file.path(.ruta_app, "misc"), verbose = verbose)
