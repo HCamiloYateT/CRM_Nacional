@@ -5,15 +5,15 @@ permanecen en CRM Nacional. No se instalan paquetes ni se ejecutan migraciones d
 
 ## Actualizar dependencias antes de desplegar
 
-Se requieren racafeForms >= 0.7.0, racafeShiny >= 1.4.1 y racafeModulos >= 0.4.1.
-Mientras se revisan estos cambios, usar `ref = "codex/compact-client-cards"` para racafeShiny y
-racafeModulos. Tras integrar los PR puede omitirse ese argumento.
+Se requieren racafeForms >= 0.7.0, racafeShiny >= 1.4.1 y racafeModulos >= 0.5.0.
+Mientras se revisan estos cambios, usar `ref = "codex/kpi-card-appearance"` para racafeModulos.
+racafeShiny puede instalarse desde main. Tras integrar los PR puede omitirse ese argumento.
 
 ```r
 install.packages("remotes")
 remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeForms")
-remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeShiny", ref = "codex/compact-client-cards")
-remotes::install_github("HCamiloYateT/racafeModulos", ref = "codex/compact-client-cards")
+remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeShiny")
+remotes::install_github("HCamiloYateT/racafeModulos", ref = "codex/kpi-card-appearance")
 ```
 
 Instalar las librerías antes de actualizar los scripts del CRM. racafeShiny 1.3.1 conserva los nombres antiguos de
@@ -97,3 +97,10 @@ las otras pruebas de navegador. Revisa totales, alineación, bordes, cajas, camb
 
 Las cajas del cliente usan `compact = TRUE`: padding de 8px y separación vertical de 3px.
 Las tablas del modal usan padding de fila de 3px y línea roja de encabezado de 1px.
+
+
+Las cajas usan el diseño 0.5.0 de racafeModulos: borde lateral rojo, sombra suave y footer para las fechas.
+El valor usa color_kpi y el pie color_footer. El CRM mantiene mostrar_boton = FALSE en estas seis métricas,
+porque no tienen una acción definida; otros consumidores pueden activar el botón con click_detalle.
+Los ajustes locales del resumen ejecutivo se limitan a tarjetas heredadas para que la presentación nueva
+conserve sus estilos corporativos. No cambia la navegación ni el cálculo de sus indicadores.

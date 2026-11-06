@@ -50,12 +50,13 @@ const {chromium} = require('playwright');
     check(await modal.locator('.racafe-caja-valor').count()===6, 'Seis módulos de indicadores');
     const cards=await modal.locator('.racafe-caja-valor').evaluateAll(nodes=>nodes.map(el=>{
       const style=getComputedStyle(el), icon=el.querySelector('i');
-      return {border:style.borderTopColor,width:style.borderTopWidth,icon:!!icon,color:icon&&getComputedStyle(icon).color};}));
+      return {border:style.borderLeftColor,width:style.borderLeftWidth,top:style.borderTopWidth,
+        icon:!!icon,color:icon&&getComputedStyle(icon).color};}));
     const heights=await modal.locator('.racafe-caja-valor').evaluateAll(nodes=>nodes.map(el=>el.getBoundingClientRect().height));
     check(Math.max(...heights)-Math.min(...heights)<2, 'Cajas de altura uniforme');
     check(Math.max(...heights)<100, 'Cajas compactas de menos de 100px');
-    check(cards.every(c=>c.border==='rgb(218, 41, 28)' && c.width==='1px' && c.icon && c.color==='rgb(218, 41, 28)'),
-      'Todas las cajas con borde e icono rojos');
+    check(cards.every(c=>c.border==='rgb(218, 41, 28)' && c.width==='3px' && c.top==='0px' && c.icon && c.color==='rgb(218, 41, 28)'),
+      'Todas las cajas con borde lateral e icono rojos');
     check((await modal.textContent()).includes('Creación: 20/10/2026'), 'Conserva fecha de creación');
     await modal.locator('#header_detalle_pedidos > summary').click();
     const detail=modal.locator('#header_detalle_pedidos .gt_table');

@@ -54,8 +54,8 @@
 
 .header_tarjeta <- function(nombre, id, icono, detalle = NULL) {
   racafeModulos::cajaValor_ui(id, icono = icono, texto = nombre, mostrar_boton = FALSE,
-    color_borde = "#DA291C", color_icono = "#DA291C", compact = TRUE,
-    detalle = if (is.null(detalle)) shiny::tags$span(`aria-hidden` = "true", "\u00a0") else detalle)
+    color = "#DA291C", color_kpi = "#344054", color_footer = "#667085", compact = TRUE,
+    footer = if (is.null(detalle)) shiny::tags$span(`aria-hidden` = "true", "\u00a0") else detalle)
 }
 
 .header_tabla <- function(datos, min_width = NULL) {

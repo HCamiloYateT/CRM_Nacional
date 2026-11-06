@@ -100,3 +100,19 @@ Validación: 98 pruebas de racafeModulos, 19 de Vancouver, 43 comprobaciones est
 comprobaciones de navegador correctas. Se verifica altura uniforme inferior a 100px, línea roja de 1px,
 actualización entre clientes, totales, scroll y vista móvil. Paquetes instalados y ayuda roxygen2 actualizada.
 No se ejecutaron operaciones BD ni se desplegó la aplicación.
+
+## Tarjetas con borde lateral y footer configurable
+
+Requiere racafeModulos 0.5.0. Las cajas mantienen valores, fechas e IDs, con borde lateral, título/icono,
+sombra suave y fechas en el footer. color_kpi/color_footer controlan sus colores de forma independiente.
+El CRM mantiene las seis cajas sin botón porque no tienen una acción definida. La biblioteca permite
+mostrarlo abajo a la derecha y la aplicación decide qué hacer con click_detalle.
+Los overrides anteriores del resumen ejecutivo se aplican solo a tarjetas heredadas para que la nueva
+apariencia sea responsabilidad del componente compartido. Los valores de sus KPIs se mantienen oscuros.
+
+Validación: 98 pruebas testthat correctas; 43 comprobaciones estáticas/UI del CRM correctas; 30 de navegador
+del modal de clientes y 25 de tarjetas/acciones correctas. Se prueban navegación de pestaña, apertura de modal,
+teclado sin eventos duplicados, botón ausente, colores independientes, cero reactivo, namespaces, guías sin KPI
+y vista móvil sin desbordamiento. R CMD build/instalación correctos; R CMD check sin errores, con las mismas
+4 advertencias y 1 nota históricas de licencia, ASCII, código anterior y documentación pendiente de otros objetos.
+No se ejecutaron consultas, transacciones ni guardados reales.

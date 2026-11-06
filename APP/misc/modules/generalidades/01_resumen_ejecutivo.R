@@ -95,8 +95,8 @@
       border-radius:50%;animation:re-girar .8s linear infinite;}
     .resumen-ejecutivo .re-loader-texto {font-size:12px;color:#64748b;}
     @keyframes re-girar {to {transform:rotate(360deg);}}
-    .resumen-ejecutivo .re-seccion {display:flex;align-items:center;gap:8px;\n      margin:15px 0 8px;padding-bottom:5px;border-bottom:1px solid #e2e8f0;}\n    .resumen-ejecutivo .re-seccion i {color:#DA291C;font-size:12px;}\n    .resumen-ejecutivo .re-seccion span {font-size:12px;font-weight:700;\n      color:#374151;text-transform:uppercase;letter-spacing:.02em;}\n    .resumen-ejecutivo .re-columna {margin-bottom:10px;}\n    .resumen-ejecutivo .re-navegar {cursor:pointer;outline:none;}\n    .resumen-ejecutivo .racafe-caja-valor {min-height:92px;padding:10px 12px;\n      gap:7px;border:1px solid #e5e7eb;box-shadow:0 1px 2px rgba(0,0,0,.04);\n      transition:border-color .12s,box-shadow .12s;}\n    .resumen-ejecutivo .re-navegar:hover .racafe-caja-valor,\n    .resumen-ejecutivo .re-navegar:focus .racafe-caja-valor {\n      border-color:#DA291C;box-shadow:0 2px 7px rgba(0,0,0,.08);}\n    .resumen-ejecutivo .racafe-caja-valor > div:first-child > div:first-child {\n      min-width:0;align-items:center!important;gap:8px!important;}\n    .resumen-ejecutivo .racafe-caja-valor > div:first-child > div:first-child > div:first-child {\n      font-size:1.2em!important;margin-right:0!important;flex-shrink:0;
-      color:#DA291C!important;}\n    .resumen-ejecutivo .racafe-caja-valor > div:first-child > div:first-child > div:last-child {\n      font-size:11px!important;line-height:1.3;overflow-wrap:anywhere;}\n    .resumen-ejecutivo .racafe-caja-valor > div:last-child {font-size:1.3em!important;\n      line-height:1.15;}\n  "))
+    .resumen-ejecutivo .re-seccion {display:flex;align-items:center;gap:8px;\n      margin:15px 0 8px;padding-bottom:5px;border-bottom:1px solid #e2e8f0;}\n    .resumen-ejecutivo .re-seccion i {color:#DA291C;font-size:12px;}\n    .resumen-ejecutivo .re-seccion span {font-size:12px;font-weight:700;\n      color:#374151;text-transform:uppercase;letter-spacing:.02em;}\n    .resumen-ejecutivo .re-columna {margin-bottom:10px;}\n    .resumen-ejecutivo .re-navegar {cursor:pointer;outline:none;}\n    .resumen-ejecutivo .racafe-caja-valor:not(.rmcv-card) {min-height:92px;padding:10px 12px;\n      gap:7px;border:1px solid #e5e7eb;box-shadow:0 1px 2px rgba(0,0,0,.04);\n      transition:border-color .12s,box-shadow .12s;}\n    .resumen-ejecutivo .re-navegar:hover .racafe-caja-valor:not(.rmcv-card),\n    .resumen-ejecutivo .re-navegar:focus .racafe-caja-valor:not(.rmcv-card) {\n      border-color:#DA291C;box-shadow:0 2px 7px rgba(0,0,0,.08);}\n    .resumen-ejecutivo .racafe-caja-valor:not(.rmcv-card) > div:first-child > div:first-child {\n      min-width:0;align-items:center!important;gap:8px!important;}\n    .resumen-ejecutivo .racafe-caja-valor:not(.rmcv-card) > div:first-child > div:first-child > div:first-child {\n      font-size:1.2em!important;margin-right:0!important;flex-shrink:0;
+      color:#DA291C!important;}\n    .resumen-ejecutivo .racafe-caja-valor:not(.rmcv-card) > div:first-child > div:first-child > div:last-child {\n      font-size:11px!important;line-height:1.3;overflow-wrap:anywhere;}\n    .resumen-ejecutivo .racafe-caja-valor:not(.rmcv-card) > div:last-child {font-size:1.3em!important;\n      line-height:1.15;}\n  "))
 }
 
 .resumen_ejecutivo_seccion_ui <- function(titulo, icono) {
@@ -113,7 +113,7 @@
                                "event.preventDefault();Shiny.setInputValue('%s',",
                                "Date.now(),{priority:'event'});}"), evento),
     racafeModulos::cajaValor_ui(ns(caja$id), icono = caja$icono,
-                              texto = caja$texto, mostrar_boton = FALSE)
+                              texto = caja$texto, mostrar_boton = FALSE, color_kpi = "#344054")
   )
 }
 
