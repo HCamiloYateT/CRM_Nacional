@@ -791,3 +791,127 @@ descartar_oportunidad <- function(id_oportunidad, razon, usr) {
   ReemplazarDatos(fila_actual, "CRMNALCLOPT", llaves = list(IdOportunidad = id_oportunidad))
   invisible(fila_actual)
 }
+## Crear Tarea ----
+.nota_obtener_etiquetas <- function() {
+  notas <- tryCatch(racafeBD::CargarDatos("CRMNALNOTAS"), error = function(e) data.frame())
+  
+  if (nrow(notas) == 0L || !"Etiquetas" %in% names(notas)) {
+    return(character(0))
+  }
+  
+  etiquetas <- notas$Etiquetas
+  etiquetas <- etiquetas[!is.na(etiquetas)]
+  etiquetas <- etiquetas[nzchar(etiquetas)]
+  
+  if (length(etiquetas) == 0L) {
+    return(character(0))
+  }
+  
+  etiquetas <- unlist(strsplit(etiquetas, "\\|"))
+  etiquetas <- trimws(etiquetas)
+  etiquetas <- etiquetas[nzchar(etiquetas)]
+  
+  etiquetas %>%
+    stringr::str_to_sentence() %>%
+    unique() %>%
+    sort()
+}
+.nota_obtener_consecutivo <- function() {
+  notas <- tryCatch(racafeBD::CargarDatos("CRMNALNOTAS"), error = function(e) data.frame())
+  
+  if (nrow(notas) == 0L || !"cons" %in% names(notas)) {
+    return(1L)
+  }
+  
+  consecutivo <- suppressWarnings(max(notas$cons, na.rm = TRUE))
+  
+  if (!is.finite(consecutivo)) {
+    return(1L)
+  }
+  
+  as.integer(consecutivo) + 1L
+}
+.nota_construir_registro <- function(titulo, tipo, descripcion, fecha_cumplimiento, prioridad, responsable,
+                                     etiquetas, actividades, cumplidas, usuario) {
+  data.frame(
+    cons = .nota_obtener_consecutivo(), titulo = trimws(titulo), Usuario = usuario, Responsable = responsable,
+    FechaHoraCrea = Sys.time(), Tipo = tipo, Descripcion = trimws(descripcion %||% ""),
+    FechaCumplimiento = fecha_cumplimiento, Actividades = paste(actividades, collapse = "|"),
+    Cumplidas = paste(cumplidas, collapse = "|"), Etiquetas = paste(etiquetas, collapse = "|"),
+    Prioridad = prioridad, Archivado = 0L, Cumplido = 0L, Respuesta = "", stringsAsFactors = FALSE
+  )
+}
+.nota_actividad_ui <- function(ns, numero) {
+  tags$div(id = ns(paste0("NOT_Actividad_", numero)), class = "nota-actividad-row",
+           tags$div(class = "nota-actividad-texto",
+                    racafeForms::racafeInputText(paste0("NOT_Texto_", numero), label = NULL, value = "",
+                                                     placeholder = paste("Actividad", numero), ns = ns)
+           ),
+           tags$div(class = "nota-actividad-accion",
+                    uiOutput(ns(paste0("NOT_BotonCumplir_", numero)))
+           ),
+           tags$div(class = "nota-actividad-accion",
+                    racafeForms::racafeButton(paste0("NOT_Eliminar_", numero), label = NULL, icon = "trash",
+                                               variant = "danger", size = "xxs", ns = ns,
+                                               title = "Eliminar actividad")
+           )
+  )
+}
+## Registrar Competencia----
+.registrar_competencia_datos_vacios <- function() {
+  data.frame(
+    UsuarioCrea = character(),
+    FechaHoraCrea = as.POSIXct(character()),
+    Competencia = character(),
+    PrecioUGQ = numeric(),
+    Observaciones = character(),
+    stringsAsFactors = FALSE
+  )
+}
+.registrar_competencia_cargar_datos <- function() {
+  tryCatch({
+    datos <- CargarDatos("CRMNALCOMPETENCIA")
+    
+    if (is.null(datos)) {
+      return(.registrar_competencia_datos_vacios())
+    }
+    
+    datos
+  }, error = function(e) {
+    .registrar_competencia_datos_vacios()
+  })
+}
+.registrar_competencia_choices <- function(datos) {
+  if (is.null(datos) || nrow(datos) == 0L || !"Competencia" %in% names(datos)) {
+    return(character(0))
+  }
+  
+  competencias <- as.character(datos$Competencia)
+  competencias <- competencias[!is.na(competencias)]
+  competencias <- trimws(competencias)
+  competencias <- competencias[nzchar(competencias)]
+  
+  sort(unique(competencias))
+}
+.registrar_competencia_ugq_actual <- function() {
+  indicadores <- .ObtenerIndicadoresActuales(
+    uid = uid,
+    pwd = pwd
+  )
+  
+  if (is.null(indicadores) || nrow(indicadores) == 0L) {
+    return(NA_real_)
+  }
+  
+  valor <- indicadores %>%
+    dplyr::filter(as.character(Item) == "Costo UGQ Racafé") %>%
+    dplyr::pull(Valor)
+  
+  if (length(valor) == 0L) {
+    return(NA_real_)
+  }
+  
+  suppressWarnings(
+    as.numeric(valor[[1]])
+  )
+}

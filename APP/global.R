@@ -1,7 +1,7 @@
 # Configuraciones Iniciales ----
 ## Variables de control
 # Flags de entorno para comportamiento en produccion vs desarrollo
-verbose <- TRUE
+verbose <- FALSE
 debug   <- FALSE
 
 ## Configuracion regional y del sistema
@@ -23,18 +23,18 @@ locales_es <- c(
 )
 .set_spanish_locale <- function(cat) {
   actual <- suppressWarnings(tryCatch(Sys.getlocale(cat), error = function(e) "C"))
-
+  
   if (grepl("^(es|spanish)", actual, ignore.case = TRUE)) {
     return(invisible(actual))
   }
-
+  
   for (loc in locales_es) {
     res <- suppressWarnings(tryCatch(Sys.setlocale(cat, loc), error = function(e) "C"))
     if (!identical(res, "C") && nzchar(res) && grepl("^(es|spanish)", res, ignore.case = TRUE)) {
       return(invisible(res))
     }
   }
-
+  
   invisible(actual)
 }
 locales_activos <- setNames(
@@ -113,10 +113,10 @@ library("racafeBD")
 library("racafeDrive")
 library("racafeGraph")
 library("racafeShiny")
+library("racafeForms")
 library("racafeModulos")
-racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs",
-                      "shinyWidgets", "tidyverse", "scales", "rlang",
-                      "waiter", "glue", "lubridate", "stringr", "purrr"))
+racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", "tidyverse", "scales", "rlang",
+                      "waiter", "glue", "lubridate", "stringr", "purrr", "gt", "plotly"))
 
 # Impresiones ----
 tit_app <- "Análisis de Ofertas"
@@ -140,37 +140,10 @@ if (file.exists("data/data.RData")) {
   if (verbose) message("[INFO] data/data.RData no encontrado. App inicia sin datos precargados.")
 }
 
-load("/home/htamara/6_IndustriaNacional/CRM Cliente Nacional/CRMNacional/data/data.RData")
-Choices <- function() {
-  
-  clientes_data <- CargarDatos("CRMNALCLIENTE")
-  productos <- CargarDatos("CRMNALPRODS") %>% 
-    mutate(Categoria  =  ifelse(Categoria == "BLEND", "FUERA DE NORMA", Categoria))  
-  origen_lead <- CargarDatos("CRMNALORILEAD") %>% filter(Estado== "A")
-  raz_descarte <- CargarDatos("CRMNALDESCARTE")
-  formapago <- ConsultaSistema("syscafe", "select distinct ForPagNom from NFORPAG")
-  
-  pais <- c("", read.csv("https://gist.githubusercontent.com/kalinchernev/486393efcca01623b18d/raw/daa24c9fea66afb7d68f8d69f0c4b8eeb9406e83/countries",
-                         header = FALSE, col.names = "Pais") %>% pull(Pais) %>% str_to_upper())
-  depto <- c("", Unicos(CargarDatos("ANDIVIPOLA") %>% pull(NomDep)))
-  direccion_via <- c("", "AVENIDA", "CALLE", "CARRERA", "TRANSVERSAL", "DIAGONAL", "CIRCULAR", "CIRCUNVALAR", "KILOMETRO")
-  direccion_cardinalidad <- c("","NORTE","SUR","ESTE","OESTE")
-  
-  list(
-    personas = c(Unicos(clientes_data$Asesor)),
-    segmento = Unicos(clientes_data$Segmento),
-    linneg = Unicos(productos$LinNeg),
-    categoria = Unicos(c(productos$Categoria)),
-    producto = Unicos(c(productos$Producto)),
-    origen = Unicos(origen_lead$Origen),
-    raz_descarte = Unicos(raz_descarte$Razon1),
-    formapago = Unicos(formapago$ForPagNom),
-    paises = pais,
-    deptos = depto,
-    direccion_via = direccion_via,
-    direccion_cardinalidad = direccion_cardinalidad
-  )
-}
 
+# Constantes ----
+uid <- Sys.getenv("SYS_UID")
+pwd <- Sys.getenv("SYS_PWD")
 # Sources ----
 load_modules(verbose = verbose)
+ 

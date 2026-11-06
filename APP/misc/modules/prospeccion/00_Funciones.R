@@ -862,9 +862,9 @@ detectar_conversion_leads <- function(usr = "SISTEMA") {
     reactable::colDef(name = "Núm Leads", minWidth = 90, style = estilo),
     reactable::colDef(name = "Núm Clientes", minWidth = 100, style = estilo),
     reactable::colDef(name = "% de Clientes", minWidth = 100,
-                      cell = function(v) scales::percent(v, accuracy = 0.1, decimal.mark = ","), style = estilo),
+                      cell = function(v) scales::percent(v, accuracy = 0.1, decimal.mark = SEP_DECIMAL), style = estilo),
     reactable::colDef(name = "Conversión Lead → Cliente", minWidth = 155,
-                      cell = function(v) scales::percent(v, accuracy = 0.1, decimal.mark = ","), style = estilo),
+                      cell = function(v) scales::percent(v, accuracy = 0.1, decimal.mark = SEP_DECIMAL), style = estilo),
     reactable::colDef(name = "Tiempo Lead → Cliente (días)", minWidth = 175, style = estilo),
     reactable::colDef(name = "Gestiones Lead → Cliente", minWidth = 165, style = estilo),
     reactable::colDef(name = "Gestiones como Cliente", minWidth = 150, style = estilo)

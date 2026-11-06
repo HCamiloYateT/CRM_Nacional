@@ -366,3 +366,5 @@ google_key <- Sys.getenv("GOOGLE_MAPS_KEY")
   "Error en el registro de la oportunidad",
   "OTRAS"
 )
+## Crear Tarea -----
+.TSK_PRIORIDADES <- c("URGENTE", "IMPORTANTE", "MEDIA", "BAJA")
