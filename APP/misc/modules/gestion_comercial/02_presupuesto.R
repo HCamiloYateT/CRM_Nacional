@@ -115,14 +115,16 @@ PresupuestoUI <- function(id) {
              bs4Dash::bs4Card(
                title = "Presupuesto de Sacos (70 Kgs)", status = "white",
                solidHeader = TRUE, width = 12, collapsible = TRUE,
-               plotlyOutput(ns("GraficoPresupuestoSacos"))
+               plotlyOutput(ns("GraficoPresupuestoSacos")),
+               uiOutput(ns("nota_serie_sacos"))
              )
       ),
       column(6,
              bs4Dash::bs4Card(
                title = "Presupuesto de $MNFCC", status = "white",
                solidHeader = TRUE, width = 12, collapsible = TRUE,
-               plotlyOutput(ns("GraficoPresupuestoMargen"))
+               plotlyOutput(ns("GraficoPresupuestoMargen")),
+               uiOutput(ns("nota_serie_margen"))
              )
       )
     ),
@@ -133,14 +135,15 @@ PresupuestoUI <- function(id) {
         solidHeader = TRUE, width = 12, collapsible = TRUE, collapsed = TRUE,
         fluidRow(
           column(10,
-                 racafe::BotonesRadiales(
-                   inputId = "dim_breakdown",
+                 racafeForms::racafeInputSelect(
+                   id = "dim_breakdown", label = "Dimensión",
                    choices = c(
                      "Línea de Negocio" = "linneg", "Segmento" = "segmento",
                      "Asesor" = "asesor", "Departamento" = "departamento",
                      "Municipio" = "municipio", "Unidad Comercial" = "unidadcomercial"
                    ),
-                   selected = "linneg", ns = ns
+                   selected = "linneg", empty = FALSE, search = FALSE,
+                   uppercase = FALSE, width = "260px", ns = ns
                  )
           )
         ),
@@ -150,6 +153,7 @@ PresupuestoUI <- function(id) {
         # Tabla de Margen
         uiOutput(ns("tabla_margen_ui")),
         uiOutput(ns("footer_metodologia")),
+        uiOutput(ns("nota_dimension")),
         fluidRow(
           column(6,
                  bs4Dash::bs4Card(
@@ -160,15 +164,17 @@ PresupuestoUI <- function(id) {
                      column(12,
                             div(
                               style = "display:flex; align-items:center; gap:12px; margin-bottom:4px;",
-                              racafe::BotonesRadiales(
-                                inputId = "medida_proyeccion",
+                              racafeForms::racafeInputSelect(
+                                id = "medida_proyeccion", label = NULL,
                                 choices = c("Sacos" = "sacos", "Margen" = "margen"),
-                                selected = "sacos", ns = ns
+                                selected = "sacos", empty = FALSE, search = FALSE,
+                                uppercase = FALSE, width = "150px", ns = ns
                               )
                             )
                      )
                    ),
-                   plotlyOutput(ns("grafico_proyeccion"))
+                   plotlyOutput(ns("grafico_proyeccion")),
+                   uiOutput(ns("nota_proyeccion_dimension"))
                  )
           ),
           column(6,
@@ -180,15 +186,17 @@ PresupuestoUI <- function(id) {
                      column(12,
                             div(
                               style = "display:flex; align-items:center; gap:12px; margin-bottom:4px;",
-                              racafe::BotonesRadiales(
-                                inputId = "medida_velocidad",
+                              racafeForms::racafeInputSelect(
+                                id = "medida_velocidad", label = NULL,
                                 choices = c("Sacos" = "sacos", "Margen" = "margen"),
-                                selected = "sacos", ns = ns
+                                selected = "sacos", empty = FALSE, search = FALSE,
+                                uppercase = FALSE, width = "150px", ns = ns
                               )
                             )
                      )
                    ),
-                   plotlyOutput(ns("grafico_velocidad"))
+                   plotlyOutput(ns("grafico_velocidad")),
+                   uiOutput(ns("nota_velocidad_dimension"))
                  )
           )
         )
@@ -590,11 +598,27 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           Brecha_Margen = Margen_YTD - Ppto_Margen_YTD,
           Ritmo_Sacos_Actual = .division_segura(Sacos_YTD / pmax(mes_actual, 1L)),
           Ritmo_Margen_Actual = .division_segura(Margen_YTD / pmax(mes_actual, 1L)),
-          Ritmo_Sacos_Req = .division_segura((Ppto_Sacos_Anual - Sacos_YTD) / pmax(meses_rest, 1L)),
-          Ritmo_Margen_Req = .division_segura((Ppto_Margen_Anual - Margen_YTD) / pmax(meses_rest, 1L)),
+          Ritmo_Sacos_Bruto = if (meses_rest > 0L) (Ppto_Sacos_Anual - Sacos_YTD) / meses_rest else NA_real_,
+          Ritmo_Margen_Bruto = if (meses_rest > 0L) (Ppto_Margen_Anual - Margen_YTD) / meses_rest else NA_real_,
+          Ritmo_Sacos_Negativo = !is.na(Ritmo_Sacos_Bruto) & Ritmo_Sacos_Bruto < 0,
+          Ritmo_Margen_Negativo = !is.na(Ritmo_Margen_Bruto) & Ritmo_Margen_Bruto < 0,
+          Ritmo_Sacos_Ajustado = !is.na(Ritmo_Sacos_Bruto) & Ritmo_Sacos_Bruto < pmax(Ppto_Sacos_Mes, 0),
+          Ritmo_Margen_Ajustado = !is.na(Ritmo_Margen_Bruto) & Ritmo_Margen_Bruto < pmax(Ppto_Margen_Mes, 0),
+          Ritmo_Sacos_Req = .meta_mensual_requerida(Ppto_Sacos_Anual, Sacos_YTD, meses_rest)$valor,
+          Ritmo_Margen_Req = .meta_mensual_requerida(Ppto_Margen_Anual, Margen_YTD, meses_rest)$valor,
           Meses_Restantes = meses_rest,
           Meta_Mensual_Sacos = Ritmo_Sacos_Req,
           Meta_Mensual_Margen = Ritmo_Margen_Req,
+          Nota_Sacos = dplyr::case_when(
+            Ritmo_Sacos_Negativo ~ "Ritmo negativo; se fija presupuesto mensual",
+            Ritmo_Sacos_Ajustado ~ "Ritmo inferior; se fija presupuesto mensual",
+            TRUE ~ ""
+          ),
+          Nota_Margen = dplyr::case_when(
+            Ritmo_Margen_Negativo ~ "Ritmo negativo; se fija presupuesto mensual",
+            Ritmo_Margen_Ajustado ~ "Ritmo inferior; se fija presupuesto mensual",
+            TRUE ~ ""
+          ),
           Ritmo_Proj_Sacos = coalesce(Ritmo_Pond_Sacos, Ritmo_Sacos_Actual),
           Ritmo_Proj_Margen = coalesce(Ritmo_Pond_Margen, Ritmo_Margen_Actual),
           Proyeccion_Sacos = Sacos_YTD + Ritmo_Proj_Sacos * meses_rest,
@@ -635,7 +659,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       
       ppto_total <- sum(datos_grafico[[col_ppto]], na.rm = TRUE)
       meses_rest <- 12L - mes_actual
-      meta_mens  <- .division_segura((ppto_total - ejec_acum) / pmax(meses_rest, 1))
+      meta_info <- .meta_mensual_requerida(ppto_total, ejec_acum, meses_rest)
+      meta_mens <- meta_info$valor
       
       datos_grafico <- datos_grafico %>%
         mutate(
@@ -735,6 +760,36 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     .division_segura <- function(numerador, denominador = 1) {
       valor <- suppressWarnings(numerador / denominador)
       replace(valor, !is.finite(valor), 0)
+    }
+    
+    # Metas mensuales requeridas ----
+    .meta_mensual_requerida <- function(ppto_anual, ejecutado, meses_rest) {
+      ppto_mes <- pmax(ppto_anual / 12, 0)
+      faltante <- ppto_anual - ejecutado
+      ritmo_bruto <- if (meses_rest > 0L) faltante / meses_rest else rep(NA_real_, length(faltante))
+      ritmo_bruto[!is.finite(ritmo_bruto)] <- NA_real_
+      ajustado <- !is.na(ritmo_bruto) & ritmo_bruto < ppto_mes
+      negativo <- !is.na(ritmo_bruto) & ritmo_bruto < 0
+      list(valor = pmax(dplyr::coalesce(ritmo_bruto, ppto_mes), ppto_mes),
+           bruto = ritmo_bruto, negativo = negativo, ajustado = ajustado,
+           presupuesto_mensual = ppto_mes, faltante = faltante)
+    }
+    
+    .nota_meta <- function(negativo, ajustado = negativo) {
+      if (any(negativo, na.rm = TRUE)) {
+        return(paste0("El ritmo requerido calculado es negativo porque la ejecución supera ",
+                      "el presupuesto anual. Se presenta el presupuesto mensual como mínimo."))
+      }
+      if (any(ajustado, na.rm = TRUE)) {
+        return(paste0("El ritmo requerido es inferior al presupuesto mensual; ",
+                      "se presenta el presupuesto mensual como mínimo."))
+      }
+      NULL
+    }
+    
+    .nota_presupuesto_ui <- function(texto) {
+      if (is.null(texto)) return(NULL)
+      racafeForms::racafeFormMessage(texto, type = "info", size = "compact")
     }
     
     # Fuente financiera ----
@@ -1048,6 +1103,10 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           Prob_Margen      = .division_segura(Proyeccion_Margen / Ppto_Margen_Anual),
           Sem_Sacos        = purrr::map_chr(Prob_Sacos,  ~ .semaforo(.x, "emoji")),
           Sem_Margen       = purrr::map_chr(Prob_Margen, ~ .semaforo(.x, "emoji")),
+          Nota_Sacos       = if (any(df$Ritmo_Sacos_Negativo))
+            "Ritmo negativo en al menos una dimensión" else "",
+          Nota_Margen      = if (any(df$Ritmo_Margen_Negativo))
+            "Ritmo negativo en al menos una dimensión" else "",
           .dim_key         = "TOTAL"
         )
     }
@@ -1097,7 +1156,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           all_of(cols_dim),
           Sacos_Mes, Ppto_Sacos_Mes, Cumpl_Sacos_Mes,
           Sacos_YTD, Ppto_Sacos_YTD, Cumpl_Sacos_YTD, Brecha_Sacos,
-          Proyeccion_Sacos, Prob_Sacos, Sem_Sacos, Meta_Mensual_Sacos
+          Proyeccion_Sacos, Prob_Sacos, Sem_Sacos, Meta_Mensual_Sacos, Nota_Sacos
         ) %>%
         mutate(.row_type = ifelse(.dim_key == "TOTAL", "total", ""))
     })
@@ -1113,9 +1172,49 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           all_of(cols_dim),
           Margen_Mes, Ppto_Margen_Mes, Cumpl_Margen_Mes,
           Margen_YTD, Ppto_Margen_YTD, Cumpl_Margen_YTD, Brecha_Margen,
-          Proyeccion_Margen, Prob_Margen, Sem_Margen, Meta_Mensual_Margen
+          Proyeccion_Margen, Prob_Margen, Sem_Margen, Meta_Mensual_Margen, Nota_Margen
         ) %>%
         mutate(.row_type = ifelse(.dim_key == "TOTAL", "total", ""))
+    })
+    
+    # Notas de proyección ----
+    nota_serie_r <- function(real, ppto) {
+      dg <- datos_grafico_r()
+      cal <- calendario_r()
+      total <- sum(dg[[ppto]], na.rm = TRUE)
+      ejecutado <- sum(dg[[real]][dg$Mes_Num <= cal$mes_actual], na.rm = TRUE)
+      meta <- .meta_mensual_requerida(total, ejecutado, cal$meses_rest)
+      .nota_meta(meta$negativo, meta$ajustado)
+    }
+    output$nota_serie_sacos <- renderUI({
+      .nota_presupuesto_ui(nota_serie_r("Sacos_Real", "Sacos_Ppto"))
+    })
+    output$nota_serie_margen <- renderUI({
+      .nota_presupuesto_ui(nota_serie_r("Margen_Real", "Margen_Ppto"))
+    })
+    nota_dimension_r <- reactive({
+      df <- breakdown_r()
+      .nota_meta(c(df$Ritmo_Sacos_Negativo, df$Ritmo_Margen_Negativo),
+                 c(df$Ritmo_Sacos_Ajustado, df$Ritmo_Margen_Ajustado))
+    })
+    output$nota_dimension <- renderUI({
+      .nota_presupuesto_ui(nota_dimension_r())
+    })
+    output$nota_proyeccion_dimension <- renderUI({
+      df <- breakdown_r()
+      medida <- input$medida_proyeccion
+      .nota_presupuesto_ui(.nota_meta(
+        if (medida == "sacos") df$Ritmo_Sacos_Negativo else df$Ritmo_Margen_Negativo,
+        if (medida == "sacos") df$Ritmo_Sacos_Ajustado else df$Ritmo_Margen_Ajustado
+      ))
+    })
+    output$nota_velocidad_dimension <- renderUI({
+      df <- breakdown_r()
+      medida <- input$medida_velocidad
+      .nota_presupuesto_ui(.nota_meta(
+        if (medida == "sacos") df$Ritmo_Sacos_Negativo else df$Ritmo_Margen_Negativo,
+        if (medida == "sacos") df$Ritmo_Sacos_Ajustado else df$Ritmo_Margen_Ajustado
+      ))
     })
     
     # KPIs derivados de datos_grafico_r
@@ -1152,10 +1251,12 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         summarise(p = sum(Sacos_Ppto, na.rm = TRUE)) %>%
         pull(p)
       faltante   <- ppto_anual - ejec_ytd
+      meta <- .meta_mensual_requerida(ppto_anual, ejec_ytd, cal$meses_rest)
       list(
-        ritmo      = .division_segura(faltante / pmax(cal$meses_rest, 1)),
+        ritmo      = meta$valor,
         faltante   = faltante,
-        meses_rest = cal$meses_rest
+        meses_rest = cal$meses_rest,
+        nota       = .nota_meta(meta$negativo, meta$ajustado)
       )
     })
     kpi_ritmo_margen_r <- reactive({
@@ -1169,10 +1270,12 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         summarise(p = sum(Margen_Ppto, na.rm = TRUE)) %>%
         pull(p)
       faltante   <- ppto_anual - ejec_ytd
+      meta <- .meta_mensual_requerida(ppto_anual, ejec_ytd, cal$meses_rest)
       list(
-        ritmo      = .division_segura(faltante / pmax(cal$meses_rest, 1)),
+        ritmo      = meta$valor,
         faltante   = faltante,
-        meses_rest = cal$meses_rest
+        meses_rest = cal$meses_rest,
+        nota       = .nota_meta(meta$negativo, meta$ajustado)
       )
     })
     
@@ -1245,7 +1348,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         Meta_Mensual_Sacos = reactable::colDef(
           name   = "Meta Mens.", minWidth = 90,
           format = reactable::colFormat(separators = TRUE, digits = 0)
-        )
+        ),
+        Nota_Sacos = reactable::colDef(name = "Nota", minWidth = 180)
       )
     }
     
@@ -1298,7 +1402,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         Meta_Mensual_Margen = reactable::colDef(
           name   = "Meta Mens.", minWidth = 110,
           format = reactable::colFormat(prefix = "$", separators = TRUE, digits = 0)
-        )
+        ),
+        Nota_Margen = reactable::colDef(name = "Nota", minWidth = 180)
       )
     }
     
@@ -1497,9 +1602,10 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       mostrar_boton = FALSE,
       footer = reactive(
         paste0(
-          "Faltan ", FormatearNumero(kpi_ritmo_sacos_r()$faltante, "coma"),
-          " sacos en ", kpi_ritmo_sacos_r()$meses_rest,
-          " meses para cerrar el presupuesto"
+          if (kpi_ritmo_sacos_r()$faltante >= 0) "Faltan " else "Excedente de ",
+          FormatearNumero(abs(kpi_ritmo_sacos_r()$faltante), "coma"),
+          " sacos. Meses restantes: ", kpi_ritmo_sacos_r()$meses_rest,
+          if (!is.null(kpi_ritmo_sacos_r()$nota)) paste0(". ", kpi_ritmo_sacos_r()$nota) else ""
         ) %>% HTML
       )
     )
@@ -1510,9 +1616,10 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       mostrar_boton = FALSE,
       footer = reactive(
         paste0(
-          "Faltan ", FormatearNumero(kpi_ritmo_margen_r()$faltante, "dinero"),
-          " en ", kpi_ritmo_margen_r()$meses_rest,
-          " meses para cerrar el presupuesto de margen"
+          if (kpi_ritmo_margen_r()$faltante >= 0) "Faltan " else "Excedente de ",
+          FormatearNumero(abs(kpi_ritmo_margen_r()$faltante), "dinero"),
+          ". Meses restantes: ", kpi_ritmo_margen_r()$meses_rest,
+          if (!is.null(kpi_ritmo_margen_r()$nota)) paste0(". ", kpi_ritmo_margen_r()$nota) else ""
         ) %>% HTML
       )
     )
@@ -1990,7 +2097,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         htmltools::tags$span(htmltools::HTML(paste0(
           "<b>Meta mensual:</b> ",
           "<code style='background:#f3f4f6;color:#374151;padding:1px 5px;border-radius:3px;'>",
-          "(Presupuesto anual \u2212 Ejecutado acumulado) \u00f7 Meses restantes</code>"
+          "max(Presupuesto anual / 12, (Presupuesto anual − Ejecutado) / Meses restantes, 0)</code>"
         ))),
         htmltools::tags$br(),
         htmltools::tags$span(htmltools::HTML(paste0(
@@ -2031,13 +2138,15 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           else paste0(RazSoc, " \u2014 ", LinNeg),
           .cx         = !!sym(col_cumpl), .cy     = !!sym(col_prob),
           .ytd        = !!sym(col_ytd),   .brecha = !!sym(col_brecha),
+          .nota       = if (medida == "sacos") Nota_Sacos else Nota_Margen,
           color_punto = .color_punto_cumpl(.cx, .cy),
           tooltip     = paste0(
             "<b>", dim, "</b><br>",
             "Cumpl. Acum. ", periodo, ": ", scales::percent(.cx, accuracy = 0.1), "<br>",
             "Proyección de cierre: ",          scales::percent(.cy, accuracy = 0.1), "<br>",
             lbl_medida, " Acum.: ", fmt_val(.ytd), "<br>",
-            "Brecha: ", fmt_val(.brecha)
+            "Brecha: ", fmt_val(.brecha),
+            ifelse(nzchar(.nota), paste0("<br>Nota: ", .nota), "")
           )
         )
       
@@ -2134,11 +2243,13 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           .b_amarillo = .req * 0.90,
           .b_verde    = .req * 1.20,
           .ratio      = .division_segura(.act / pmax(.req, 1e-9)),
+          .nota      = if (medida == "sacos") Nota_Sacos else Nota_Margen,
           tooltip     = paste0(
             "<b>", dim, "</b><br>",
             "Ritmo actual: ",    fmt_val(.act), " ", lbl_unidad, "<br>",
             "Ritmo requerido: ", fmt_val(.req), " ", lbl_unidad, "<br>",
-            "Ratio: ", scales::percent(.ratio, accuracy = 0.1)
+            "Ratio: ", scales::percent(.ratio, accuracy = 0.1),
+            ifelse(nzchar(.nota), paste0("<br>Nota: ", .nota), "")
           )
         )
       
