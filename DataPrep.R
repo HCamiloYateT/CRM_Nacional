@@ -1536,7 +1536,7 @@ data_pendiente <- base_operativa %>%
   ) %>%
   ungroup() %>%
   filter(PdcEst == "A", coalesce(SacosPendientesLinea > 0, FALSE)) %>%
-  # MES OPERATIVO ----
+# MES OPERATIVO ----
 mutate(
   FecMes = pmax(coalesce(lubridate::floor_date(PdcFecEst, "month"),
                          mes_actual), fecha_inicio_operativo),
