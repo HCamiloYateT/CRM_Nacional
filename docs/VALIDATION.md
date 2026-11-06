@@ -53,3 +53,38 @@ Se verifican títulos a todo el ancho, NIT único, metadatos de actualización, 
 selección con menú abierto, una sola zona de desplazamiento, pie fijo, importes sin saltos y ausencia de
 desbordamiento horizontal y errores R/JavaScript. Se inspeccionaron capturas de clientes, tareas e indicadores.
 Se mantienen los alcances de staging y las restricciones de pruebas de negocio descritos arriba.
+
+## Modal de clientes y Vancouver — 2026-11-06
+
+Referencias iniciales: CRM `f71acf7`, Libreria-Racafe `694b04d`, racafeModulos `78dd9cb`.
+Versiones resultantes: racafeShiny 1.4.0 y racafeModulos 0.4.0; racafeForms no cambia.
+
+| Validación | Resultado |
+| --- | --- |
+| testthat de tabla Vancouver | 19 PASS, 0 FAIL/WARN |
+| testthat racafeModulos completo | 98 PASS, 0 FAIL/WARN |
+| testthat racafeShiny completo | 362 PASS; mismos 28 fallos preexistentes, 0 WARN |
+| Comparación estática y construcción UI CRM | 43 comprobaciones correctas |
+| Navegador: tabla y modal real con datos ficticios | 29 comprobaciones correctas |
+| Navegador: integración CRM anterior | 15 comprobaciones correctas |
+| Navegador: presentación de encabezados | 48 comprobaciones correctas |
+| Construcción/instalación de paquetes | Correctas |
+| R CMD check racafeModulos | Sin errores, 4 WARNINGs/1 NOTE históricas |
+| R CMD check racafeShiny --no-tests | Sin errores, 1 WARNING/2 NOTEs históricas |
+
+Se verificó la línea roja continua de 2px, ausencia de cuadrícula/bordes verticales, alineación automática y
+por columna, reconocimiento de Total, fondos iguales en su intersección, opciones de color/grosor/espaciado,
+compatibilidad con las tablas anteriores y escaping. La ayuda Rd nueva se generó y verificó con R CMD check.
+El check de racafeShiny omite tests explícitamente: la suite completa se ejecutó por separado y mantiene los
+28 fallos anteriores de formatos/clases de modales, documentados en las tareas previas.
+
+En el modal se verificaron 1200px máximos, seis cajas de altura uniforme con borde/icono rojo, fechas,
+actualización al cambiar cliente, formato numérico, historial, detalle con scroll horizontal y adaptación a
+390px sin desbordamiento exterior. Tras abrir varios clientes no hay IDs duplicados ni errores R/JavaScript.
+El módulo distingue cantidades desconocidas y cero cuando se solicita empty.
+
+El verificador conserva SQL, transacciones y funciones comerciales protegidas. Para las dos funciones que
+componen ahora las UI se comparan las transformaciones de datos y cálculos originales, permitiendo sustituir
+exclusivamente su presentación. Se conserva el trabajo previo de main y sus cambios de formulación.
+No se ejecutaron servidores comerciales, consultas, guardados, transacciones ni PDF. Mantener la revisión
+con servicios y permisos reales en staging antes del despliegue.
