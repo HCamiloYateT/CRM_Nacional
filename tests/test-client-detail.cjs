@@ -57,7 +57,7 @@ const {chromium} = require('playwright');
     check(Math.max(...heights)<100, 'Cajas compactas de menos de 100px');
     check(cards.every(c=>c.border==='rgb(218, 41, 28)' && c.width==='3px' && c.top==='1px' && c.icon && c.color==='rgb(218, 41, 28)'),
       'Todas las cajas con borde lateral e icono rojos');
-    check(await modal.locator('.rmcv-footer .rmcv-button').count()===6, 'Seis acciones de detalle visibles');
+    check(await modal.locator('.rmcv-footer .rmcv-button').count()===3, 'Tres acciones con detalle; las otras cajas son informativas');
     await modal.locator('#header_cli_pedidos-detalle').click();
     await page.locator('.modal.show .modal-title').filter({hasText:'Detalle: Pedidos'}).waitFor();
     check(await page.locator('.modal.show .gt_table').count()===1, 'Botón abre el detalle operativo');

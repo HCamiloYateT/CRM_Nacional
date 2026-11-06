@@ -1,12 +1,7 @@
 # TablaDetalleDat ----
 TablaDetalleDatUI <- function(id) {
   ns <- NS(id)
-  div(
-    class = "rt-contenedor reactable-wrap rt-sortable",
-    div(class = "rt-titulo",    "Detalle de Transacciones"),
-    div(class = "rt-subtitulo", "Todas las columnas del dataset activo"),
-    reactable::reactableOutput(ns("tabla"))
-  )
+  shiny::uiOutput(ns("contenedor"))
 }
 TablaDetalleDat <- function(id, dat) {
   moduleServer(id, function(input, output, session) {
@@ -44,35 +39,51 @@ TablaDetalleDat <- function(id, dat) {
       cols
     }
     
-    # Render principal: colDef construidos dentro del renderReactable con df disponible
-    output$tabla <- reactable::renderReactable({
+    # Registrar una tabla por esquema, conservando filtros y formatos de columna.
+    esquemas <- reactiveVal(character())
+    observeEvent(names(dat()), {
       req(dat())
-      df <- dat()
-      reactable::reactable(
-        data            = df,
-        columns         = .build_coldefs(df),
-        sortable        = TRUE,
-        searchable      = TRUE,
-        defaultPageSize = 20,
-        compact         = TRUE,
-        bordered        = TRUE,
-        striped         = FALSE,
-        highlight       = TRUE,
-        language = reactable::reactableLang(
-          searchPlaceholder = "Buscar...",
-          noData            = "Sin resultados",
-          pageInfo          = "{rowStart}\u2013{rowEnd} de {rows} registros",
-          pagePrevious      = "Anterior",
-          pageNext          = "Siguiente"
-        ),
-        theme = reactable::reactableTheme(
-          headerStyle = list(fontWeight = "600", fontSize = "12px", cursor = "pointer"),
-          cellStyle   = list(fontSize = "12px", padding = "3px 6px")
-        )
-      )
-    })
+      firma <- paste(nchar(names(dat())), names(dat()), collapse = ";")
+      conocidas <- isolate(esquemas())
+      indice <- match(firma, conocidas)
+      nueva <- is.na(indice)
+      if (nueva) {
+        conocidas <- c(conocidas, firma)
+        esquemas(conocidas)
+        indice <- length(conocidas)
+      }
+      mid <- paste0("tabla_", indice)
+      if (nueva) {
+        .crm_tabla_servidor(mid, data = dat, modo_seleccion = "ninguno", page_size = 20,
+                             col_specs = .build_coldefs(dat()),
+                             footer = "Transacciones de la base activa; filtros y ordenamiento solo afectan esta vista.")
+      }
+      output$contenedor <- renderUI(.crm_tabla_ui(session$ns(mid), titulo = "Detalle de Transacciones",
+                                                  subtitulo = "Todas las columnas del dataset activo"))
+    }, ignoreNULL = TRUE)
+
   })
 }
+
+.ppto_lotes_col_specs <- function() list(
+              FecFact    = reactable::colDef(
+                name = "Fecha Factura", minWidth = 110,
+                cell = function(v) if (is.na(v)) "\u2014" else format(as.Date(v), "%d %b %Y")
+              ),
+              PerRazSoc  = reactable::colDef(name = "Razón Social",  minWidth = 180),
+              CLLinNegNo = reactable::colDef(name = "Línea de Negocio", minWidth = 130),
+              CLLotCod   = reactable::colDef(name = "Lote",          minWidth = 80),
+              Asesor     = reactable::colDef(name = "Asesor",        minWidth = 120),
+              Segmento   = reactable::colDef(name = "Segmento",      minWidth = 100),
+              Sacos70    = reactable::colDef(
+                name   = "Sacos (70Kg)", minWidth = 100,
+                format = reactable::colFormat(separators = TRUE, digits = 1)
+              ),
+              Margen     = reactable::colDef(
+                name   = "Margen ($)", minWidth = 110,
+                format = reactable::colFormat(prefix = "$", separators = TRUE, digits = 0)
+              )
+            )
 
 # Presupuesto ----
 
@@ -81,10 +92,10 @@ PresupuestoUI <- function(id) {
   tagList(
     # KPIs principales
     fluidRow(
-      column(3, racafeModulos::CajaModalUI(ns("kpi_cumpl_sacos_ytd"))),
-      column(3, racafeModulos::CajaModalUI(ns("kpi_cumpl_margen_ytd"))),
-      column(3, racafeModulos::CajaModalUI(ns("kpi_ritmo_req_sacos"))),
-      column(3, racafeModulos::CajaModalUI(ns("kpi_ritmo_req_margen")))
+      column(3, .crm_caja_output(ns("kpi_cumpl_sacos_ytd"))),
+      column(3, .crm_caja_output(ns("kpi_cumpl_margen_ytd"))),
+      column(3, .crm_caja_output(ns("kpi_ritmo_req_sacos"))),
+      column(3, .crm_caja_output(ns("kpi_ritmo_req_margen")))
     ),
     # Tabla GT resumen mensual/acumulado — con scroll horizontal
     fluidRow(
@@ -206,6 +217,12 @@ PresupuestoUI <- function(id) {
 }
 Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NULL) {
   moduleServer(id, function(input, output, session) {
+    .detalle_lotes_rv <- reactiveVal(data.frame(FecFact = as.Date(character()), PerRazSoc = character(),
+                                               CLLinNegNo = character(), CLLotCod = numeric(), Asesor = character(),
+                                               Segmento = character(), Sacos70 = numeric(), Margen = numeric()))
+    .crm_tabla_servidor("detalle_lotes", data = .detalle_lotes_rv, modo_seleccion = "ninguno",
+                         col_specs = .ppto_lotes_col_specs(), page_size = 15,
+                         footer = "Detalle de facturas del período y dimensión seleccionados; sacos de 70 kg e importes COP.")
     
     # Constantes ----
     .MESES <- c(
@@ -1567,7 +1584,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     # Outputs ----
     
     ## KPIs CajaModal ----
-    racafeModulos::CajaModal(
+    .crm_caja(
       id = "kpi_cumpl_sacos_ytd", valor = reactive(kpi_sacos_r()$cumpl),
       formato = "porcentaje",
       texto   = reactive(paste0("Cumpl. Sacos \u2014 Acum. ", kpi_sacos_r()$periodo)),
@@ -1581,7 +1598,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         ) %>% HTML
       )
     )
-    racafeModulos::CajaModal(
+    .crm_caja(
       id = "kpi_cumpl_margen_ytd", valor = reactive(kpi_margen_r()$cumpl),
       formato = "porcentaje",
       texto   = reactive(paste0("Cumpl. Margen \u2014 Acum. ", kpi_margen_r()$periodo)),
@@ -1595,7 +1612,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         ) %>% HTML
       )
     )
-    racafeModulos::CajaModal(
+    .crm_caja(
       id = "kpi_ritmo_req_sacos", valor = reactive(kpi_ritmo_sacos_r()$ritmo),
       formato = "numero", texto = "Sacos / mes requeridos", icono = "arrow-trend-up",
       colores = reactive(c(fondo = "white")), color_fondo_hex = "#F8FAFC",
@@ -1609,7 +1626,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         ) %>% HTML
       )
     )
-    racafeModulos::CajaModal(
+    .crm_caja(
       id = "kpi_ritmo_req_margen", valor = reactive(kpi_ritmo_margen_r()$ritmo),
       formato = "dinero", texto = "Margen / mes requerido", icono = "money-bill-trend-up",
       colores = reactive(c(fondo = "white")), color_fondo_hex = "#F8FAFC",
@@ -1741,7 +1758,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         )
       
       gt1 <- bind_rows(t1, fila_total) %>%
-        gt() %>%
+        .crm_tabla_vancouver(font_size = 11, row_padding = 5) %>%
         tab_header(
           title    = md(paste0("**Seguimiento de Presupuesto ", periodo, "**")),
           subtitle = md(paste0(
@@ -1776,7 +1793,6 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         fmt_number(columns   = c(2, 3, 6, 7, 10, 11), decimals = 0) %>%
         fmt_currency(columns = c(4, 5, 14, 15, 18, 19), currency = "COP", decimals = 0) %>%
         fmt_percent(columns  = c(8, 9, 12, 13, 16, 17, 20, 21), decimals = 1) %>%
-        gt_minimal_style() %>%
         gt::tab_options(
           table.width = gt::pct(100), container.width = gt::pct(100),
           table.font.size = gt::px(11), column_labels.font.size = gt::px(10),
@@ -1806,58 +1822,14 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
             cn$acum_ppto_ma, cn$acum_margen_act, cn$cumpl_mgn_acum, cn$varmgn_acum
           )))
         ) %>%
-        tab_source_note(
-          source_note = htmltools::tags$div(
-            style = "margin-top:8px; font-size:12px; text-align:left;",
-            tags$span(style = paste0(
-              "display:inline-block;width:15px;height:15px;",
-              "background-color:#F0FDF4;border:1px solid #ccc;",
-              "margin-right:6px;vertical-align:middle;"
-            )),
-            tags$span(
-              paste0("Año Anterior (", periodo_ant, ")"),
-              style = "font-weight:bold;font-size:12px;"
-            ),
-            tags$span(style = paste0(
-              "display:inline-block;width:15px;height:15px;",
-              "background-color:#F8FAFC;border:1px solid #ccc;",
-              "margin-left:18px;margin-right:6px;vertical-align:middle;"
-            )),
-            tags$span(
-              paste0("Mensual (", periodo, ")"),
-              style = "font-weight:bold;font-size:12px;"
-            ),
-            tags$span(style = paste0(
-              "display:inline-block;width:15px;height:15px;",
-              "background-color:#EFF6FF;border:1px solid #ccc;",
-              "margin-left:18px;margin-right:6px;vertical-align:middle;"
-            )),
-            tags$span(
-              paste0("Acumulado (", periodo, ")"),
-              style = "font-weight:bold;font-size:12px;"
-            )
-          )
-        ) %>%
-        tab_source_note(
-          source_note = htmltools::tags$div(
-            style = paste0(
-              "margin-top:10px;padding:12px 14px;background:#F8FAFC;",
-              "border-left:3px solid #94A3B8;border-radius:4px;font-size:11px;",
-              "color:#374151;line-height:1.8;"
-            ),
-            tags$span(HTML(paste0(
-              "<b>Cumplimiento:</b> ",
-              "<code style='background:#f3f4f6;color:#374151;padding:1px 5px;",
-              "border-radius:3px;'>Ejecutado \u00f7 Presupuesto</code>"
-            ))),
-            tags$br(),
-            tags$span(HTML(paste0(
-              "<b>Comparación con año anterior:</b> ",
-              "<code style='background:#f3f4f6;color:#374151;padding:1px 5px;",
-              "border-radius:3px;'>(Actual \u2212 Anterior) \u00f7 |Anterior|</code>"
-            )))
-          )
-        ) %>%
+        tab_source_note(source_note = gt::html(as.character(racafeForms::racafeNoticeList(
+          c(paste0("Año anterior: ", periodo_ant, ". Columnas verdes."),
+            paste0("Mensual: ", periodo, ". Columnas grises."),
+            paste0("Acumulado: ", periodo, ". Columnas azules.")), title = "Lectura de la tabla")))) %>%
+        tab_source_note(source_note = gt::html(as.character(racafeForms::racafeNoticeList(
+          c("Cumplimiento = ejecutado / presupuesto.",
+            "Comparación con año anterior = (actual − anterior) / |anterior|."),
+          title = "Metodología")))) %>%
         sub_missing(columns = everything(), rows = everything(), missing_text = "") %>%
         tab_style(
           style     = cell_text(weight = "bold"),
@@ -1904,7 +1876,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     ## UI dinamica: dos tablas breakdown (Sacos arriba, Margen abajo) ----
     output$tabla_sacos_ui <- renderUI({
       ver <- .breakdown_ver_sacos()
-      racafeModulos::TablaReactableUI(
+      .crm_tabla_ui(
         .ns_local(paste0("tabla_ss_", ver)),
         estilo    = "minimal2",
         titulo    = "Sacos (70 Kgs)",
@@ -1915,7 +1887,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     
     output$tabla_margen_ui <- renderUI({
       ver <- .breakdown_ver_margen()
-      racafeModulos::TablaReactableUI(
+      .crm_tabla_ui(
         .ns_local(paste0("tabla_ma_", ver)),
         estilo    = "minimal2",
         titulo    = "Margen ($MNFCC)",
@@ -1932,9 +1904,10 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       mid        <- paste0("tabla_ss_", ver)
       cols_todas <- c(.col_dim_def(dim), .cols_sacos())
       
-      racafeModulos::TablaReactable(
+      .crm_tabla_servidor(
         id             = mid,
         data           = breakdown_tabla_sacos_r,
+        footer = "Sacos equivalentes de 70 kg. Cumplimiento = ejecutado / presupuesto; TOTAL suma dimensiones.",
         id_col         = ".dim_key",
         modo_seleccion = "ninguno",
         sortable       = TRUE,
@@ -1956,9 +1929,10 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       mid        <- paste0("tabla_ma_", ver)
       cols_todas <- c(.col_dim_def(dim), .cols_margen())
       
-      racafeModulos::TablaReactable(
+      .crm_tabla_servidor(
         id             = mid,
         data           = breakdown_tabla_margen_r,
+        footer = "Margen FCC en COP. Seleccione una fila para consultar sus lotes; TOTAL suma dimensiones.",
         id_col         = ".dim_key",
         modo_seleccion = "fila",
         sortable       = TRUE,
@@ -2017,44 +1991,9 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           }
           
           # Tabla reactable de detalle de lotes en modal
-          reactable::reactable(
-            data            = df_modal,
-            sortable        = TRUE,
-            searchable      = TRUE,
-            defaultPageSize = 15,
-            compact         = TRUE,
-            bordered        = TRUE,
-            highlight       = TRUE,
-            language = reactable::reactableLang(
-              searchPlaceholder = "Buscar...",
-              noData            = "Sin resultados",
-              pageInfo          = "{rowStart}\u2013{rowEnd} de {rows} registros",
-              pagePrevious      = "Anterior",
-              pageNext          = "Siguiente"
-            ),
-            theme = reactable::reactableTheme(
-              headerStyle = list(fontWeight = "600", fontSize = "12px"),
-              cellStyle   = list(fontSize = "12px", padding = "3px 6px")
-            ),
-            columns = list(
-              FecFact    = reactable::colDef(
-                name = "Fecha Factura", minWidth = 110,
-                cell = function(v) if (is.na(v)) "\u2014" else format(as.Date(v), "%d %b %Y")
-              ),
-              PerRazSoc  = reactable::colDef(name = "Razón Social",  minWidth = 180),
-              CLLinNegNo = reactable::colDef(name = "Línea de Negocio", minWidth = 130),
-              CLLotCod   = reactable::colDef(name = "Lote",          minWidth = 80),
-              Asesor     = reactable::colDef(name = "Asesor",        minWidth = 120),
-              Segmento   = reactable::colDef(name = "Segmento",      minWidth = 100),
-              Sacos70    = reactable::colDef(
-                name   = "Sacos (70Kg)", minWidth = 100,
-                format = reactable::colFormat(separators = TRUE, digits = 1)
-              ),
-              Margen     = reactable::colDef(
-                name   = "Margen ($)", minWidth = 110,
-                format = reactable::colFormat(prefix = "$", separators = TRUE, digits = 0)
-              )
-            )
+          shiny::tagList(
+            { .detalle_lotes_rv(df_modal); NULL },
+            .crm_tabla_ui(session$ns("detalle_lotes"), titulo = "Detalle de lotes facturados")
           )
         },
         modal_size = "xl",
@@ -2064,50 +2003,16 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     
     ## Footer metodologia ----
     output$footer_metodologia <- renderUI({
-      htmltools::tags$div(
-        style = paste0(
-          "margin-top:4px;margin-bottom:16px;padding:12px 14px;background:#F8FAFC;",
-          "border-left:3px solid #94A3B8;border-radius:4px;font-size:11px;",
-          "color:#374151;line-height:1.8;"
-        ),
-        htmltools::tags$span(htmltools::HTML(paste0(
-          "<b>Cumplimiento:</b> ",
-          "<code style='background:#f3f4f6;color:#374151;padding:1px 5px;border-radius:3px;'>",
-          "Ejecutado \u00f7 Presupuesto</code>"
-        ))),
-        htmltools::tags$br(),
-        htmltools::tags$span(htmltools::HTML(paste0(
-          "<b>Brecha:</b> ",
-          "<code style='background:#f3f4f6;color:#374151;padding:1px 5px;border-radius:3px;'>",
-          "Ejecutado \u2212 Presupuesto acumulado al mes</code>"
-        ))),
-        htmltools::tags$br(),
-        htmltools::tags$span(htmltools::HTML(paste0(
-          "<b>Proyección de cierre:</b> ",
-          "<code style='background:#f3f4f6;color:#374151;padding:1px 5px;border-radius:3px;'>",
-          "Ejecutado acumulado + (ritmo ponderado de los 3 últimos meses \u00d7 meses restantes)</code>"
-        ))),
-        htmltools::tags$br(),
-        htmltools::tags$span(htmltools::HTML(paste0(
-          "<b>Verosimilitud:</b> ",
-          "<code style='background:#f3f4f6;color:#374151;padding:1px 5px;border-radius:3px;'>",
-          "Proyección \u00f7 Presupuesto anual</code>"
-        ))),
-        htmltools::tags$br(),
-        htmltools::tags$span(htmltools::HTML(paste0(
-          "<b>Meta mensual:</b> ",
-          "<code style='background:#f3f4f6;color:#374151;padding:1px 5px;border-radius:3px;'>",
-          "max(Presupuesto anual / 12, (Presupuesto anual − Ejecutado) / Meses restantes, 0)</code>"
-        ))),
-        htmltools::tags$br(),
-        htmltools::tags$span(htmltools::HTML(paste0(
-          "<b>TOTAL:</b> suma de todas las dimensiones del periodo. ",
-          "Los indicadores se calculan sobre la fila y no como promedio de la columna. ",
-          "Ejecución: PyG de meses cerrados; el presupuesto corresponde a Industria Nacional."
-        )))
-      )
+      racafeForms::racafeNoticeList(
+        c("Cumplimiento: ejecutado / presupuesto.",
+          "Brecha: ejecutado − presupuesto acumulado al mes.",
+          "Proyección de cierre: ejecutado acumulado + ritmo ponderado de los 3 últimos meses × meses restantes.",
+          "Verosimilitud: proyección / presupuesto anual.",
+          "Meta mensual: max(presupuesto anual / 12, (presupuesto anual − ejecutado) / meses restantes, 0).",
+          "TOTAL suma las dimensiones; los indicadores se calculan sobre esa fila, sin promediar porcentajes.",
+          "Ejecución: PyG de meses cerrados. Presupuesto: Industria Nacional."), title = "Metodología de las tablas")
     })
-    
+
     ## Grafico cuadrantes: proyeccion de cierre vs cumplimiento acumulado ----
     output$grafico_proyeccion <- renderPlotly({
       req(breakdown_r())

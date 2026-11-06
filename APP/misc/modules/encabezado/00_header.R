@@ -25,7 +25,8 @@
   labels <- c(pedidos = "Pedidos", lotes = "Lotes", produccion = "Producción (sacos)",
     despachos = "Despachos (sacos)", asignados = "Sacos asignados", facturacion = "Facturación (sacos)")
   racafeForms::racafeModalDetail(title = paste("Detalle:", labels[[key]]), size = "ventana",
-    .header_tabla(attr(resumen, "header_detalle"), min_width = "1500px"),
+    .header_tabla(attr(resumen, "header_detalle"), min_width = "1500px",
+                  nota = "Detalle operativo del cliente. Cantidades en sacos equivalentes de 70 kg."),
     footer = racafeForms::racafeModalFooter(
       racafeForms::racafeButton("header_cliente_volver", "Volver", variant = "secondary", size = "xs"),
       racafeForms::racafeButtonCancel("header_cliente_cerrar", "Cerrar", size = "xs")))
@@ -63,18 +64,17 @@
   racafeForms::racafeDataBadge(sub("[[:space:]:]+$", "", nombre), valor, variant = "neutral", size = "xs")
 }
 
-.header_tarjeta <- function(nombre, id, icono, detalle = NULL) {
-  racafeModulos::cajaValor_ui(id, icono = icono, texto = nombre, mostrar_boton = TRUE, label_boton = "Ver detalle",
-    color = "#DA291C", color_kpi = "#000000", color_footer = "#667085", compact = TRUE,
-    footer = if (is.null(detalle)) shiny::tags$span(`aria-hidden` = "true", "\u00a0") else detalle)
+.header_tarjeta <- function(nombre, id, icono, detalle = NULL, mostrar_boton = FALSE) {
+  .crm_caja_ui(id, icono = icono, texto = nombre, mostrar_boton = mostrar_boton,
+                footer = detalle, tooltip = paste("Ver detalle de", tolower(nombre)))
 }
 
-.header_tabla <- function(datos, min_width = NULL) {
+.header_tabla <- function(datos, min_width = NULL, nota = NULL) {
   cifras <- grepl("^Sacos|^Lotes$|^Producidos$|^Despachados$|^Facturados$|^Meses para recuperar$", names(datos))
   align <- stats::setNames(ifelse(cifras | vapply(datos, is.numeric, logical(1)), "right", "left"), names(datos))
   if ("Año" %in% names(datos)) align[["Año"]] <- "left"
   racafeShiny::racafeTableVancouver(datos, min_width = min_width, align = align, decimals = NULL,
-    font_size = 12, row_padding = 3, header_width = 1)
+    font_size = 12, row_padding = 3, header_color = "#495057", header_width = 1.5, source_note = nota)
 }
 
 # INDICADORES REACTIVOS DEL CLIENTE ----
@@ -84,7 +84,9 @@
     modulo <- racafeModulos::cajaValor_server(paste0("header_cli_", key), valor_r = shiny::reactive({
       attr(resumen(), "header_kpis")[[key]]
     }), formato = if (key %in% c("pedidos", "lotes")) "entero" else "numero", empty = "—")
-    if (is.function(on_detail)) shiny::observeEvent(modulo$click_detalle(), on_detail(key))
+    if (key %in% c("pedidos", "lotes", "facturacion") && is.function(on_detail)) {
+      shiny::observeEvent(modulo$click_detalle(), on_detail(key))
+    }
     modulo
   }), keys)
 }
@@ -196,13 +198,14 @@
                     .header_badge("Línea:", linea)),
     racafeForms::racafeMetricGrid(
       .header_tarjeta("Pedidos", "header_cli_pedidos", "cart-shopping",
-        paste("Creación:", .header_fecha(pedidos$PdcFecCre))),
-      .header_tarjeta("Lotes", "header_cli_lotes", "boxes-stacked"),
-      .header_tarjeta("Producción (sacos)", "header_cli_produccion", "industry"),
-      .header_tarjeta("Despachos (sacos)", "header_cli_despachos", "truck"),
-      .header_tarjeta("Sacos asignados", "header_cli_asignados", "weight-hanging"),
+        paste("Creación:", .header_fecha(pedidos$PdcFecCre)), mostrar_boton = TRUE),
+      .header_tarjeta("Lotes", "header_cli_lotes", "boxes-stacked", "Lotes únicos vinculados al cliente.",
+                       mostrar_boton = TRUE),
+      .header_tarjeta("Producción (sacos)", "header_cli_produccion", "industry", "Sacos producidos de 70 kg."),
+      .header_tarjeta("Despachos (sacos)", "header_cli_despachos", "truck", "Sacos despachados de 70 kg."),
+      .header_tarjeta("Sacos asignados", "header_cli_asignados", "weight-hanging", "Sacos asignados de 70 kg."),
       .header_tarjeta("Facturación (sacos)", "header_cli_facturacion", "file-invoice-dollar",
-        paste("Última:", .header_fecha(lotes$FecFact)))
+        paste("Última:", .header_fecha(lotes$FecFact)), mostrar_boton = TRUE)
     ),
     shiny::tags$div(
       style = "font-size:10px;color:#64748b;text-align:right;margin:4px 0 10px;",
