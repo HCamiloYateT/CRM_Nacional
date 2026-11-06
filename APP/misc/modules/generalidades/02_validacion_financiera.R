@@ -14,40 +14,127 @@
 ValidacionFinancieraUI <- function(id) {
   ns <- shiny::NS(id)
   
-  .kpi_ui <- function(id_kpi) {
-    racafeModulos::CajaModalUI(ns(id_kpi))
-  }
-  
-  shiny::tagList(
-    shiny::fluidRow(
-      shiny::column(
-        6,
-        racafeShiny::FormatearTexto(
-          "Validación financiera - meses cerrados",
-          negrita = TRUE,
-          tamano_pct = 1
-        ),
-        gt::gt_output(ns("tabla_extraccion_pyg")),
-        shiny::uiOutput(ns("auditoria_base"))
+  .kpi_ui <- function(id_kpi, texto, icono) {
+    id_modal <- ns(paste0(id_kpi, "-btn_abrir"))
+    shiny::tags$div(
+      class = "vf-kpi-accion", role = "button", tabindex = "0",
+      title = paste("Ver detalle:", texto),
+      onclick = sprintf(
+        "Shiny.setInputValue('%s', Date.now(), {priority: 'event'});",
+        id_modal
       ),
-      shiny::column(
-        3,
-        .kpi_ui("kpi_cuadre"),
-        .kpi_ui("kpi_lotes"),
-        .kpi_ui("kpi_fact_sin_pyg"),
-        .kpi_ui("kpi_pyg_sin_fact")
+      onkeydown = sprintf(
+        paste0("if(event.key==='Enter'||event.key===' '){event.preventDefault();",
+               "Shiny.setInputValue('%s',Date.now(),{priority:'event'});}"),
+        id_modal
       ),
-      shiny::column(
-        3,
-        .kpi_ui("kpi_pyg_sin_lote"),
-        .kpi_ui("kpi_linea"),
-        .kpi_ui("kpi_segmentos"),
-        .kpi_ui("kpi_calidad")
+      racafeModulos::cajaValor_ui(
+        ns(id_kpi), texto = texto, icono = icono, mostrar_boton = FALSE
       )
     )
+  }
+  
+  .tarjetas <- list(
+    c("kpi_cuadre", "Cuadre de sacos", "scale-balanced"),
+    c("kpi_lotes", "Lotes con diferencia", "not-equal"),
+    c("kpi_fact_sin_pyg", "Facturados sin PyG", "file-circle-xmark"),
+    c("kpi_pyg_sin_fact", "PyG sin factura", "receipt"),
+    c("kpi_pyg_sin_lote", "PyG sin lote", "box-open"),
+    c("kpi_linea", "Línea de negocio", "shuffle"),
+    c("kpi_segmentos", "Segmentos diferentes", "users-viewfinder"),
+    c("kpi_calidad", "Calidad PyG", "triangle-exclamation")
+  )
+
+  ids_carga <- c(
+    ns("tabla_extraccion_pyg"), ns("auditoria_base"),
+    vapply(.tarjetas, function(x) ns(paste0(x[[1]], "-valor_display")), "")
+  )
+  ids_js <- jsonlite::toJSON(unname(ids_carga), auto_unbox = FALSE)
+  contenedor_js <- jsonlite::toJSON(ns("vf_contenido"), auto_unbox = TRUE)
+  preloader_js <- jsonlite::toJSON(ns("vf_preloader"), auto_unbox = TRUE)
+
+  shiny::tagList(
+    shiny::tags$style(shiny::HTML(sprintf("
+      #%s { position:relative; min-height:260px; }
+      #%s .racafe-caja-valor { min-height:102px; padding:10px 12px;
+        border:1px solid #E5E7EB; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+      #%s .racafe-caja-valor .fa, #%s .racafe-caja-valor svg { color:#DA291C!important; }
+      #%s .racafe-caja-valor .shiny-html-output { font-size:1.12rem; }
+      #%s .vf-kpi-accion { cursor:pointer; margin-bottom:8px; }
+      #%s .vf-kpi-accion:focus-visible { outline:2px solid #DA291C; outline-offset:2px; }
+      #%s { position:absolute; inset:0; z-index:25; display:flex;
+        align-items:center; justify-content:center; background:rgba(255,255,255,.92); }
+      #%s .vf-spinner { width:35px; height:35px; border:3px solid #E5E7EB;
+        border-top-color:#DA291C; border-radius:50%%; animation:vf-spin .8s linear infinite; }
+      @keyframes vf-spin { to { transform:rotate(360deg); } }
+    ", ns("vf_contenido"), ns("vf_contenido"), ns("vf_contenido"),
+                                          ns("vf_contenido"), ns("vf_contenido"), ns("vf_contenido"),
+                                          ns("vf_preloader"), ns("vf_preloader"), ns("vf_preloader")))),
+    shiny::tags$div(
+      id = ns("vf_contenido"),
+      shiny::fluidRow(
+        shiny::column(
+          8,
+          racafeShiny::FormatearTexto(
+            "Validación financiera - meses cerrados",
+            negrita = TRUE, tamano_pct = 1
+          ),
+          gt::gt_output(ns("tabla_extraccion_pyg")),
+          shiny::uiOutput(ns("auditoria_base"))
+        ),
+        shiny::column(
+          4,
+          shiny::fluidRow(lapply(.tarjetas, function(item) {
+            shiny::column(6, .kpi_ui(item[[1]], item[[2]], item[[3]]))
+          }))
+        )
+      ),
+      shiny::tags$div(
+        id = ns("vf_preloader"), role = "status", `aria-live` = "polite",
+        shiny::tags$div(style = "text-align:center;",
+                        shiny::tags$div(class = "vf-spinner", style = "margin:auto;"),
+                        shiny::tags$div(style = "margin-top:12px;color:#374151;font-size:12px;",
+                                        "Cargando validación financiera..."))
+      )
+    ),
+    shiny::tags$script(shiny::HTML(sprintf("
+      (function() {
+        var rootId = %s, loaderId = %s, ids = %s;
+        function inspect() {
+          var root = document.getElementById(rootId);
+          if (!root) return false;
+          return ids.every(function(id) {
+            var el = document.getElementById(id);
+            if (!el) return false;
+            if (el.classList.contains('shiny-output-error')) return true;
+            if (id.indexOf('tabla_extraccion_pyg') >= 0) {
+              return !!el.querySelector('.gt_table, table');
+            }
+            return el.children.length > 0 || el.textContent.trim().length > 0;
+          });
+        }
+        function ready() {
+          if (!inspect()) return false;
+          var loader = document.getElementById(loaderId);
+          if (loader) loader.style.display = 'none';
+          return true;
+        }
+        function init() {
+          var root = document.getElementById(rootId);
+          if (!root) return;
+          if (ready()) return;
+          var observer = new MutationObserver(function() {
+            if (ready()) observer.disconnect();
+          });
+          observer.observe(root, {childList:true,subtree:true,characterData:true});
+        }
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', init, {once:true});
+        } else { init(); }
+      })();
+    ", contenedor_js, preloader_js, ids_js)))
   )
 }
-
 
 # Server ----
 ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal, clientes_snap, n_cliente) {
@@ -1429,36 +1516,38 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         dplyr::distinct()
     })
     
+    cuadre_valor_r <- shiny::reactive({
+      datos <- cuadro_mensual()
+
+      fact_total <- sum(
+        dplyr::coalesce(datos$FactConv, 0) +
+          dplyr::coalesce(datos$FactMedida, 0),
+        na.rm = TRUE
+      )
+
+      base_total <- sum(
+        dplyr::coalesce(datos$PYGConv, 0) +
+          dplyr::coalesce(datos$PYGMedida, 0),
+        na.rm = TRUE
+      )
+
+      if (!is.finite(fact_total) || fact_total <= 0) {
+        return(0)
+      }
+
+      cuadre <- 1 - abs(base_total - fact_total) / fact_total
+
+      if (!is.finite(cuadre)) {
+        return(0)
+      }
+
+      pmax(0, pmin(1, cuadre))
+    })
+
     # Cuadre mensual ----
     racafeModulos::CajaModal(
       id = "kpi_cuadre",
-      valor = shiny::reactive({
-        datos <- cuadro_mensual()
-        
-        fact_total <- sum(
-          dplyr::coalesce(datos$FactConv, 0) +
-            dplyr::coalesce(datos$FactMedida, 0),
-          na.rm = TRUE
-        )
-        
-        base_total <- sum(
-          dplyr::coalesce(datos$PYGConv, 0) +
-            dplyr::coalesce(datos$PYGMedida, 0),
-          na.rm = TRUE
-        )
-        
-        if (!is.finite(fact_total) || fact_total <= 0) {
-          return(0)
-        }
-        
-        cuadre <- 1 - abs(base_total - fact_total) / fact_total
-        
-        if (!is.finite(cuadre)) {
-          return(0)
-        }
-        
-        pmax(0, pmin(1, cuadre))
-      }),
+      valor = cuadre_valor_r,
       formato = "porcentaje",
       texto = "Cuadre de sacos",
       icono = "scale-balanced",
@@ -1867,6 +1956,40 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
       footer = "Alertas internas por margen, sacos o inconsistencias dentro del PyG financiero."
     )
     
+    # Cajas compactas ----
+    racafeModulos::cajaValor_server(
+      "kpi_cuadre", valor_r = cuadre_valor_r, formato = "porcentaje"
+    )
+    racafeModulos::cajaValor_server(
+      "kpi_lotes", valor_r = shiny::reactive(nrow(detalle_conciliacion())),
+      formato = "entero"
+    )
+    racafeModulos::cajaValor_server(
+      "kpi_fact_sin_pyg", valor_r = shiny::reactive(nrow(fact_sin_pyg())),
+      formato = "entero"
+    )
+    racafeModulos::cajaValor_server(
+      "kpi_pyg_sin_fact", valor_r = shiny::reactive(nrow(pyg_sin_fact())),
+      formato = "entero"
+    )
+    racafeModulos::cajaValor_server(
+      "kpi_pyg_sin_lote", valor_r = shiny::reactive(nrow(pyg_sin_lote())),
+      formato = "entero"
+    )
+    racafeModulos::cajaValor_server(
+      "kpi_linea", valor_r = shiny::reactive(nrow(lineas_diferentes())),
+      formato = "entero"
+    )
+    racafeModulos::cajaValor_server(
+      "kpi_segmentos", valor_r = shiny::reactive(
+        dplyr::n_distinct(segmentos_error()$CliNitPpal, na.rm = TRUE)
+      ), formato = "entero"
+    )
+    racafeModulos::cajaValor_server(
+      "kpi_calidad", valor_r = shiny::reactive(nrow(calidad_pyg())),
+      formato = "entero"
+    )
+
     .fecha_resumen <- function(datos) {
       if ("Mes" %in% names(datos) && inherits(datos$Mes, "Date")) {
         return(as.Date(datos$Mes))
