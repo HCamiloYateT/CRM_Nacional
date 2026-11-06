@@ -5,15 +5,15 @@ permanecen en CRM Nacional. No se instalan paquetes ni se ejecutan migraciones d
 
 ## Actualizar dependencias antes de desplegar
 
-Se requieren racafeForms >= 0.7.0, racafeShiny >= 1.4.1 y racafeModulos >= 0.4.1.
-Mientras se revisan estos cambios, usar `ref = "codex/compact-client-cards"` para racafeShiny y
-racafeModulos. Tras integrar los PR puede omitirse ese argumento.
+Se requieren racafeForms >= 0.7.0, racafeShiny >= 1.4.1 y racafeModulos >= 0.5.1.
+Mientras se revisan estos cambios, usar `ref = "codex/kpi-colors-actions"` para racafeModulos.
+racafeShiny puede instalarse desde main. Tras integrar los PR puede omitirse ese argumento.
 
 ```r
 install.packages("remotes")
 remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeForms")
-remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeShiny", ref = "codex/compact-client-cards")
-remotes::install_github("HCamiloYateT/racafeModulos", ref = "codex/compact-client-cards")
+remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeShiny")
+remotes::install_github("HCamiloYateT/racafeModulos", ref = "codex/kpi-colors-actions")
 ```
 
 Instalar las librerías antes de actualizar los scripts del CRM. racafeShiny 1.3.1 conserva los nombres antiguos de
@@ -97,3 +97,22 @@ las otras pruebas de navegador. Revisa totales, alineación, bordes, cajas, camb
 
 Las cajas del cliente usan `compact = TRUE`: padding de 8px y separación vertical de 3px.
 Las tablas del modal usan padding de fila de 3px y línea roja de encabezado de 1px.
+
+
+Las cajas usan el diseño 0.5.0 de racafeModulos: borde lateral rojo, sombra suave y footer para las fechas.
+El valor usa color_kpi y el pie color_footer. Las seis métricas tienen Ver detalle para abrir las operaciones del cliente, con Volver para restaurar el resumen.
+Los ajustes locales del resumen ejecutivo se limitan a tarjetas heredadas para que la presentación nueva
+conserve sus estilos corporativos. No cambia la navegación ni el cálculo de sus indicadores.
+
+## Colores y botones de KPI (0.5.1)
+
+Valores negros y textos neutrales sin meta; el rojo decorativo queda en iconos y acento lateral.
+La meta opcional colorea el valor: prop TRUE mayor/mejor y FALSE menor/mejor. No se asignan metas nuevas
+a los indicadores financieros del CRM. El Resumen Ejecutivo muestra Abrir módulo usando sus rutas existentes;
+los ocho KPIs financieros muestran Ver detalle y usan el evento btn_abrir de sus CajaModal existentes.
+Se elimina el clic sobre toda la tarjeta para evitar acciones duplicadas. El borde derecho vuelve a ser visible.
+
+Prueba aislada con UI reales: `shiny::runApp("tests/kpi-actions", port = 4104)` y `node tests/test-kpi-actions.cjs`.
+Usar CRM_ACTIONS_URL/CHROMIUM_PATH/NODE_PATH como en las demás pruebas. El servidor financiero de prueba
+usa valores y contenido ficticios; no ejecuta el servidor comercial ni sus consultas.
+Actualizar racafeModulos, aplicar los cambios del CRM y reiniciar la aplicación para cargar el código nuevo.

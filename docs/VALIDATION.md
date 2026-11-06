@@ -100,3 +100,37 @@ Validación: 98 pruebas de racafeModulos, 19 de Vancouver, 43 comprobaciones est
 comprobaciones de navegador correctas. Se verifica altura uniforme inferior a 100px, línea roja de 1px,
 actualización entre clientes, totales, scroll y vista móvil. Paquetes instalados y ayuda roxygen2 actualizada.
 No se ejecutaron operaciones BD ni se desplegó la aplicación.
+
+## Tarjetas con borde lateral y footer configurable
+
+Requiere racafeModulos 0.5.0. Las cajas mantienen valores, fechas e IDs, con borde lateral, título/icono,
+sombra suave y fechas en el footer. color_kpi/color_footer controlan sus colores de forma independiente.
+El CRM mantiene las seis cajas sin botón porque no tienen una acción definida. La biblioteca permite
+mostrarlo abajo a la derecha y la aplicación decide qué hacer con click_detalle.
+Los overrides anteriores del resumen ejecutivo se aplican solo a tarjetas heredadas para que la nueva
+apariencia sea responsabilidad del componente compartido. Los valores de sus KPIs se mantienen oscuros.
+
+Validación: 98 pruebas testthat correctas; 43 comprobaciones estáticas/UI del CRM correctas; 30 de navegador
+del modal de clientes y 25 de tarjetas/acciones correctas. Se prueban navegación de pestaña, apertura de modal,
+teclado sin eventos duplicados, botón ausente, colores independientes, cero reactivo, namespaces, guías sin KPI
+y vista móvil sin desbordamiento. R CMD build/instalación correctos; R CMD check sin errores, con las mismas
+4 advertencias y 1 nota históricas de licencia, ASCII, código anterior y documentación pendiente de otros objetos.
+No se ejecutaron consultas, transacciones ni guardados reales.
+
+## Corrección de colores, contorno y acciones KPI (0.5.1)
+
+Sin meta los valores son negros y los textos neutrales. Una meta explícita permite comparar en sentido
+directo (prop TRUE: mayor/mejor) o inverso (FALSE: menor/mejor), incluyendo igualdad y meta cero.
+Los colores de acento se reservan a borde lateral, icono y botón; los overrides de texto explícitos siguen disponibles.
+Las tarjetas recuperan borde superior, derecho e inferior de 1px y mantienen acento lateral de 3px.
+
+Resumen Ejecutivo usa Abrir módulo con sus destinos existentes y el evento nativo click_detalle. Las ocho
+acciones financieras usan Ver detalle e id_boton = btn_abrir, reutilizando los observadores/modal existentes.
+Las seis cajas del cliente abren el detalle de operaciones ya calculado y Volver restaura el resumen.
+No se registran módulos por cada apertura ni se añaden consultas, metas financieras o cálculos comerciales.
+
+Validación: 107 pruebas testthat de racafeModulos, 45 comprobaciones estáticas/UI, 25 de tarjetas genéricas,
+32 del modal de clientes y 18 de UI de Resumen/Financiera correctas. Los ocho botones financieros abren su modal
+y el botón de resumen cambia a su sección. Los servidores financieros de prueba usan datos/contenido ficticios;
+no se ejecuta el servidor comercial ni servicios BD reales. Las transformaciones y consultas del CRM se conservan.
+Actualizar racafeModulos y aplicar los cambios del CRM; reiniciar la aplicación para cargar el código nuevo.

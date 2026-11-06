@@ -15,23 +15,9 @@ ValidacionFinancieraUI <- function(id) {
   ns <- shiny::NS(id)
   
   .kpi_ui <- function(id_kpi, texto, icono) {
-    id_modal <- ns(paste0(id_kpi, "-btn_abrir"))
-    shiny::tags$div(
-      class = "vf-kpi-accion", role = "button", tabindex = "0",
-      title = paste("Ver detalle:", texto),
-      onclick = sprintf(
-        "Shiny.setInputValue('%s', Date.now(), {priority: 'event'});",
-        id_modal
-      ),
-      onkeydown = sprintf(
-        paste0("if(event.key==='Enter'||event.key===' '){event.preventDefault();",
-               "Shiny.setInputValue('%s',Date.now(),{priority:'event'});}"),
-        id_modal
-      ),
-      racafeModulos::cajaValor_ui(
-        ns(id_kpi), texto = texto, icono = icono, mostrar_boton = FALSE
-      )
-    )
+    shiny::tags$div(class = "vf-kpi-accion",
+      racafeModulos::cajaValor_ui(ns(id_kpi), texto = texto, icono = icono,
+        mostrar_boton = TRUE, label_boton = "Ver detalle", id_boton = "btn_abrir", compact = TRUE))
   }
   
   .tarjetas <- list(
@@ -56,11 +42,11 @@ ValidacionFinancieraUI <- function(id) {
   shiny::tagList(
     shiny::tags$style(shiny::HTML(sprintf("
       #%s { position:relative; min-height:260px; }
-      #%s .racafe-caja-valor { min-height:102px; padding:10px 12px;
+      #%s .racafe-caja-valor:not(.rmcv-card) { min-height:102px; padding:10px 12px;
         border:1px solid #E5E7EB; box-shadow:0 1px 3px rgba(0,0,0,.06); }
-      #%s .racafe-caja-valor .fa, #%s .racafe-caja-valor svg { color:#DA291C!important; }
-      #%s .racafe-caja-valor .shiny-html-output { font-size:1.12rem; }
-      #%s .vf-kpi-accion { cursor:pointer; margin-bottom:8px; }
+      #%s .racafe-caja-valor:not(.rmcv-card) .fa, #%s .racafe-caja-valor:not(.rmcv-card) svg { color:#DA291C!important; }
+      #%s .racafe-caja-valor:not(.rmcv-card) .shiny-html-output { font-size:1.12rem; }
+      #%s .vf-kpi-accion { cursor:default; margin-bottom:8px; }
       #%s .vf-kpi-accion:focus-visible { outline:2px solid #DA291C; outline-offset:2px; }
       #%s { position:absolute; inset:0; z-index:25; display:flex;
         align-items:center; justify-content:center; background:rgba(255,255,255,.92); }
@@ -1958,36 +1944,36 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     
     # Cajas compactas ----
     racafeModulos::cajaValor_server(
-      "kpi_cuadre", valor_r = cuadre_valor_r, formato = "porcentaje"
+      "kpi_cuadre", valor_r = cuadre_valor_r, formato = "porcentaje", id_boton = "btn_abrir"
     )
     racafeModulos::cajaValor_server(
       "kpi_lotes", valor_r = shiny::reactive(nrow(detalle_conciliacion())),
-      formato = "entero"
+      formato = "entero", id_boton = "btn_abrir"
     )
     racafeModulos::cajaValor_server(
       "kpi_fact_sin_pyg", valor_r = shiny::reactive(nrow(fact_sin_pyg())),
-      formato = "entero"
+      formato = "entero", id_boton = "btn_abrir"
     )
     racafeModulos::cajaValor_server(
       "kpi_pyg_sin_fact", valor_r = shiny::reactive(nrow(pyg_sin_fact())),
-      formato = "entero"
+      formato = "entero", id_boton = "btn_abrir"
     )
     racafeModulos::cajaValor_server(
       "kpi_pyg_sin_lote", valor_r = shiny::reactive(nrow(pyg_sin_lote())),
-      formato = "entero"
+      formato = "entero", id_boton = "btn_abrir"
     )
     racafeModulos::cajaValor_server(
       "kpi_linea", valor_r = shiny::reactive(nrow(lineas_diferentes())),
-      formato = "entero"
+      formato = "entero", id_boton = "btn_abrir"
     )
     racafeModulos::cajaValor_server(
       "kpi_segmentos", valor_r = shiny::reactive(
         dplyr::n_distinct(segmentos_error()$CliNitPpal, na.rm = TRUE)
-      ), formato = "entero"
+      ), formato = "entero", id_boton = "btn_abrir"
     )
     racafeModulos::cajaValor_server(
       "kpi_calidad", valor_r = shiny::reactive(nrow(calidad_pyg())),
-      formato = "entero"
+      formato = "entero", id_boton = "btn_abrir"
     )
 
     .fecha_resumen <- function(datos) {
