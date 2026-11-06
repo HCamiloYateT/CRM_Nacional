@@ -28,7 +28,7 @@ footer <- bs4DashFooter(
     app_badge(badge_estado)
   ),
   right = tags$img(
-    src = "https://raw.githubusercontent.com/HCamiloYateT/Compartido/main/img/logo.png",
+    src = "racafe-shared-1-1-0-img/logo.png",
     style = "height:30px;"
   ),
   fixed = TRUE

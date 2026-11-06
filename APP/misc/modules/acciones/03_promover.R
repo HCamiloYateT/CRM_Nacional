@@ -8,13 +8,13 @@ FormularioAscenderProspectoUI <- function(id) {
     box(title = "Ascender a Prospecto", width = 12, collapsible = FALSE,
         FormatearTexto("Vincula este contacto como alianza de uno o varios clientes existentes.",
                        tamano_pct = 0.8, color = "#64748B"),
-        selectizeInput(ns("PRO_Alianzas"), label = Obligatorio("Cliente(s) Aliado(s)"),
-                       choices = .choices_cliente_ppal(), selected = NULL, multiple = TRUE,
-                       options = list(placeholder = "Seleccione uno o varios clientes")),
-        textAreaInput(ns("PRO_Observacion"), label = h6("Observación"), value = "",
-                      width = "100%", height = "60px"),
-        racafeShiny::Boton(id = ns("PRO_Solicitar"), label = "Ascender", icono = "arrow-up",
-                           align = "right", size = "xs", color_fondo = "#C11007", color_fuente = "#FFFFFF")
+        racafeForms::racafeInputSelect("PRO_Alianzas", label = Obligatorio("Cliente(s) Aliado(s)"),
+                                       choices = .choices_cliente_ppal(), multiple = TRUE, ns = ns,
+                                       empty_label = "Seleccione uno o varios clientes"),
+        racafeForms::racafeInputTextArea(id = ns("PRO_Observacion"), label = h6("Observación"), value = "",
+                                width = "100%", rows = 2),
+        racafeForms::racafeButton(id = ns("PRO_Solicitar"), label = "Ascender", size = "xs", variant = "primary",
+                                icon = "arrow-up")
     )
   )
 }
@@ -25,7 +25,8 @@ FormularioAscenderProspecto <- function(id, usuario, cod_contacto, data_contacto
     
     observeEvent(input$PRO_Solicitar, {
       if (length(input$PRO_Alianzas) == 0) {
-        showNotification("Debe seleccionar al menos un cliente aliado", type = "error", duration = 4)
+        racafeForms::racafeNotify(type = "error", duration = 4, title = "Debe seleccionar al menos un cliente aliado",
+                                session = shiny::getDefaultReactiveDomain())
         return(invisible(NULL))
       }
       # Modal centralizado de racafeShiny, igual que CrearContacto/Identificacion/
@@ -43,11 +44,14 @@ FormularioAscenderProspecto <- function(id, usuario, cod_contacto, data_contacto
       tryCatch({
         convertir_contacto_a_prospecto(cod_contacto(), input$PRO_Alianzas, usuario(), input$PRO_Observacion)
         removeModal()
-        showNotification("Contacto ascendido a Prospecto exitosamente", duration = 4, type = "message")
+        racafeForms::racafeNotify(duration = 4, type = "success", title = "Contacto ascendido a Prospecto exitosamente",
+                                session = shiny::getDefaultReactiveDomain())
         ret(ret() + 1)
       }, error = function(e) {
         removeModal()
-        showNotification(paste("Error al ascender el contacto:", conditionMessage(e)), duration = 6, type = "error")
+        racafeForms::racafeNotify(duration = 6, type = "error",
+                                title = paste("Error al ascender el contacto:", conditionMessage(e)),
+                                session = shiny::getDefaultReactiveDomain())
       })
     })
     list(n = reactive(ret()))
@@ -59,14 +63,14 @@ FormularioAscenderLeadUI <- function(id) {
   ns <- NS(id)
   tagList(
     box(title = "Ascender a Lead", width = 12, collapsible = FALSE,
-        ListaDesplegable(ns("ASC_LinNeg"), label = Obligatorio("Línea de Negocio"),
-                         choices = Choices()$linneg, selected = NULL, multiple = FALSE),
-        ListaDesplegable(ns("ASC_Segmento"), label = Obligatorio("Segmento"),
-                         choices = Choices()$segmento, selected = NULL, multiple = FALSE),
-        ListaDesplegable(ns("ASC_Asesor"), label = Obligatorio("Asesor"),
-                         choices = Choices()$personas, selected = NULL, multiple = FALSE),
-        racafeShiny::Boton(id = ns("ASC_Solicitar"), label = "Ascender", icono = "arrow-up",
-                           align = "right", size = "xs", color_fondo = "#C11007", color_fuente = "#FFFFFF")
+        racafeForms::racafeInputSelect(id = ns("ASC_LinNeg"), label = Obligatorio("Línea de Negocio"),
+                                choices = Choices()$linneg, selected = NULL, multiple = FALSE, empty = FALSE),
+        racafeForms::racafeInputSelect(id = ns("ASC_Segmento"), label = Obligatorio("Segmento"),
+                                choices = Choices()$segmento, selected = NULL, multiple = FALSE, empty = FALSE),
+        racafeForms::racafeInputSelect(id = ns("ASC_Asesor"), label = Obligatorio("Asesor"),
+                                choices = Choices()$personas, selected = NULL, multiple = FALSE, empty = FALSE),
+        racafeForms::racafeButton(id = ns("ASC_Solicitar"), label = "Ascender", size = "xs", variant = "primary",
+                                icon = "arrow-up")
     )
   )
 }
@@ -95,7 +99,9 @@ FormularioAscenderLead <- function(id, usuario, cod_contacto, data_contacto = NU
     observeEvent(input$ASC_Solicitar, {
       cond <- validar_campos_ascenso()
       if (any(cond)) {
-        sapply(names(cond), function(x) if (cond[[x]]) showNotification(x, duration = 4, type = "error"))
+        sapply(names(cond), function(x) {
+          if (cond[[x]]) racafeForms::racafeNotify(session, title = x, type = "error", duration = 4)
+        })
         return(invisible(NULL))
       }
       racafeShiny::MostrarModalConfirmacion(
@@ -111,11 +117,14 @@ FormularioAscenderLead <- function(id, usuario, cod_contacto, data_contacto = NU
       tryCatch({
         convertir_contacto_a_lead(cod_contacto(), input$ASC_Asesor, input$ASC_Segmento, input$ASC_LinNeg, usuario())
         removeModal()
-        showNotification("Contacto ascendido a Lead exitosamente", duration = 4, type = "message")
+        racafeForms::racafeNotify(duration = 4, type = "success", title = "Contacto ascendido a Lead exitosamente",
+                                session = shiny::getDefaultReactiveDomain())
         ret(ret() + 1)
       }, error = function(e) {
         removeModal()
-        showNotification(paste("Error al ascender el contacto:", conditionMessage(e)), duration = 6, type = "error")
+        racafeForms::racafeNotify(duration = 6, type = "error",
+                                title = paste("Error al ascender el contacto:", conditionMessage(e)),
+                                session = shiny::getDefaultReactiveDomain())
       })
     })
     
@@ -130,14 +139,14 @@ FormularioReclasificarLeadUI <- function(id) {
     box(title = "Reclasificar a Lead", width = 12, collapsible = FALSE,
         FormatearTexto("El volumen de este Prospecto ahora sí interesa para venta directa. Las alianzas ya registradas quedan como historial.",
                        tamano_pct = 0.8, color = "#64748B"),
-        ListaDesplegable(ns("RLE_Asesor"), label = Obligatorio("Asesor"),
-                         choices = Choices()$personas, selected = NULL, multiple = FALSE),
-        ListaDesplegable(ns("RLE_Segmento"), label = Obligatorio("Segmento"),
-                         choices = Choices()$segmento, selected = NULL, multiple = FALSE),
-        ListaDesplegable(ns("RLE_LinNeg"), label = Obligatorio("Línea de Negocio"),
-                         choices = Choices()$linneg, selected = NULL, multiple = FALSE),
-        racafeShiny::Boton(id = ns("RLE_Solicitar"), label = "Reclasificar a Lead", icono = "arrow-up",
-                           align = "right", size = "xs", color_fondo = "#C11007", color_fuente = "#FFFFFF")
+        racafeForms::racafeInputSelect(id = ns("RLE_Asesor"), label = Obligatorio("Asesor"),
+                                choices = Choices()$personas, selected = NULL, multiple = FALSE, empty = FALSE),
+        racafeForms::racafeInputSelect(id = ns("RLE_Segmento"), label = Obligatorio("Segmento"),
+                                choices = Choices()$segmento, selected = NULL, multiple = FALSE, empty = FALSE),
+        racafeForms::racafeInputSelect(id = ns("RLE_LinNeg"), label = Obligatorio("Línea de Negocio"),
+                                choices = Choices()$linneg, selected = NULL, multiple = FALSE, empty = FALSE),
+        racafeForms::racafeButton(id = ns("RLE_Solicitar"), label = "Reclasificar a Lead", size = "xs",
+                                variant = "primary", icon = "arrow-up")
     )
   )
 }
@@ -165,7 +174,9 @@ FormularioReclasificarLead <- function(id, usuario, cod_contacto, data_contacto 
     observeEvent(input$RLE_Solicitar, {
       cond <- validar_campos_reclasificacion()
       if (any(cond)) {
-        sapply(names(cond), function(x) if (cond[[x]]) showNotification(x, duration = 4, type = "error"))
+        sapply(names(cond), function(x) {
+          if (cond[[x]]) racafeForms::racafeNotify(session, title = x, type = "error", duration = 4)
+        })
         return(invisible(NULL))
       }
       racafeShiny::MostrarModalConfirmacion(
@@ -181,11 +192,14 @@ FormularioReclasificarLead <- function(id, usuario, cod_contacto, data_contacto 
       tryCatch({
         convertir_prospecto_a_lead(cod_contacto(), input$RLE_Asesor, input$RLE_Segmento, input$RLE_LinNeg, usuario())
         removeModal()
-        showNotification("Prospecto reclasificado a Lead exitosamente", duration = 4, type = "message")
+        racafeForms::racafeNotify(duration = 4, type = "success", title = "Prospecto reclasificado a Lead exitosamente",
+                                session = shiny::getDefaultReactiveDomain())
         ret(ret() + 1)
       }, error = function(e) {
         removeModal()
-        showNotification(paste("Error al reclasificar:", conditionMessage(e)), duration = 6, type = "error")
+        racafeForms::racafeNotify(duration = 6, type = "error",
+                                title = paste("Error al reclasificar:", conditionMessage(e)),
+                                session = shiny::getDefaultReactiveDomain())
       })
     })
     
@@ -200,10 +214,11 @@ FormularioVincularNitUI <- function(id) {
     box(title = "Vincular NIT de Facturación", width = 12, collapsible = FALSE,
         FormatearTexto("Úsalo cuando el lead entró con un NIT distinto al que finalmente factura.",
                        tamano_pct = 0.8, color = "#64748B"),
-        textInput(ns("VIN_Nit"), label = Obligatorio("NIT que Factura"), width = "100%"),
-        textAreaInput(ns("VIN_Observacion"), label = h6("Observación"), value = "", width = "100%", height = "60px"),
-        racafeShiny::Boton(id = ns("VIN_Guardar"), label = "Vincular", icono = "link",
-                           align = "right", size = "xs", color_fondo = "#C11007", color_fuente = "#FFFFFF")
+        racafeForms::racafeInputText(id = ns("VIN_Nit"), label = Obligatorio("NIT que Factura"), width = "100%"),
+        racafeForms::racafeInputTextArea(id = ns("VIN_Observacion"), label = h6("Observación"), value = "",
+                                width = "100%", rows = 2),
+        racafeForms::racafeButton(id = ns("VIN_Guardar"), label = "Vincular", size = "xs", variant = "primary",
+                                icon = "link")
     )
   )
 }
@@ -230,7 +245,8 @@ FormularioVincularNit <- function(id, usuario, cod_contacto, data_contacto = NUL
     
     observeEvent(input$VIN_Guardar, {
       if (EsVacio(input$VIN_Nit) || !EsEnteroPositivo(input$VIN_Nit)) {
-        showNotification("Ingrese un NIT válido", type = "error", duration = 4)
+        racafeForms::racafeNotify(type = "error", duration = 4, title = "Ingrese un NIT válido",
+                                session = shiny::getDefaultReactiveDomain())
         return(invisible(NULL))
       }
       # Se homologa a modal de confirmacion, igual que los otros 3 formularios;
@@ -249,11 +265,14 @@ FormularioVincularNit <- function(id, usuario, cod_contacto, data_contacto = NUL
       tryCatch({
         registrar_vinculo_nit(cod_contacto(), input$VIN_Nit, usuario(), input$VIN_Observacion)
         removeModal()
-        showNotification("NIT vinculado exitosamente", duration = 3, type = "message")
+        racafeForms::racafeNotify(duration = 3, type = "success", title = "NIT vinculado exitosamente",
+                                session = shiny::getDefaultReactiveDomain())
         ret(ret() + 1)
       }, error = function(e) {
         removeModal()
-        showNotification(paste("Error al vincular:", conditionMessage(e)), duration = 5, type = "error")
+        racafeForms::racafeNotify(duration = 5, type = "error",
+                                title = paste("Error al vincular:", conditionMessage(e)),
+                                session = shiny::getDefaultReactiveDomain())
       })
     })
     
@@ -326,11 +345,9 @@ Promover <- function(id, usuario, codigo_contacto) {
       etapa <- etapa_contacto()
       req(!is.na(etapa), etapa == "CONTACTO")
       
-      ListaDesplegable(
-        ns("CampoDestino"), label = Obligatorio("Promover a"),
-        choices = c("Seleccione una opción" = "", "Lead" = "LEAD", "Prospecto" = "PROSPECTO"),
-        selected = destino_contacto() %||% "", multiple = FALSE
-      )
+      racafeForms::racafeInputSelect(id = ns("CampoDestino"), label = Obligatorio("Promover a"),
+                              choices = c("Seleccione una opción" = "", "Lead" = "LEAD", "Prospecto" = "PROSPECTO"),
+                              selected = destino_contacto() %||% "", multiple = FALSE, empty = FALSE)
     })
     
     observeEvent(input$CampoDestino, {
@@ -382,28 +399,31 @@ Promover <- function(id, usuario, codigo_contacto) {
 }
 
 # App de prueba ----
-ui <- bs4DashPage(
-  title = "Prueba Accion Promover",
-  header = bs4DashNavbar(),
-  sidebar = bs4DashSidebar(),
-  controlbar = bs4DashControlbar(),
-  footer = bs4DashFooter(),
-  body = bs4DashBody(
-    useShinyjs(),
-    includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/", "refs/heads/main/Styles/style.css")),
-    box(
-      title = "Promover Contacto (prueba)",
-      width = 12,
-      textInput("CodigoContactoPrueba", label = "Codigo de Contacto a promover", value = ""),
-      PromoverUI("AccionPromover")
+DemoAccionesPromover <- function() {
+  ui <- bs4DashPage(
+    title = "Prueba Accion Promover",
+    header = bs4DashNavbar(),
+    sidebar = bs4DashSidebar(),
+    controlbar = bs4DashControlbar(),
+    footer = bs4DashFooter(),
+    body = bs4DashBody(
+      useShinyjs(),
+      includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
+                        "refs/heads/main/Styles/style.css")),
+      box(
+        title = "Promover Contacto (prueba)",
+        width = 12,
+        racafeForms::racafeInputText(id = "CodigoContactoPrueba", label = "Codigo de Contacto a promover", value = ""),
+        PromoverUI("AccionPromover")
+      )
     )
   )
-)
 
-server <- function(input, output, session) {
-  usuario_sesion <- reactive("CMEDINA")
-  codigo_contacto_prueba <- reactive(input$CodigoContactoPrueba)
-  Promover("AccionPromover", usuario = usuario_sesion, codigo_contacto = codigo_contacto_prueba)
+  server <- function(input, output, session) {
+    usuario_sesion <- reactive("CMEDINA")
+    codigo_contacto_prueba <- reactive(input$CodigoContactoPrueba)
+    Promover("AccionPromover", usuario = usuario_sesion, codigo_contacto = codigo_contacto_prueba)
+  }
+
+  shinyApp(ui, server)
 }
-
-shinyApp(ui, server)

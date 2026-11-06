@@ -11,15 +11,13 @@ DetalleCreacionMensualUI <- function(id) {
           div(style = "width:220px;", uiOutput(ns("DetOrigen_ui")))
       ),
       div(
-        racafeShiny::BotonesRadiales(inputId = ns("modo_tiempo"),
-                                     choices = list("Por Mes" = "mes", "Por Año" = "anio"),
-                                     selected = "mes", alineacion = "left",
-                                     color_activo = "#C11007", color_inactivo = "#FFF")
+        racafeForms::racafeInputRadio(choices = list("Por Mes" = "mes", "Por Año" = "anio"), selected = "mes",
+                                id = ns("modo_tiempo"), label = NULL)
       )
     ),
     plotly::plotlyOutput(ns("serie"), height = "280px"),
     br(),
-    TablaReactable2UI(ns("tabla"))
+    racafeModulos::TablaReactable2UI(ns("tabla"))
   )
 }
 DetalleCreacionMensual <- function(id, datos) {
@@ -27,9 +25,8 @@ DetalleCreacionMensual <- function(id, datos) {
     ns <- session$ns
     output$Origen_ui <- renderUI({
       origenes <- datos()$Origen %>% unique() %>% sort()
-      ListaDesplegable(ns("Origen"), label = h6("Origen"),
-                       choices = c("Todos", origenes), selected = "Todos",
-                       multiple = FALSE, size = 8)
+      racafeForms::racafeInputSelect(id = ns("Origen"), label = h6("Origen"), choices = c("Todos", origenes),
+                              selected = "Todos", multiple = FALSE, size = 8, empty = FALSE)
     })
     output$DetOrigen_ui <- renderUI({
       req(input$Origen)
@@ -39,9 +36,8 @@ DetalleCreacionMensual <- function(id, datos) {
         datos() %>% filter(Origen == input$Origen) %>% pull(DetOrigen)
       }
       det <- det[!is.na(det)] %>% unique() %>% sort()
-      ListaDesplegable(ns("DetOrigen"), label = h6("Detalle Origen"),
-                       choices = c("Todos", det), selected = "Todos",
-                       multiple = FALSE, size = 8)
+      racafeForms::racafeInputSelect(id = ns("DetOrigen"), label = h6("Detalle Origen"), choices = c("Todos", det),
+                              selected = "Todos", multiple = FALSE, size = 8, empty = FALSE)
     })
     
     datos_filtrados <- reactive({
@@ -100,7 +96,7 @@ DetalleCreacionMensual <- function(id, datos) {
       } else list()
     }
     
-    TablaReactable2(id = "tabla", data = datos_tabla_r, columnas = NULL, 
+    racafeModulos::TablaReactable2(id = "tabla", data = datos_tabla_r, columnas = NULL,
                     col_specs = list(Periodo      = reactable::colDef(name = "Periodo", minWidth = 100, style = .estilo_total_periodo),
                                      NumContactos = reactable::colDef(name = "N° Contactos", minWidth = 100, style = .estilo_total_periodo),
                                      Pct          = reactable::colDef(name = "% del Total", minWidth = 90,
@@ -122,13 +118,11 @@ DetalleContactoUI <- function(id) {
     fluidRow(
       column(12,
              div(style = "display:flex; justify-content:flex-end; gap:8px; align-items:center;",
-                 racafeShiny::Boton(id = ns("btn_nuevo_contacto"), label = "Añadir",
-                                    icono = "user-plus", align = "right", size = "xs",
-                                    color_fondo = "#C11007", color_fuente = "#FFFFFF"),
-                 racafeShiny::BotonDescarga(button_id = "etapa_contacto", icono = "file-excel",
-                                            color_fondo = "#6c757d", color_fuente = "#000",
-                                            title = "Descargar", size = "xs",
-                                            align = "right", ns = ns)
+                 racafeForms::racafeButton(id = ns("btn_nuevo_contacto"), label = "Añadir", size = "xs",
+                                         variant = "primary", icon = "user-plus"),
+                 shiny::tagAppendAttributes(racafeForms::racafeButtonDownload(id = "etapa_contacto", label = NULL,
+                   icon = "file-excel",
+                                         size = "xs", ns = ns, variant = "secondary"), title = "Descargar")
              )
       )
     ),
@@ -137,9 +131,9 @@ DetalleContactoUI <- function(id) {
       column(4,
              box(title = "Indicadores de Contactos", width = 12,
                  collapsible = TRUE, collapsed = FALSE,
-                 CajaModalUI(ns("kpi_total")), br(),
-                 CajaModalUI(ns("kpi_creacion_prom")), br(),
-                 CajaModalUI(ns("kpi_30"))
+                 racafeModulos::CajaModalUI(ns("kpi_total")), br(),
+                 racafeModulos::CajaModalUI(ns("kpi_creacion_prom")), br(),
+                 racafeModulos::CajaModalUI(ns("kpi_30"))
              )
       ),
       column(8,
@@ -148,17 +142,17 @@ DetalleContactoUI <- function(id) {
                  tabsetPanel(
                    tabPanel("Usuario",
                             Saltos(),
-                            TablaReactable2UI(ns("tabla_usuario"))
+                            racafeModulos::TablaReactable2UI(ns("tabla_usuario"))
                    ),
                    tabPanel("Origen",
                             Saltos(),
-                            TablaReactable2UI(ns("tabla_origen")),
+                            racafeModulos::TablaReactable2UI(ns("tabla_origen")),
                             tags$hr(),
                             shinyjs::hidden(
                               tags$div(id = ns("BloqueDetOrigen"),
                                        FormatearTexto("Detalle Origen (según fila seleccionada arriba)",
                                                       tamano_pct = 0.8, color = "#64748B"),
-                                       TablaReactable2UI(ns("tabla_det_origen"))
+                                       racafeModulos::TablaReactable2UI(ns("tabla_det_origen"))
                               )
                             )
                    )
@@ -201,7 +195,7 @@ DetalleContacto <- function(id, usuario) {
     })
     
     # KPIs ----
-    CajaModal("kpi_total",
+    racafeModulos::CajaModal("kpi_total",
               valor  = reactive(html_valor(nrow(contactos_enriquecidos()), formato = "coma", color = "#404040")),
               texto  = html_texto("Total de Contactos", color = "#404040"), icono = "user-group",
               colores = c(fondo = "white"), mostrar_boton = FALSE)
@@ -217,7 +211,7 @@ DetalleContacto <- function(id, usuario) {
         mutate(MesCrea = format(FechaHoraCrea, "%Y-%m")) %>%
         count(MesCrea, name = "NumContactos")
     })
-    CajaModal("kpi_creacion_prom",
+    racafeModulos::CajaModal("kpi_creacion_prom",
               valor  = reactive({html_valor(
                 round(mean(creacion_mensual_todos()$NumContactos, na.rm = TRUE), 1),
                 formato = "coma", color = "#404040")}),
@@ -229,7 +223,7 @@ DetalleContacto <- function(id, usuario) {
     DetalleCreacionMensual("modal_creacion_mensual", datos = contactos_creacion_todos)
     
     # Contactos con 30+ días sin registro de relacionamiento
-    CajaModal("kpi_30",
+    racafeModulos::CajaModal("kpi_30",
               valor  = reactive({html_valor(
                 mean(contactos_enriquecidos()$DiasSinRelacionamiento >= 30, na.rm = TRUE),
                 formato = "porcentaje", color = "#404040")}),
@@ -246,7 +240,7 @@ DetalleContacto <- function(id, usuario) {
     datos_usuario_r <- reactive(.resumen_dimension(contactos_enriquecidos(), "UsuarioCrea"))
     .estilo_total_usuario <- .estilo_fila_total(datos_usuario_r, "UsuarioCrea")
     
-    TablaReactable2(id = "tabla_usuario",  data = datos_usuario_r,  columnas = NULL,
+    racafeModulos::TablaReactable2(id = "tabla_usuario",  data = datos_usuario_r,  columnas = NULL,
                     col_specs = .col_specs_resumen_contacto("UsuarioCrea", "Usuario (Creación)", .estilo_total_usuario),
                     modo_seleccion = "ninguno", id_col = "UsuarioCrea",
                     sortable = TRUE, searchable = TRUE, page_size = 10, compact = TRUE,
@@ -256,7 +250,7 @@ DetalleContacto <- function(id, usuario) {
     datos_origen_r <- reactive(.resumen_dimension(contactos_enriquecidos(), "Origen"))
     .estilo_total_origen <- .estilo_fila_total(datos_origen_r, "Origen")
     
-    modulo_tabla_origen <- TablaReactable2(id = "tabla_origen", data = datos_origen_r, columnas = NULL,
+    modulo_tabla_origen <- racafeModulos::TablaReactable2(id = "tabla_origen", data = datos_origen_r, columnas = NULL,
                                            col_specs = .col_specs_resumen_contacto("Origen", "Origen", .estilo_total_origen),
                                            modo_seleccion = "fila", id_col = "Origen",
                                            sortable = TRUE, searchable = TRUE, page_size = 10, compact = TRUE,
@@ -286,7 +280,7 @@ DetalleContacto <- function(id, usuario) {
     })
     .estilo_total_det_origen <- .estilo_fila_total(datos_det_origen_r, "DetOrigen")
     
-    TablaReactable2(id = "tabla_det_origen", data = datos_det_origen_r, columnas = NULL,
+    racafeModulos::TablaReactable2(id = "tabla_det_origen", data = datos_det_origen_r, columnas = NULL,
                     col_specs = .col_specs_resumen_contacto("DetOrigen", "Detalle Origen", .estilo_total_det_origen),
                     modo_seleccion = "ninguno", id_col = "DetOrigen",
                     sortable = TRUE, searchable = TRUE, page_size = 10, compact = TRUE,
@@ -300,8 +294,11 @@ DetalleContacto <- function(id, usuario) {
     contacto_mod <- CrearContacto(id = "mod_nuevo_contacto", usuario = usuario)
     
     observeEvent(input$btn_nuevo_contacto, {
-      showModal(modalDialog(title = "Nuevo Contacto", size = "l", easyClose = TRUE, footer = modalButton("Cerrar"),
-                            CrearContactoUI(ns("mod_nuevo_contacto"))))
+      showModal(racafeForms::racafeModal(title = "Nuevo Contacto",
+        size = "subventana1",
+        easy_close = TRUE,
+        footer = modalButton("Cerrar"),
+        CrearContactoUI(ns("mod_nuevo_contacto"))))
     })
     observeEvent(contacto_mod$n(), {
       req(contacto_mod$codigo())
@@ -322,19 +319,22 @@ DetalleContacto <- function(id, usuario) {
 }
 
 # App de Prueba ----
-ui <- bs4DashPage(
-  title = "Prueba Detalle Contacto",
-  header = bs4DashNavbar(), sidebar = bs4DashSidebar(),
-  controlbar = bs4DashControlbar(), footer = bs4DashFooter(),
-  body = bs4DashBody(
-    useShinyjs(),
-    use_waiter(),
-    includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/", "refs/heads/main/Styles/style.css")),
-    box(title = "Detalle Contacto (prueba)", width = 12, DetalleContactoUI("AccionDetalleContacto"))
+DemoProspeccionDetalleContacto <- function() {
+  ui <- bs4DashPage(
+    title = "Prueba Detalle Contacto",
+    header = bs4DashNavbar(), sidebar = bs4DashSidebar(),
+    controlbar = bs4DashControlbar(), footer = bs4DashFooter(),
+    body = bs4DashBody(
+      useShinyjs(),
+      use_waiter(),
+      includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
+                        "refs/heads/main/Styles/style.css")),
+      box(title = "Detalle Contacto (prueba)", width = 12, DetalleContactoUI("AccionDetalleContacto"))
+    )
   )
-)
-server <- function(input, output, session) {
-  usuario_sesion <- reactive("CMEDINA")
-  DetalleContacto("AccionDetalleContacto", usuario = usuario_sesion)
+  server <- function(input, output, session) {
+    usuario_sesion <- reactive("CMEDINA")
+    DetalleContacto("AccionDetalleContacto", usuario = usuario_sesion)
+  }
+  shinyApp(ui, server)
 }
-shinyApp(ui, server)

@@ -42,37 +42,7 @@ server <- function(input, output, session) {
   data_c <- reactive({
     req(datos_rv())
     
-    productos_r <- productos_snap %>%
-      select(LinNegCod, LinProCod, MCCod, MrcCod, LinProNom, MCNom, Marca, Categoria, Producto,
-             ProdExcluir = Excluir)
-    
-    segmentacion_r <- segmentaciones_actual %>% select(-any_of("FecMes"))
-    
-    datos_rv() %>%
-      left_join(productos_r, by = c("LinNegCod", "LinProCod", "MCCod", "MrcCod")) %>%
-      left_join(segmentacion_r, by = c("CliNitPpal", "LinNegCod")) %>%
-      left_join(ord_cmp, by = "CLLotCod") %>%
-      mutate(
-        SegmentoAsignadoSistema = Segmento %in% c(NA_character_, "", "SIN DATO"),
-        Excluir = ifelse(Excluir %in% c(NA_character_, "", "SIN DATO"), "NO", Excluir),
-        ProdExcluir = ifelse(ProdExcluir %in% c(NA_character_, "", "SIN DATO"), "NO", ProdExcluir),
-        Segmento = case_when(
-          !SegmentoAsignadoSistema ~ Segmento,
-          LinNegCod == 10000 & SacLote <= 240 ~ "DETAL",
-          LinNegCod == 10000 & SacLote > 240 ~ "MEDIANO",
-          LinNegCod == 21000 & SacLote < 50 ~ "DETAL",
-          LinNegCod == 21000 & SacLote >= 50 ~ "MEDIANO",
-          TRUE ~ "SIN DATO"
-        ),
-        SegmentoRacafe = ifelse(
-          SegmentoRacafe %in% c(NA_character_, "", "SIN DATO") & !is.na(FecFact), "CLIENTE", SegmentoRacafe
-        ),
-        SegmentoRacafe = ifelse(SegmentoRacafe %in% c(NA_character_, ""), "SIN DATO", SegmentoRacafe),
-        Asesor = ifelse(Asesor %in% c(NA_character_, ""), "SIN DATO", Asesor),
-        CLLinNegNo = ifelse(CLLinNegNo %in% c(NA_character_, ""), "SIN DATO", CLLinNegNo),
-        Categoria = ifelse(Categoria %in% c(NA_character_, ""), "SIN DATO", Categoria),
-        Producto = ifelse(Producto %in% c(NA_character_, ""), "SIN DATO", Producto)
-      )
+    .crm_preparar_datos(datos_rv(), productos_snap, segmentaciones_actual, ord_cmp)
   })
   
   data_t <- reactive({
@@ -129,8 +99,8 @@ server <- function(input, output, session) {
   
   ### Indicadores ----
   TablaIndicadores("ind_kpis")
-  res_ind <- MenuHeaderServer(id = "MenuIndicadores", items_r = TablaIndicadoresUI("ind_kpis"), headerText = NULL,
-                              href = "#", footerText = "Comparación de indicadores")
+  res_ind <- racafeModulos::MenuHeaderServer(id = "MenuIndicadores", items_r = TablaIndicadoresUI("ind_kpis"),
+                                            headerText = NULL, href = "#", footerText = "Comparación de indicadores")
   
   observeEvent(res_ind$footer_click(), {
     bs4Dash::updateTabItems(session, "menu_principal", selected = "GE_Comparacion")
@@ -179,7 +149,7 @@ server <- function(input, output, session) {
   HeaderClientesServer(
     data_c = data_c, datos_rv = datos_rv, clientes_raw = clientes_raw_cache,
     usuario = usuario, ncliente = reactive(n_cliente), output = output,
-    es_admin = es_admin
+    es_admin = es_admin, operaciones = crm_detalle_operaciones
   )
   
   ### Migración de Cartera ----

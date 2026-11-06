@@ -14,17 +14,16 @@ DetalleCurvaConversionClienteUI <- function(id, tipo) {
     fluidRow(
       style = "display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;",
       div(style = "width:220px;",
-          ListaDesplegable(ns("agrupador"), label = h6("Desglosar por"), choices = choices,
-                           selected = "ninguno", multiple = FALSE,size = 8)
+          racafeForms::racafeInputSelect(id = ns("agrupador"), label = h6("Desglosar por"), choices = choices,
+                                  selected = "ninguno", multiple = FALSE, size = 8, empty = FALSE)
           ),
       div(style = "width:220px;",
-          ListaDesplegable(ns("unidad_tiempo"), label = h6("Unidad de Tiempo"), 
-                           choices = c("Días" = "dias",
+          racafeForms::racafeInputSelect(id = ns("unidad_tiempo"), label = h6("Unidad de Tiempo"),
+                                  choices = c("Días" = "dias",
                                        "Semanas" = "semanas",
                                        "Meses" = "meses"
                                        ),
-                           selected = "dias", multiple = FALSE, size = 5
-                           )
+                                  selected = "dias", multiple = FALSE, size = 5, empty = FALSE)
           )
       ),
     br(),
@@ -33,9 +32,9 @@ DetalleCurvaConversionClienteUI <- function(id, tipo) {
              plotly::plotlyOutput(ns("curva_km"), height = "450px")
              ),
       column(3,
-             CajaModalUI(ns("kpi_analizados")),
-             CajaModalUI(ns("kpi_convertidos")),
-             CajaModalUI(ns("kpi_censurados"))
+             racafeModulos::CajaModalUI(ns("kpi_analizados")),
+             racafeModulos::CajaModalUI(ns("kpi_convertidos")),
+             racafeModulos::CajaModalUI(ns("kpi_censurados"))
              )
       )
     )
@@ -139,7 +138,7 @@ DetalleCurvaConversionCliente <- function(id, datos_conversion, tipo) {
       if (is.null(fit)) return(NULL)
       summary(fit)$table
     })
-    CajaModal("kpi_analizados",
+    racafeModulos::CajaModal("kpi_analizados",
               valor = reactive({
                 tabla <- tabla_surv_r()
                 if (is.null(tabla)) 0 else html_valor(tabla[["records"]], formato = "coma", color = "#404040")
@@ -151,7 +150,7 @@ DetalleCurvaConversionCliente <- function(id, datos_conversion, tipo) {
               footer = paste0("Incluye todo el universo analizado, ",
                               "sin restringir por etapa o estado vigente."))
     
-    CajaModal("kpi_convertidos",
+    racafeModulos::CajaModal("kpi_convertidos",
               valor = reactive({
                 tabla <- tabla_surv_r()
                 if (is.null(tabla)) 0 else html_valor(tabla[["events"]], formato = "coma", color = "#198754")
@@ -162,7 +161,7 @@ DetalleCurvaConversionCliente <- function(id, datos_conversion, tipo) {
               footer = paste0("Contactos que alcanzaron históricamente la etapa Cliente, ",
                               "aunque actualmente estén en otra etapa o estado."))
     
-    CajaModal("kpi_censurados",
+    racafeModulos::CajaModal("kpi_censurados",
               valor = reactive({
                 tabla <- tabla_surv_r()
                 if (is.null(tabla)) {
@@ -208,15 +207,15 @@ DetalleConversionClienteUI <- function(id, tipo) {
         DetalleCurvaConversionClienteUI(ns("mod_curva"), tipo = tipo)),
     br(),
     box(title = titulo_cohorte, width = 12, collapsible = TRUE, collapsed = FALSE,
-        TablaReactable2UI(ns("tabla_cohorte")),
+        racafeModulos::TablaReactable2UI(ns("tabla_cohorte")),
         tags$hr(),
         FormatearTexto(titulo_matriz, tamano_pct = 1, negrita = TRUE),
-        div(style = "width:100%; overflow-x:auto;", TablaReactable2UI(ns("tabla_matriz"))),
+        div(style = "width:100%; overflow-x:auto;", racafeModulos::TablaReactable2UI(ns("tabla_matriz"))),
         tags$hr(),
         shinyjs::hidden(
           tags$div(id = ns("BloqueDetalleCohorte"),
                    FormatearTexto("Registros de la celda seleccionada", tamano_pct = 0.9, color = "#64748B"),
-                   TablaReactable2UI(ns("tabla_detalle")))
+                   racafeModulos::TablaReactable2UI(ns("tabla_detalle")))
         ))
   )
 }
@@ -376,7 +375,7 @@ DetalleConversionCliente <- function(id, datos_conversion, usuario, tipo) {
                                                  style = .estilo_cohorte)
       )
     }
-    TablaReactable2(id = "tabla_cohorte", data = datos_cohorte_r, columnas = orden_cohorte,
+    racafeModulos::TablaReactable2(id = "tabla_cohorte", data = datos_cohorte_r, columnas = orden_cohorte,
                     col_specs = col_specs_cohorte, modo_seleccion = "ninguno", id_col = "Cohorte",
                     sortable = TRUE, searchable = FALSE, page_size = 12, compact = TRUE,
                     mostrar_badge = FALSE, mostrar_nota = FALSE)
@@ -506,7 +505,7 @@ DetalleConversionCliente <- function(id, datos_conversion, usuario, tipo) {
         cols_matriz
       )
     )
-    TablaReactable2(id = "tabla_matriz", data = matriz_cohorte_r, columnas = NULL,
+    racafeModulos::TablaReactable2(id = "tabla_matriz", data = matriz_cohorte_r, columnas = NULL,
                     col_specs = col_specs_matriz, modo_seleccion = "ninguno", id_col = "Cohorte",
                     sortable = FALSE, searchable = FALSE, page_size = 24, compact = TRUE,
                     mostrar_badge = FALSE, mostrar_nota = FALSE)
@@ -596,7 +595,7 @@ DetalleConversionCliente <- function(id, datos_conversion, usuario, tipo) {
       GestionesLeadCliente = reactable::colDef(name = "Gestiones Lead → Cliente", minWidth = 165),
       GestionesCliente = reactable::colDef(name = "Gestiones como Cliente", minWidth = 150)
     )
-    TablaReactable2(id = "tabla_detalle", data = detalle_cohorte_r, columnas = columnas_detalle,
+    racafeModulos::TablaReactable2(id = "tabla_detalle", data = detalle_cohorte_r, columnas = columnas_detalle,
                     col_specs = col_specs_detalle, modo_seleccion = "ninguno", id_col = "CodContacto",
                     sortable = TRUE, searchable = TRUE, page_size = 10, compact = TRUE,
                     mostrar_badge = FALSE, mostrar_nota = FALSE,
@@ -627,7 +626,7 @@ DetalleConversionCliente <- function(id, datos_conversion, usuario, tipo) {
       accion_seleccionada(seleccion$accion)
       titulo_modal_actual(acciones_permitidas[[seleccion$accion]] %||% seleccion$accion)
       clase_modal <- .CONFIG_ACCIONES_EMBUDO[[seleccion$accion]]$modal %||% "subventana2"
-      modal_construido <- modalDialog(
+      modal_construido <- racafeForms::racafeModal(size = clase_modal,
         title = titulo_modal_actual(),
         tagList(
           shinyjs::hidden(
@@ -637,10 +636,9 @@ DetalleConversionCliente <- function(id, datos_conversion, usuario, tipo) {
           ),
           uiOutput(ns("ModalContenidoDetalle"))
         ),
-        easyClose = TRUE,
-        footer = modalButton("Cerrar")
-      )
-      showModal(htmltools::tagAppendAttributes(modal_construido, class = clase_modal))
+        easy_close = TRUE,
+        footer = modalButton("Cerrar"))
+      showModal(modal_construido)
     })
     output$ModalContenidoDetalle <- renderUI({
       req(accion_seleccionada())
@@ -689,8 +687,8 @@ DetalleAnalisisConversionCliente <- function(id, universo_contactos, usuario, ti
     output$Origen_ui <- renderUI({
       origenes <- universo_contactos()$Origen
       origenes <- origenes[!is.na(origenes)] %>% unique() %>% sort()
-      ListaDesplegable(ns("Origen"), label = h6("Filtrar Origen"),
-                       choices = c("Todos", origenes), selected = "Todos", multiple = FALSE, size = 8)
+      racafeForms::racafeInputSelect(id = ns("Origen"), label = h6("Filtrar Origen"), choices = c("Todos", origenes),
+                              selected = "Todos", multiple = FALSE, size = 8, empty = FALSE)
     })
     output$DetOrigen_ui <- renderUI({
       req(input$Origen)
@@ -700,8 +698,8 @@ DetalleAnalisisConversionCliente <- function(id, universo_contactos, usuario, ti
         universo_contactos() %>% filter(Origen == input$Origen) %>% pull(DetOrigen)
       }
       det <- det[!is.na(det)] %>% unique() %>% sort()
-      ListaDesplegable(ns("DetOrigen"), label = h6("Filtrar Detalle Origen"),
-                       choices = c("Todos", det), selected = "Todos", multiple = FALSE, size = 8)
+      racafeForms::racafeInputSelect(id = ns("DetOrigen"), label = h6("Filtrar Detalle Origen"),
+                              choices = c("Todos", det), selected = "Todos", multiple = FALSE, size = 8, empty = FALSE)
     })
     datos_filtrados_r <- reactive({
       dat <- universo_contactos()
@@ -746,39 +744,38 @@ DetalleClientesUI <- function(id) {
     fluidRow(
       column(12,
              div(style = "display:flex;justify-content:flex-end;gap:8px;align-items:center;",
-                 racafeShiny::BotonDescarga(
-                   button_id = "descarga_clientes", icono = "file-excel", color_fondo = "#6c757d",
-                   color_fuente = "#000", title = "Descargar", size = "xs", align = "right", ns = ns
-                 )))
+                 shiny::tagAppendAttributes(racafeForms::racafeButtonDownload(id = "descarga_clientes", label = NULL,
+                   icon = "file-excel",
+                                         size = "xs", ns = ns, variant = "secondary"), title = "Descargar")))
     ),
     br(),
     fluidRow(
       column(4,
              box(title = "Indicadores de Clientes", width = 12, collapsible = TRUE, collapsed = FALSE,
-                 CajaModalUI(ns("kpi_total")),
+                 racafeModulos::CajaModalUI(ns("kpi_total")),
                  br(),
-                 CajaModalUI(ns("kpi_conversion_contacto")),
+                 racafeModulos::CajaModalUI(ns("kpi_conversion_contacto")),
                  br(),
-                 CajaModalUI(ns("kpi_conversion_lead")))),
+                 racafeModulos::CajaModalUI(ns("kpi_conversion_lead")))),
       column(8,
              box(title = "Resumen por Dimensión", width = 12, collapsible = TRUE, collapsed = FALSE,
                  tabsetPanel(
-                   tabPanel("Usuario", Saltos(), TablaReactable2UI(ns("tabla_usuario"))),
-                   tabPanel("Origen", Saltos(), TablaReactable2UI(ns("tabla_origen")),
+                   tabPanel("Usuario", Saltos(), racafeModulos::TablaReactable2UI(ns("tabla_usuario"))),
+                   tabPanel("Origen", Saltos(), racafeModulos::TablaReactable2UI(ns("tabla_origen")),
                             tags$hr(),
                             shinyjs::hidden(
                               tags$div(id = ns("BloqueDetOrigen"),
                                        FormatearTexto("Detalle Origen (según fila seleccionada arriba)",
                                                       tamano_pct = 0.8, color = "#64748B"),
-                                       TablaReactable2UI(ns("tabla_det_origen")))
+                                       racafeModulos::TablaReactable2UI(ns("tabla_det_origen")))
                             )),
-                   tabPanel("Asesor", Saltos(), TablaReactable2UI(ns("tabla_asesor")),
+                   tabPanel("Asesor", Saltos(), racafeModulos::TablaReactable2UI(ns("tabla_asesor")),
                             FormatearTexto("Esta información solo está disponible desde la conversión a Lead.",
                                            tamano_pct = 0.75, color = "#64748B")),
-                   tabPanel("Línea de Negocio", Saltos(), TablaReactable2UI(ns("tabla_linnegocio")),
+                   tabPanel("Línea de Negocio", Saltos(), racafeModulos::TablaReactable2UI(ns("tabla_linnegocio")),
                             FormatearTexto("Esta información solo está disponible desde la conversión a Lead.",
                                            tamano_pct = 0.75, color = "#64748B")),
-                   tabPanel("Segmento", Saltos(), TablaReactable2UI(ns("tabla_segmento")),
+                   tabPanel("Segmento", Saltos(), racafeModulos::TablaReactable2UI(ns("tabla_segmento")),
                             FormatearTexto("Esta información solo está disponible desde la conversión a Lead.",
                                            tamano_pct = 0.75, color = "#64748B"))
                  ),
@@ -872,7 +869,7 @@ DetalleClientes <- function(id, usuario) {
       universo_contactos_r() %>% filter(EsClienteActivo)
     })
     # KPIs ----
-    CajaModal(
+    racafeModulos::CajaModal(
       "kpi_total",
       valor = reactive({
         html_valor(nrow(modulo_listado$datos()), formato = "coma", color = "#404040")
@@ -892,7 +889,7 @@ DetalleClientes <- function(id, usuario) {
       if (total_leads == 0) return(0)
       sum(universo$EsCliente & universo$EsLead, na.rm = TRUE) / total_leads
     })
-    CajaModal(
+    racafeModulos::CajaModal(
       "kpi_conversion_contacto",
       valor = reactive({
         html_valor(tasa_conversion_contacto_r(), formato = "porcentaje", color = "#404040")
@@ -908,7 +905,7 @@ DetalleClientes <- function(id, usuario) {
       },
       footer = "Contactos convertidos históricamente a Cliente / total de Contactos creados."
     )
-    CajaModal(
+    racafeModulos::CajaModal(
       "kpi_conversion_lead",
       valor = reactive({
         html_valor(tasa_conversion_lead_r(), formato = "porcentaje", color = "#404040")
@@ -931,13 +928,13 @@ DetalleClientes <- function(id, usuario) {
     # Resumen por dimension ----
     datos_usuario_r <- reactive(.resumen_dimension_cliente(universo_contactos_r(), "Usuario"))
     .estilo_usuario <- .estilo_fila_total(datos_usuario_r, "Usuario")
-    TablaReactable2(id = "tabla_usuario", data = datos_usuario_r, columnas = NULL,
+    racafeModulos::TablaReactable2(id = "tabla_usuario", data = datos_usuario_r, columnas = NULL,
                     col_specs = .col_specs_resumen_cliente("Usuario", "Usuario", .estilo_usuario),
                     modo_seleccion = "ninguno", id_col = "Usuario", sortable = TRUE, searchable = TRUE,
                     page_size = 10, compact = TRUE, mostrar_badge = FALSE, mostrar_nota = FALSE)
     datos_origen_r <- reactive(.resumen_dimension_cliente(universo_contactos_r(), "Origen"))
     .estilo_origen <- .estilo_fila_total(datos_origen_r, "Origen")
-    modulo_tabla_origen <- TablaReactable2(
+    modulo_tabla_origen <- racafeModulos::TablaReactable2(
       id = "tabla_origen", data = datos_origen_r, columnas = NULL,
       col_specs = .col_specs_resumen_cliente("Origen", "Origen", .estilo_origen),
       modo_seleccion = "fila", id_col = "Origen", sortable = TRUE, searchable = TRUE,
@@ -967,19 +964,19 @@ DetalleClientes <- function(id, usuario) {
       .resumen_dimension_cliente(base, "DetOrigen")
     })
     .estilo_det_origen <- .estilo_fila_total(datos_det_origen_r, "DetOrigen")
-    TablaReactable2(id = "tabla_det_origen", data = datos_det_origen_r, columnas = NULL,
+    racafeModulos::TablaReactable2(id = "tabla_det_origen", data = datos_det_origen_r, columnas = NULL,
                     col_specs = .col_specs_resumen_cliente("DetOrigen", "Detalle Origen", .estilo_det_origen),
                     modo_seleccion = "ninguno", id_col = "DetOrigen", sortable = TRUE, searchable = TRUE,
                     page_size = 10, compact = TRUE, mostrar_badge = FALSE, mostrar_nota = FALSE)
     datos_asesor_r <- reactive(.resumen_dimension_cliente_convertido(universo_contactos_r(), "AsesorLead"))
     .estilo_asesor <- .estilo_fila_total(datos_asesor_r, "AsesorLead")
-    TablaReactable2(id = "tabla_asesor", data = datos_asesor_r, columnas = NULL,
+    racafeModulos::TablaReactable2(id = "tabla_asesor", data = datos_asesor_r, columnas = NULL,
                     col_specs = .col_specs_resumen_cliente_convertido("AsesorLead", "Asesor", .estilo_asesor),
                     modo_seleccion = "ninguno", id_col = "AsesorLead", sortable = TRUE, searchable = TRUE,
                     page_size = 10, compact = TRUE, mostrar_badge = FALSE, mostrar_nota = FALSE)
     datos_linnegocio_r <- reactive(.resumen_dimension_cliente_convertido(universo_contactos_r(), "LinNegocio"))
     .estilo_linnegocio <- .estilo_fila_total(datos_linnegocio_r, "LinNegocio")
-    TablaReactable2(
+    racafeModulos::TablaReactable2(
       id = "tabla_linnegocio", data = datos_linnegocio_r, columnas = NULL,
       col_specs = .col_specs_resumen_cliente_convertido("LinNegocio", "Línea de Negocio", .estilo_linnegocio),
       modo_seleccion = "ninguno", id_col = "LinNegocio", sortable = TRUE, searchable = TRUE,
@@ -987,7 +984,7 @@ DetalleClientes <- function(id, usuario) {
     )
     datos_segmento_r <- reactive(.resumen_dimension_cliente_convertido(universo_contactos_r(), "Segmento"))
     .estilo_segmento <- .estilo_fila_total(datos_segmento_r, "Segmento")
-    TablaReactable2(id = "tabla_segmento", data = datos_segmento_r, columnas = NULL,
+    racafeModulos::TablaReactable2(id = "tabla_segmento", data = datos_segmento_r, columnas = NULL,
                     col_specs = .col_specs_resumen_cliente_convertido("Segmento", "Segmento", .estilo_segmento),
                     modo_seleccion = "ninguno", id_col = "Segmento", sortable = TRUE, searchable = TRUE,
                     page_size = 10, compact = TRUE, mostrar_badge = FALSE, mostrar_nota = FALSE)
@@ -1005,23 +1002,25 @@ DetalleClientes <- function(id, usuario) {
 }
 
 # App de Prueba ----
-ui <- bs4DashPage(
-  title = "Prueba Detalle Clientes",
-  header = bs4DashNavbar(),
-  sidebar = bs4DashSidebar(),
-  controlbar = bs4DashControlbar(),
-  footer = bs4DashFooter(),
-  body = bs4DashBody(
-    useShinyjs(),
-    use_waiter(),
-    includeCSS(
-      paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/", "refs/heads/main/Styles/style.css")
-    ),
-    box(title = "Detalle Clientes (prueba)", width = 12, DetalleClientesUI("AccionDetalleClientes"))
+DemoProspeccionDetalleCliente <- function() {
+  ui <- bs4DashPage(
+    title = "Prueba Detalle Clientes",
+    header = bs4DashNavbar(),
+    sidebar = bs4DashSidebar(),
+    controlbar = bs4DashControlbar(),
+    footer = bs4DashFooter(),
+    body = bs4DashBody(
+      useShinyjs(),
+      use_waiter(),
+      includeCSS(
+        paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/", "refs/heads/main/Styles/style.css")
+      ),
+      box(title = "Detalle Clientes (prueba)", width = 12, DetalleClientesUI("AccionDetalleClientes"))
+    )
   )
-)
-server <- function(input, output, session) {
-  usuario_sesion <- reactive("CMEDINA")
-  DetalleClientes("AccionDetalleClientes", usuario = usuario_sesion)
+  server <- function(input, output, session) {
+    usuario_sesion <- reactive("CMEDINA")
+    DetalleClientes("AccionDetalleClientes", usuario = usuario_sesion)
+  }
+  shinyApp(ui, server)
 }
-shinyApp(ui, server)

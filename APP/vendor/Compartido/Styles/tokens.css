@@ -1,0 +1,39 @@
+/* Identidad corporativa sin reglas de layout ni Bootstrap. */
+:root {
+  --color-red-primary: #DA291C;
+  --color-red-surface: #fce9e7;
+  --color-red-secondary: #dc3545;
+  --color-red-dark: #b3001b;
+  --color-red-muted: #c0392b;
+  --color-red-hover: #b02a37;
+  --color-success: #198754;
+  --color-warning: #fd7e14;
+  --color-warning-text: #8a4300;
+  --color-info: #0d6efd;
+
+  --color-gray-50: #fafafa;
+  --color-gray-100: #f5f5f5;
+  --color-gray-200: #f0f0f0;
+  --color-gray-300: #e8e8e8;
+  --color-gray-400: #d6d6d6;
+  --color-gray-500: #c8c8c8;
+  --color-gray-600: #a1a1a1;
+  --color-gray-700: #999999;
+  --color-gray-800: #666666;
+  --color-gray-850: #6c757d;
+  --color-gray-900: #555555;
+  --color-gray-910: #111111;
+  --color-gray-920: #495057;
+  --color-gray-930: #333333;
+  --color-gray-940: #212529;
+  --color-gray-950: #1a1a1a;
+
+  --font-size-xs: 0.72rem;
+  --font-size-sm: 0.82rem;
+  --font-size-base: 0.88rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.14rem;
+  --font-size-xl: 1.34rem;
+  --line-height-base: 1.55;
+  --line-height-compact: 1.28;
+}

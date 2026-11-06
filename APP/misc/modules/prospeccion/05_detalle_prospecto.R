@@ -13,10 +13,10 @@ DetalleAlianza <- function(id, nit_aliado, fechas_alianza) {
     ventas_mensuales_r <- reactive({
       req(nit_aliado())
       data %>%
-        filter(CliNitPpal == nit_aliado()) %>%
+        filter(CliNitPpal == nit_aliado(), !is.na(FecFact)) %>%
         mutate(Mes = lubridate::floor_date(FecFact, "month")) %>%
         group_by(Mes) %>%
-        summarise(SacosPYG = sum(SacosPYG, na.rm = TRUE), .groups = "drop")
+        summarise(SacosPYG = sum(SacosFact, na.rm = TRUE), .groups = "drop")
     })
     
     cosecha_r <- reactive({
@@ -110,10 +110,9 @@ DetalleProspectosUI <- function(id) {
     fluidRow(
       column(12,
              div(style = "display:flex; justify-content:flex-end; gap:8px; align-items:center;",
-                 racafeShiny::BotonDescarga(button_id = "descarga_prospectos", icono = "file-excel",
-                                            color_fondo = "#6c757d", color_fuente = "#000",
-                                            title = "Descargar", size = "xs",
-                                            align = "right", ns = ns)
+                 shiny::tagAppendAttributes(racafeForms::racafeButtonDownload(id = "descarga_prospectos", label = NULL,
+                   icon = "file-excel",
+                                         size = "xs", ns = ns, variant = "secondary"), title = "Descargar")
              )
       )
     ),
@@ -122,8 +121,8 @@ DetalleProspectosUI <- function(id) {
       column(4,
              box(title = "Indicadores de Prospectos", width = 12,
                  collapsible = TRUE, collapsed = FALSE,
-                 CajaModalUI(ns("kpi_total")), br(),
-                 CajaModalUI(ns("kpi_alianzas"))
+                 racafeModulos::CajaModalUI(ns("kpi_total")), br(),
+                 racafeModulos::CajaModalUI(ns("kpi_alianzas"))
              )
       ),
       column(8,
@@ -132,11 +131,11 @@ DetalleProspectosUI <- function(id) {
                  tabsetPanel(
                    tabPanel("Usuario",
                             Saltos(),
-                            TablaReactable2UI(ns("tabla_usuario"))
+                            racafeModulos::TablaReactable2UI(ns("tabla_usuario"))
                    ),
                    tabPanel("Origen",
                             Saltos(),
-                            TablaReactable2UI(ns("tabla_origen")),
+                            racafeModulos::TablaReactable2UI(ns("tabla_origen")),
                             tags$hr(),
                             shinyjs::hidden(
                               tags$div(id = ns("BloqueDetOrigen"),
@@ -144,13 +143,13 @@ DetalleProspectosUI <- function(id) {
                                          "Detalle Origen (según fila seleccionada arriba)",
                                          tamano_pct = 0.8, color = "#64748B"
                                        ),
-                                       TablaReactable2UI(ns("tabla_det_origen"))
+                                       racafeModulos::TablaReactable2UI(ns("tabla_det_origen"))
                               )
                             )
                    ),
                    tabPanel("Alianza",
                             Saltos(),
-                            TablaReactable2UI(ns("tabla_alianza"))
+                            racafeModulos::TablaReactable2UI(ns("tabla_alianza"))
                    )
                  )
              )
@@ -195,7 +194,7 @@ DetalleProspectos <- function(id, usuario) {
     })
     
     # KPIs ----
-    CajaModal("kpi_total",
+    racafeModulos::CajaModal("kpi_total",
               valor = reactive(
                 html_valor(nrow(prospectos_base()), formato = "coma", color = "#404040")
               ),
@@ -215,7 +214,7 @@ DetalleProspectos <- function(id, usuario) {
         count(ClienteAliado, name = "NumProspectos", sort = TRUE)
     })
     
-    CajaModal("kpi_alianzas",
+    racafeModulos::CajaModal("kpi_alianzas",
               valor = reactive(
                 html_valor(
                   dplyr::n_distinct(alianzas_r()$ClienteAliado),
@@ -228,13 +227,13 @@ DetalleProspectos <- function(id, usuario) {
               titulo_modal = "Prospectos por Alianza — click en una fila para ver análisis de ventas",
               icono_modal = "handshake",
               contenido_modal = function() tagList(
-                TablaReactable2UI(ns("tabla_kpi_alianzas")),
+                racafeModulos::TablaReactable2UI(ns("tabla_kpi_alianzas")),
                 tags$hr(),
                 uiOutput(ns("bloque_analisis_alianza"))
               )
     )
     
-    mod_tabla_kpi_alianzas <- TablaReactable2(
+    mod_tabla_kpi_alianzas <- racafeModulos::TablaReactable2(
       id = "tabla_kpi_alianzas", data = resumen_alianzas_r,
       columnas = NULL,
       col_specs = list(
@@ -306,7 +305,7 @@ DetalleProspectos <- function(id, usuario) {
       "UsuarioCreaContacto"
     )
     
-    TablaReactable2(
+    racafeModulos::TablaReactable2(
       id = "tabla_usuario", data = datos_usuario_r, columnas = NULL,
       col_specs = .col_specs_resumen_prospecto(
         "UsuarioCreaContacto",
@@ -329,7 +328,7 @@ DetalleProspectos <- function(id, usuario) {
       "Origen"
     )
     
-    modulo_tabla_origen <- TablaReactable2(
+    modulo_tabla_origen <- racafeModulos::TablaReactable2(
       id = "tabla_origen", data = datos_origen_r, columnas = NULL,
       col_specs = .col_specs_resumen_prospecto(
         "Origen",
@@ -378,7 +377,7 @@ DetalleProspectos <- function(id, usuario) {
       "DetOrigen"
     )
     
-    TablaReactable2(
+    racafeModulos::TablaReactable2(
       id = "tabla_det_origen", data = datos_det_origen_r,
       columnas = NULL,
       col_specs = .col_specs_resumen_prospecto(
@@ -400,7 +399,7 @@ DetalleProspectos <- function(id, usuario) {
       })
     .estilo_total_alianza <- .estilo_fila_total(datos_alianza_r, "ClienteAliado")
     
-    TablaReactable2(id = "tabla_alianza", data = datos_alianza_r, columnas = NULL,
+    racafeModulos::TablaReactable2(id = "tabla_alianza", data = datos_alianza_r, columnas = NULL,
                     col_specs = .col_specs_resumen_prospecto("ClienteAliado", "Alianza", .estilo_total_alianza),
                     modo_seleccion = "ninguno", id_col = "ClienteAliado",
                     sortable = TRUE, searchable = TRUE, page_size = 10, compact = TRUE,
@@ -432,21 +431,23 @@ DetalleProspectos <- function(id, usuario) {
 }
 
 # App de Prueba ----
-ui <- bs4DashPage(
-  title = "Prueba Detalle Prospectos",
-  header = bs4DashNavbar(), sidebar = bs4DashSidebar(),
-  controlbar = bs4DashControlbar(), footer = bs4DashFooter(),
-  body = bs4DashBody(
-    useShinyjs(),
-    use_waiter(),
-    includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
-                      "refs/heads/main/Styles/style.css")),
-    box(title = "Detalle Prospectos (prueba)", width = 12,
-        DetalleProspectosUI("AccionDetalleProspectos"))
+DemoProspeccionDetalleProspecto <- function() {
+  ui <- bs4DashPage(
+    title = "Prueba Detalle Prospectos",
+    header = bs4DashNavbar(), sidebar = bs4DashSidebar(),
+    controlbar = bs4DashControlbar(), footer = bs4DashFooter(),
+    body = bs4DashBody(
+      useShinyjs(),
+      use_waiter(),
+      includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
+                        "refs/heads/main/Styles/style.css")),
+      box(title = "Detalle Prospectos (prueba)", width = 12,
+          DetalleProspectosUI("AccionDetalleProspectos"))
+    )
   )
-)
-server <- function(input, output, session) {
-  usuario_sesion <- reactive("CMEDINA")
-  DetalleProspectos("AccionDetalleProspectos", usuario = usuario_sesion)
+  server <- function(input, output, session) {
+    usuario_sesion <- reactive("CMEDINA")
+    DetalleProspectos("AccionDetalleProspectos", usuario = usuario_sesion)
+  }
+  shinyApp(ui, server)
 }
-shinyApp(ui, server)

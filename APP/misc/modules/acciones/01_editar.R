@@ -7,11 +7,13 @@ IdentificacionUI <- function(id) {
   tagList(
     uiOutput(ns("Titulo")),
     box(title = "Identificación", width = 12, collapsible = FALSE,
-        ListaDesplegable(ns("CampoAutorizaDatos"), label = Obligatorio("Autoriza Tratamiento de Datos"),
-                         choices = c("SI", "NO"), selected = "SI", multiple = FALSE),
+        racafeForms::racafeInputSelect(id = ns("CampoAutorizaDatos"),
+                                label = Obligatorio("Autoriza Tratamiento de Datos"), choices = c("SI", "NO"),
+                                selected = "SI", multiple = FALSE, empty = FALSE),
         fluidRow(
-          column(6, textInput(ns("CampoNit"), label = h6("NIT"), width = "100%")),
-          column(6, textInput(ns("CampoRazonSocial"), label = h6("Razón Social"), width = "100%"))
+          column(6, racafeForms::racafeInputText(id = ns("CampoNit"), label = h6("NIT"), width = "100%")),
+          column(6, racafeForms::racafeInputText(id = ns("CampoRazonSocial"), label = h6("Razón Social"),
+                                                 width = "100%"))
         ),
         fluidRow(
           column(12, FormatearTexto("* Debe diligenciar Razón Social, NIT o ambos",
@@ -22,8 +24,8 @@ IdentificacionUI <- function(id) {
           column(6, uiOutput(ns("ValidacionRazonSocial")))
         ),
         uiOutput(ns("OrigenTexto")),
-        racafeShiny::Boton(id = ns("BotonGuardar"), label = "Guardar Cambios", icono = "save",
-                           align = "right", size = "xs", color_fondo = "#C11007", color_fuente = "#FFFFFF")
+        racafeForms::racafeButton(id = ns("BotonGuardar"), label = "Guardar Cambios", size = "xs", variant = "primary",
+                                icon = "save")
     )
   )
 }
@@ -122,8 +124,8 @@ Identificacion <- function(id, usuario, codigo_contacto) {
                         value = datos_contacto()$PerRazSoc)
         updateTextInput(session = session, inputId = "CampoNit",
                         value = datos_contacto()$PerCod)
-        updatePickerInput(session = session, inputId = "CampoAutorizaDatos",
-                          selected = datos_contacto()$AutorizaTD)
+        racafeForms::racafeUpdateSelect(session = session, selected = datos_contacto()$AutorizaTD,
+                                id = "CampoAutorizaDatos")
       }
     })
     
@@ -133,7 +135,8 @@ Identificacion <- function(id, usuario, codigo_contacto) {
       if (any(condiciones_validacion)) {
         for (nombre_condicion in names(condiciones_validacion)) {
           if (condiciones_validacion[[nombre_condicion]]) {
-            showNotification(nombre_condicion, duration = 4, type = "error")
+            racafeForms::racafeNotify(duration = 4, type = "error", title = nombre_condicion,
+                                    session = shiny::getDefaultReactiveDomain())
           }
         }
         return(invisible(NULL))
@@ -184,7 +187,8 @@ Identificacion <- function(id, usuario, codigo_contacto) {
       tryCatch({
         ReemplazarDatos(fila_actualizada, "CRMNALCONTACTO", llaves = list(CodContacto = codigo_contacto()))
         removeModal()
-        showNotification("Contacto modificado exitosamente", duration = 4, type = "message")
+        racafeForms::racafeNotify(duration = 4, type = "success", title = "Contacto modificado exitosamente",
+                                session = shiny::getDefaultReactiveDomain())
         contador_actualizaciones(contador_actualizaciones() + 1)
       }, error = function(error) {
         removeModal()
@@ -204,73 +208,70 @@ DirectorioUI <- function(id) {
   tagList(
     # Datos Empresariales ----
     box(title = "Datos Empresariales", width = 12, collapsible = FALSE,
-        textInput(ns("CampoCorreoEmpresarial"), label = h6("Correo"), width = "100%"),
+        racafeForms::racafeInputText(id = ns("CampoCorreoEmpresarial"), label = h6("Correo"), width = "100%"),
         tags$hr(style = "border-color: grey;"),
         h6("Teléfonos"),
         fluidRow(
-          column(10, textInput(ns("CampoTelefonoNuevo"), label = NULL,
-                               placeholder = "Número de teléfono", width = "100%")),
-          column(1, racafeShiny::Boton(id = ns("BotonAgregarTelefono"), label = "Agregar",
-                                       icono = "plus", align = "right", size = "xs",
-                                       color_fondo = "#0d6efd", color_fuente = "#FFFFFF"))
+          column(10, racafeForms::racafeInputText(id = ns("CampoTelefonoNuevo"), label = NULL,
+                                                  placeholder = "Número de teléfono",
+                                  width = "100%")),
+          column(1, racafeForms::racafeButton(id = ns("BotonAgregarTelefono"), label = "Agregar", size = "xs",
+                                  variant = "primary", icon = "plus"))
         ),
         uiOutput(ns("ListaTelefonosEmpresariales")),
         tags$hr(style = "border-color: grey;"),
         h6("Redes Sociales"),
         fluidRow(
-          column(5, ListaDesplegable(ns("CampoTipoRed"), label = NULL, choices = .TIPOS_RED_SOCIAL,
-                                     selected = NULL, multiple = FALSE)),
-          column(6, textInput(ns("CampoUsuarioRed"), label = NULL,
-                              placeholder = "Enlace o usuario de la cuenta", width = "100%")),
-          column(1, racafeShiny::Boton(id = ns("BotonAgregarRed"), label = "Agregar", icono = "plus",
-                                       align = "right", size = "xs", color_fondo = "#0d6efd",
-                                       color_fuente = "#FFFFFF"))
+          column(5, racafeForms::racafeInputSelect(id = ns("CampoTipoRed"), label = NULL, choices = .TIPOS_RED_SOCIAL,
+                                  selected = NULL, multiple = FALSE, empty = FALSE)),
+          column(6, racafeForms::racafeInputText(id = ns("CampoUsuarioRed"), label = NULL,
+                                  placeholder = "Enlace o usuario de la cuenta", width = "100%")),
+          column(1, racafeForms::racafeButton(id = ns("BotonAgregarRed"), label = "Agregar", size = "xs",
+                                              variant = "primary",
+                                  icon = "plus"))
         ),
-        TablaReactableUI(ns("TablaRedesEmpresariales"), titulo = NULL),
-        racafeShiny::Boton(id = ns("BotonGuardarDatosEmpresariales"), label = "Guardar",
-                           icono = "floppy-disk", align = "right", size = "xs",
-                           color_fondo = "#C11007", color_fuente = "#FFFFFF")
+        racafeModulos::TablaReactableUI(ns("TablaRedesEmpresariales"), titulo = NULL),
+        racafeForms::racafeButton(id = ns("BotonGuardarDatosEmpresariales"), label = "Guardar", size = "xs",
+                                variant = "primary", icon = "floppy-disk")
     ),
     # Datos Personales ----
     box(title = "Datos Personales", width = 12, collapsible = FALSE,
         div(style = "text-align: right; margin-bottom: 10px;",
-            racafeShiny::Boton(id = ns("BotonAnadirPersona"), label = "Añadir Persona",
-                               icono = "user-plus", align = "right", size = "xs",
-                               color_fondo = "#198754", color_fuente = "#FFFFFF")),
+            racafeForms::racafeButton(id = ns("BotonAnadirPersona"), label = "Añadir Persona", size = "xs",
+                                    variant = "success", icon = "user-plus")),
         shinyjs::hidden(
           div(id = ns("PanelNuevaPersona"),
               style = "border:1px solid #E2E8F0; border-radius:6px; padding:12px; margin-bottom:14px;",
               fluidRow(
-                column(6, textInput(ns("CampoNombre"), label = Obligatorio("Nombre"), width = "100%")),
-                column(6, textInput(ns("CampoCargo"), label = h6("Cargo"), width = "100%"))
+                column(6, racafeForms::racafeInputText(id = ns("CampoNombre"), label = Obligatorio("Nombre"),
+                                                       width = "100%")),
+                column(6, racafeForms::racafeInputText(id = ns("CampoCargo"), label = h6("Cargo"), width = "100%"))
               ),
               fluidRow(
-                column(6, textInput(ns("CampoTelefonoPersona"), label = h6("Teléfono"), width = "100%")),
-                column(6, textInput(ns("CampoCorreoPersona"), label = h6("Correo"), width = "100%"))
+                column(6, racafeForms::racafeInputText(id = ns("CampoTelefonoPersona"), label = h6("Teléfono"),
+                                                       width = "100%")),
+                column(6, racafeForms::racafeInputText(id = ns("CampoCorreoPersona"), label = h6("Correo"),
+                                                       width = "100%"))
               ),
               tags$hr(style = "border-color: grey;"),
               h6("Redes Sociales"),
               fluidRow(
-                column(5, ListaDesplegable(ns("CampoTipoRedPersona"), label = NULL,
-                                           choices = .TIPOS_RED_SOCIAL, selected = NULL,
-                                           multiple = FALSE)),
-                column(5, textInput(ns("CampoUsuarioRedPersona"), label = NULL,
-                                    placeholder = "Usuario o enlace", width = "100%")),
-                column(2, racafeShiny::Boton(id = ns("BotonAgregarRedPersona"), label = NULL,
-                                             icono = "plus", align = "right", size = "xs",
-                                             color_fondo = "#0d6efd", color_fuente = "#FFFFFF"))
+                column(5, racafeForms::racafeInputSelect(id = ns("CampoTipoRedPersona"), label = NULL,
+                                        choices = .TIPOS_RED_SOCIAL, selected = NULL, multiple = FALSE, empty = FALSE)),
+                column(5, racafeForms::racafeInputText(id = ns("CampoUsuarioRedPersona"), label = NULL,
+                                        placeholder = "Usuario o enlace", width = "100%")),
+                column(2, racafeForms::racafeButton(id = ns("BotonAgregarRedPersona"), label = NULL, size = "xs",
+                                        variant = "primary", icon = "plus"))
               ),
               uiOutput(ns("RedesTemporales")),
               div(style = "text-align: right; margin-top: 10px;",
-                  racafeShiny::Boton(id = ns("BotonCancelarPersona"), label = "Cancelar",
-                                     icono = "xmark", align = "right", size = "xs",
-                                     color_fondo = "transparent", color_fuente = "#6c757d"),
-                  racafeShiny::Boton(id = ns("BotonGuardarPersona"), label = "Guardar Persona",
-                                     icono = "floppy-disk", align = "right", size = "xs",
-                                     color_fondo = "#C11007", color_fuente = "#FFFFFF"))
+                  racafeForms::racafeButton(id = ns("BotonCancelarPersona"), label = "Cancelar", size = "xs",
+                                          variant = "ghost", icon = "xmark"),
+                  racafeForms::racafeButton(id = ns("BotonGuardarPersona"), label = "Guardar Persona", size = "xs",
+                                          variant = "primary", icon = "floppy-disk"))
           )
         ),
-        TablaReactableUI(ns("TablaPersonas"), titulo = "Personas de Contacto")
+        racafeModulos::TablaReactableUI(ns("TablaPersonas"), titulo = "Personas de Contacto")
     )
   )
 }
@@ -306,7 +307,8 @@ Directorio <- function(id, usuario, codigo_contacto) {
       tryCatch({
         guardar_info_empresarial_directorio(codigo_contacto(), input$CampoCorreoEmpresarial, usuario())
         contador_actualizacion_correo_empresa(isolate(contador_actualizacion_correo_empresa()) + 1)
-        showNotification("Datos empresariales guardados exitosamente", duration = 3, type = "message")
+        racafeForms::racafeNotify(duration = 3, type = "success", title = "Datos empresariales guardados exitosamente",
+                                session = shiny::getDefaultReactiveDomain())
       }, error = function(error) {
         .ManejarErrorAccion(error = error, operacion = "guardar los datos empresariales",
                             usuario = usuario(), codigo_contacto = codigo_contacto())
@@ -340,12 +342,14 @@ Directorio <- function(id, usuario, codigo_contacto) {
     observeEvent(input$BotonAgregarTelefono, {
       req(codigo_contacto())
       if (trimws(input$CampoTelefonoNuevo %||% "") == "") {
-        showNotification("Ingrese un número de teléfono", type = "warning", duration = 3)
+        racafeForms::racafeNotify(type = "warning", duration = 3, title = "Ingrese un número de teléfono",
+                                session = shiny::getDefaultReactiveDomain())
         return(invisible(NULL))
       }
       if (nrow(datos_telefonos()) >= .MAX_TELEFONOS_GENERAL) {
-        showNotification(paste0("Máximo ", .MAX_TELEFONOS_GENERAL, " teléfonos"),
-                         type = "warning", duration = 4)
+        racafeForms::racafeNotify(type = "warning", duration = 4,
+                                title = paste0("Máximo ", .MAX_TELEFONOS_GENERAL, " teléfonos"),
+                                session = shiny::getDefaultReactiveDomain())
         return(invisible(NULL))
       }
       registrar_telefono_directorio(codigo_contacto(), input$CampoTelefonoNuevo, usuario())
@@ -375,7 +379,7 @@ Directorio <- function(id, usuario, codigo_contacto) {
         mutate(RedHTML = mapply(.linea_red_social, TipoRedSocial, UsuarioRed), Eliminar = IdRed)
     })
     ### Outputs ----
-    modulo_tabla_redes_empresa <- TablaReactable(
+    modulo_tabla_redes_empresa <- racafeModulos::TablaReactable(
       id = "TablaRedesEmpresariales", data = datos_redes, columnas = NULL,
       col_specs = list(
         Eliminar      = .coldef_accion("Eliminar", "trash", COLOR_ERROR),
@@ -396,12 +400,15 @@ Directorio <- function(id, usuario, codigo_contacto) {
       req(seleccion_actual, seleccion_actual$col == "Eliminar")
       eliminar_red_social_directorio(seleccion_actual$fila$IdRed[[1]])
       contador_actualizacion_redes_empresa(isolate(contador_actualizacion_redes_empresa()) + 1)
-      showNotification("Red social eliminada", duration = 3, type = "message")
+      racafeForms::racafeNotify(duration = 3, type = "success", title = "Red social eliminada",
+                              session = shiny::getDefaultReactiveDomain())
     })
     observeEvent(input$BotonAgregarRed, {
       req(codigo_contacto())
       if (input$CampoTipoRed == "" || trimws(input$CampoUsuarioRed %||% "") == "") {
-        showNotification("Seleccione el tipo de red y el usuario/enlace", type = "warning", duration = 3)
+        racafeForms::racafeNotify(type = "warning", duration = 3,
+                                title = "Seleccione el tipo de red y el usuario/enlace",
+                                session = shiny::getDefaultReactiveDomain())
         return(invisible(NULL))
       }
       registrar_red_social_directorio(codigo_contacto(), input$CampoTipoRed, input$CampoUsuarioRed)
@@ -420,7 +427,7 @@ Directorio <- function(id, usuario, codigo_contacto) {
         mutate(Eliminar = IdPersona)
     })
     ### Outputs ----
-    modulo_tabla_personas <- TablaReactable(
+    modulo_tabla_personas <- racafeModulos::TablaReactable(
       id = "TablaPersonas", data = datos_personas, columnas = NULL,
       col_specs = list(
         Eliminar    = .coldef_accion("Eliminar", "trash", COLOR_ERROR),
@@ -442,14 +449,16 @@ Directorio <- function(id, usuario, codigo_contacto) {
       req(seleccion_actual, seleccion_actual$col == "Eliminar")
       eliminar_persona_directorio(seleccion_actual$fila$IdPersona[[1]])
       contador_actualizacion_personas(isolate(contador_actualizacion_personas()) + 1)
-      showNotification("Persona eliminada", duration = 3, type = "message")
+      racafeForms::racafeNotify(duration = 3, type = "success", title = "Persona eliminada",
+                              session = shiny::getDefaultReactiveDomain())
     })
     
     # Abrir / cerrar panel de nueva persona
     observeEvent(input$BotonAnadirPersona, {
       if (nrow(datos_personas()) >= .MAX_PERSONAS_CONTACTO) {
-        showNotification(paste0("Máximo ", .MAX_PERSONAS_CONTACTO, " personas de contacto"),
-                         type = "warning", duration = 4)
+        racafeForms::racafeNotify(type = "warning", duration = 4,
+                                title = paste0("Máximo ", .MAX_PERSONAS_CONTACTO, " personas de contacto"),
+                                session = shiny::getDefaultReactiveDomain())
         return(invisible(NULL))
       }
       redes_temporales_persona_nueva(list())
@@ -460,7 +469,9 @@ Directorio <- function(id, usuario, codigo_contacto) {
     # Agregar red temporal a la lista en memoria (aun no se guarda en BD)
     observeEvent(input$BotonAgregarRedPersona, {
       if (input$CampoTipoRedPersona == "" || trimws(input$CampoUsuarioRedPersona %||% "") == "") {
-        showNotification("Seleccione el tipo de red y el usuario/enlace", type = "warning", duration = 3)
+        racafeForms::racafeNotify(type = "warning", duration = 3,
+                                title = "Seleccione el tipo de red y el usuario/enlace",
+                                session = shiny::getDefaultReactiveDomain())
         return(invisible(NULL))
       }
       redes_actuales <- redes_temporales_persona_nueva()
@@ -498,7 +509,8 @@ Directorio <- function(id, usuario, codigo_contacto) {
     # Guardar persona nueva junto con sus redes temporales -----
     observeEvent(input$BotonGuardarPersona, {
       if (trimws(input$CampoNombre %||% "") == "") {
-        showNotification("El nombre es obligatorio", type = "error", duration = 4)
+        racafeForms::racafeNotify(type = "error", duration = 4, title = "El nombre es obligatorio",
+                                session = shiny::getDefaultReactiveDomain())
         return(invisible(NULL))
       }
       identificador_persona_nueva <- registrar_persona_directorio(
@@ -517,7 +529,8 @@ Directorio <- function(id, usuario, codigo_contacto) {
       updateTextInput(session, "CampoCorreoPersona", value = "")
       redes_temporales_persona_nueva(list())
       contador_actualizacion_personas(isolate(contador_actualizacion_personas()) + 1)
-      showNotification("Persona de contacto agregada", duration = 3, type = "message")
+      racafeForms::racafeNotify(duration = 3, type = "success", title = "Persona de contacto agregada",
+                              session = shiny::getDefaultReactiveDomain())
     })
   })
 }
@@ -536,12 +549,12 @@ BuscadorDireccionUI <- function(id) {
     tags$div(style = "position: relative;",
              fluidRow(class = "align-items-end",
                       column(4,
-                             selectInput(ns("Pais"), label = h6("País"),
-                                         choices = .PAISES_BUSCADOR, selected = "CO", width = "100%")
+                             racafeForms::racafeInputSelect("Pais", label = h6("País"), choices = .PAISES_BUSCADOR,
+                                                           selected = "CO", empty = FALSE, ns = ns)
                       ),
                       column(8,
-                             textInput(ns("Direccion"), label = h6("Dirección"), value = "",
-                                       placeholder = "Empiece a escribir la dirección...", width = "100%")
+                             racafeForms::racafeInputText(id = ns("Direccion"), label = h6("Dirección"), value = "",
+                                                     placeholder = "Empiece a escribir la dirección...", width = "100%")
                       )
              ),
              uiOutput(ns("ListaSugerencias"))
@@ -708,9 +721,8 @@ GeografiaUI <- function(id) {
     column(7,
            box(title = "Dirección Principal", width = 12, collapsible = FALSE,
                BuscadorDireccionUI(ns("Direccion")),
-               racafeShiny::Boton(ns("BotonGuardarUbicacion"), label = "Guardar",
-                                  icono = "floppy-disk", color_fondo = "#C11007",
-                                  color_fuente = "#FFFFFF", size = "xs")
+               racafeForms::racafeButton(id = ns("BotonGuardarUbicacion"), label = "Guardar", size = "xs",
+                                       variant = "primary", icon = "floppy-disk")
            ),
            box(title = "Sedes del Contacto", width = 12, collapsible = FALSE,
                fluidRow(
@@ -719,9 +731,8 @@ GeografiaUI <- function(id) {
                                        tamano_pct = 0.8, color = "#64748B")
                  ),
                  column(4,
-                        racafeShiny::Boton(ns("BotonAnadirSucursal"), label = "Añadir",
-                                           icono = "plus", color_fondo = "#198754",
-                                           color_fuente = "#FFFFFF", size = "xs")
+                        racafeForms::racafeButton(id = ns("BotonAnadirSucursal"), label = "Añadir", size = "xs",
+                                                variant = "success", icon = "plus")
                  )
                ),
                shinyjs::hidden(
@@ -729,34 +740,31 @@ GeografiaUI <- function(id) {
                      style = "border:1px solid #E2E8F0; border-radius:6px; padding:12px; margin-bottom:14px; margin-top:10px;",
                      fluidRow(
                        column(7,
-                              textInput(ns("CampoNombreSucursal"), label = Obligatorio("Nombre"),
-                                        width = "100%")
+                              racafeForms::racafeInputText(id = ns("CampoNombreSucursal"),
+                                                      label = Obligatorio("Nombre"), width = "100%")
                        ),
                        column(5,
-                              ListaDesplegable(ns("CampoTipoSede"), label = Obligatorio("Tipo"),
-                                               choices = .TIPOS_SEDE, selected = NULL, multiple = FALSE)
+                              racafeForms::racafeInputSelect(id = ns("CampoTipoSede"), label = Obligatorio("Tipo"),
+                                                      choices = .TIPOS_SEDE, selected = NULL, multiple = FALSE,
+                                                      empty = FALSE)
                        )
                      ),
                      BuscadorDireccionUI(ns("DireccionSucursal")),
-                     materialSwitch(ns("CampoEsPrincipal"),
-                                    label = "Marcar como sede principal/administrativa del contacto",
-                                    value = FALSE, status = "danger"
-                     ),
+                     racafeForms::racafeInputSwitch(label = "Marcar como sede principal/administrativa del contacto",
+                                             value = FALSE, id = ns("CampoEsPrincipal"), variant = "danger"),
                      fluidRow(
                        column(6),
                        column(3,
-                              racafeShiny::Boton(ns("BotonCancelarSucursal"), label = "Cancelar",
-                                                 icono = "xmark", color_fondo = "#6c757d",
-                                                 color_fuente = "#FFFFFF", size = "xs")
+                              racafeForms::racafeButton(id = ns("BotonCancelarSucursal"), label = "Cancelar",
+                                                      size = "xs", variant = "secondary", icon = "xmark")
                        ),
                        column(3,
-                              racafeShiny::Boton(ns("BotonGuardarSucursal"), label = "Guardar",
-                                                 icono = "floppy-disk", color_fondo = "#C11007",
-                                                 color_fuente = "#FFFFFF", size = "xs")
+                              racafeForms::racafeButton(id = ns("BotonGuardarSucursal"), label = "Guardar", size = "xs",
+                                                      variant = "primary", icon = "floppy-disk")
                        ),
                      ))
                ),
-               TablaReactableUI(ns("TablaSucursales"), titulo = "Listado de Sedes")
+               racafeModulos::TablaReactableUI(ns("TablaSucursales"), titulo = "Listado de Sedes")
            )
     ),
     column(5,
@@ -860,7 +868,8 @@ Geografia <- function(id, usuario, codigo_contacto) {
           direccion_actual$Mpio, direccion_actual$Direccion,
           direccion_actual$lat, direccion_actual$lng, usuario()
         )
-        showNotification("Ubicación guardada exitosamente", duration = 3, type = "message")
+        racafeForms::racafeNotify(duration = 3, type = "success", title = "Ubicación guardada exitosamente",
+                                session = shiny::getDefaultReactiveDomain())
         contador_actualizacion_ubicacion(isolate(contador_actualizacion_ubicacion()) + 1)
       }, error = function(error) {
         .ManejarErrorAccion(
@@ -870,7 +879,7 @@ Geografia <- function(id, usuario, codigo_contacto) {
       })
     })
     
-    modulo_tabla_sucursales <- TablaReactable(
+    modulo_tabla_sucursales <- racafeModulos::TablaReactable(
       id = "TablaSucursales",
       data = datos_sucursales_tabla,
       columnas = NULL,
@@ -901,7 +910,8 @@ Geografia <- function(id, usuario, codigo_contacto) {
       tryCatch({
         eliminar_sucursal_contacto(seleccion_actual$fila$IdSucursal[[1]])
         contador_actualizacion_sucursales(isolate(contador_actualizacion_sucursales()) + 1)
-        showNotification("Sede eliminada", duration = 3, type = "message")
+        racafeForms::racafeNotify(duration = 3, type = "success", title = "Sede eliminada",
+                                session = shiny::getDefaultReactiveDomain())
       }, error = function(error) {
         .ManejarErrorAccion(
           error = error, operacion = "eliminar la sede del contacto",
@@ -921,11 +931,13 @@ Geografia <- function(id, usuario, codigo_contacto) {
     observeEvent(input$BotonGuardarSucursal, {
       req(codigo_contacto())
       if (EsVacio(input$CampoNombreSucursal)) {
-        showNotification("El nombre de la sede es obligatorio", type = "error", duration = 4)
+        racafeForms::racafeNotify(type = "error", duration = 4, title = "El nombre de la sede es obligatorio",
+                                session = shiny::getDefaultReactiveDomain())
         return(invisible(NULL))
       }
       if (EsVacio(input$CampoTipoSede)) {
-        showNotification("El tipo de sede es obligatorio", type = "error", duration = 4)
+        racafeForms::racafeNotify(type = "error", duration = 4, title = "El tipo de sede es obligatorio",
+                                session = shiny::getDefaultReactiveDomain())
         return(invisible(NULL))
       }
       direccion_sucursal_actual <- modulo_direccion_sucursal()
@@ -939,9 +951,10 @@ Geografia <- function(id, usuario, codigo_contacto) {
         )
         shinyjs::hide("PanelNuevaSucursal")
         updateTextInput(session, "CampoNombreSucursal", value = "")
-        updatePickerInput(session, "CampoTipoSede", selected = character(0))
+        racafeForms::racafeUpdateSelect(session = session, selected = character(0), id = "CampoTipoSede")
         contador_actualizacion_sucursales(isolate(contador_actualizacion_sucursales()) + 1)
-        showNotification("Sede agregada exitosamente", duration = 3, type = "message")
+        racafeForms::racafeNotify(duration = 3, type = "success", title = "Sede agregada exitosamente",
+                                session = shiny::getDefaultReactiveDomain())
       }, error = function(error) {
         .ManejarErrorAccion(
           error = error, operacion = "guardar la sede del contacto",
@@ -1025,39 +1038,43 @@ PotencialUI <- function(id) {
     box(title = "Potencial de Negocio", width = 12, collapsible = FALSE,
         fluidRow(
           column(4,
-                 ListaDesplegable(ns("CampoTostador"), label = h6("¿Es tostador?"),
-                                  choices = .choices_potencial$si_no, selected = "NO", multiple = FALSE
-                 )),
+                 racafeForms::racafeInputSelect(id = ns("CampoTostador"), label = h6("¿Es tostador?"),
+                                         choices = .choices_potencial$si_no, selected = "NO", multiple = FALSE,
+                                         empty = FALSE)),
           column(4,
-                 ListaDesplegable(ns("CampoAlianza"), label = h6("¿Tiene alianza con tostadora?"),
-                                  choices = .choices_potencial$si_no, selected = "NO", multiple = FALSE),
+                 racafeForms::racafeInputSelect(id = ns("CampoAlianza"), label = h6("¿Tiene alianza con tostadora?"),
+                                         choices = .choices_potencial$si_no, selected = "NO", multiple = FALSE,
+                                         empty = FALSE),
                  conditionalPanel(condition = paste0("input['", ns("CampoAlianza"), "'] == 'SI'"),
-                                  textInput(ns("CampoDetalleAlianza"), label = h6("¿Con cuál?"), width = "100%")
+                                  racafeForms::racafeInputText(id = ns("CampoDetalleAlianza"), label = h6("¿Con cuál?"),
+                                                          width = "100%")
                  )
           ),
           column(4,
-                 ListaDesplegable(ns("CampoMaquila"), label = h6("¿Maquila?"),
-                                  choices = .choices_potencial$si_no, selected = "NO", multiple = FALSE),
+                 racafeForms::racafeInputSelect(id = ns("CampoMaquila"), label = h6("¿Maquila?"),
+                                         choices = .choices_potencial$si_no, selected = "NO", multiple = FALSE,
+                                         empty = FALSE),
                  conditionalPanel(condition = paste0("input['", ns("CampoMaquila"), "'] == 'SI'"),
-                                  textInput(ns("CampoDetalleMaquila"), label = h6("Detalle de maquila"), width = "100%")
+                                  racafeForms::racafeInputText(id = ns("CampoDetalleMaquila"),
+                                                          label = h6("Detalle de maquila"), width = "100%")
                  )
           )
         ),
         tags$hr(style = "border-color: grey;"),
         fluidRow(
           column(4,
-                 numericInput(ns("CampoAniosOperacion"), label = h6("Años de Operación"),
-                              value = NA, min = 0, width = "100%")
+                 racafeForms::racafeInputNumeric(id = ns("CampoAniosOperacion"), label = h6("Años de Operación"),
+                                         value = NA, min = 0, width = "100%")
           ),
           column(4,
-                 ListaDesplegable(ns("CampoTipoCompra"), label = h6("Tipo de Compra"),
-                                  choices = .choices_potencial$tipo_compra, selected = NULL, multiple = FALSE
-                 )
+                 racafeForms::racafeInputSelect(id = ns("CampoTipoCompra"), label = h6("Tipo de Compra"),
+                                         choices = .choices_potencial$tipo_compra, selected = NULL, multiple = FALSE,
+                                         empty = FALSE)
           ),
           column(4,
-                 ListaDesplegable(ns("CampoFrecuenciaCompra"), label = h6("Frecuencia de Compra"),
-                                  choices = .choices_potencial$frecuencia_compra,
-                                  selected = NULL, multiple = FALSE)
+                 racafeForms::racafeInputSelect(id = ns("CampoFrecuenciaCompra"), label = h6("Frecuencia de Compra"),
+                                         choices = .choices_potencial$frecuencia_compra, selected = NULL,
+                                         multiple = FALSE, empty = FALSE)
           )
         ),
         fluidRow(
@@ -1068,22 +1085,21 @@ PotencialUI <- function(id) {
                  )
           ),
           column(3,
-                 numericInput(ns("CampoConsumoEsperado"), label = h6("Consumo Esperado"),
-                              value = NA, min = 0, width = "100%")),
+                 racafeForms::racafeInputNumeric(id = ns("CampoConsumoEsperado"), label = h6("Consumo Esperado"),
+                                         value = NA, min = 0, width = "100%")),
           column(3,
-                 ListaDesplegable(ns("CampoUnidadConsumo"), label = h6("Unidad"),
-                                  choices = .choices_potencial$unidad_consumo, selected = "SACOS/MES", multiple = FALSE
-                 ))
+                 racafeForms::racafeInputSelect(id = ns("CampoUnidadConsumo"), label = h6("Unidad"),
+                                         choices = .choices_potencial$unidad_consumo, selected = "SACOS/MES",
+                                         multiple = FALSE, empty = FALSE))
         ),
         h6("Certificaciones de Interés"),
-        selectizeInput(ns("CampoCertificaciones"), label = NULL, multiple = TRUE,
-                       choices = .choices_potencial$certificaciones,
-                       options = list(placeholder = "Seleccione una o varias")
-        ),
-        textAreaInput(ns("CampoObservaciones"), label = h6("Observaciones"), value = "", width = "100%", height = "70px"),
-        racafeShiny::Boton(ns("BotonGuardarPotencial"), label = "Guardar",
-                           icono = "floppy-disk", color_fondo = "#C11007", color_fuente = "#FFFFFF", size = "xs"
-        )
+        racafeForms::racafeInputSelect("CampoCertificaciones", label = NULL, multiple = TRUE,
+                                       choices = .choices_potencial$certificaciones, ns = ns,
+                                       empty_label = "Seleccione una o varias"),
+        racafeForms::racafeInputTextArea(id = ns("CampoObservaciones"), label = h6("Observaciones"), value = "",
+                                width = "100%", rows = 3),
+        racafeForms::racafeButton(id = ns("BotonGuardarPotencial"), label = "Guardar", size = "xs", variant = "primary",
+                                icon = "floppy-disk")
     )
   )
 }
@@ -1095,14 +1111,22 @@ Potencial <- function(id, usuario, codigo_contacto) {
       if (nrow(datos_potencial) == 0) {
         return(invisible(NULL))
       }
-      updatePickerInput(session, "CampoTostador", selected = ifelse(datos_potencial$EsTostador[[1]] == 1, "SI", "NO"))
-      updatePickerInput(session, "CampoAlianza", selected = ifelse(datos_potencial$AlianzaTostadora[[1]] == 1, "SI", "NO"))
+      racafeForms::racafeUpdateSelect(session = session,
+                              selected = ifelse(datos_potencial$EsTostador[[1]] == 1, "SI", "NO"), id = "CampoTostador")
+      racafeForms::racafeUpdateSelect(session = session,
+                              selected = ifelse(datos_potencial$AlianzaTostadora[[1]] == 1, "SI", "NO"),
+                              id = "CampoAlianza")
       updateTextInput(session, "CampoDetalleAlianza", value = datos_potencial$DetalleAlianza[[1]] %||% "")
-      updatePickerInput(session, "CampoMaquila", selected = ifelse(datos_potencial$Maquila[[1]] == 1, "SI", "NO"))
+      racafeForms::racafeUpdateSelect(session = session,
+                              selected = ifelse(datos_potencial$Maquila[[1]] == 1, "SI", "NO"), id = "CampoMaquila")
       updateTextInput(session, "CampoDetalleMaquila", value = datos_potencial$DetalleMaquila[[1]] %||% "")
-      updateNumericInput(session, "CampoAniosOperacion", value = suppressWarnings(as.numeric(datos_potencial$AniosOperacion[[1]])))
-      updatePickerInput(session, "CampoTipoCompra", selected = datos_potencial$TipoCompra[[1]] %||% "")
-      updatePickerInput(session, "CampoFrecuenciaCompra", selected = datos_potencial$FrecuenciaCompra[[1]] %||% "")
+      racafeForms::racafeUpdateNumeric(session = session,
+                              value = suppressWarnings(as.numeric(datos_potencial$AniosOperacion[[1]])),
+                              id = "CampoAniosOperacion")
+      racafeForms::racafeUpdateSelect(session = session, selected = datos_potencial$TipoCompra[[1]] %||% "",
+                              id = "CampoTipoCompra")
+      racafeForms::racafeUpdateSelect(session = session, selected = datos_potencial$FrecuenciaCompra[[1]] %||% "",
+                              id = "CampoFrecuenciaCompra")
       
       calidades_previas <- if (!EsVacio(datos_potencial$CalidadesPreferidas[[1]])) {
         strsplit(datos_potencial$CalidadesPreferidas[[1]], "\\|")[[1]]
@@ -1110,15 +1134,18 @@ Potencial <- function(id, usuario, codigo_contacto) {
         NULL
       }
       updateSelectizeInput(session, "CampoCalidades", choices = calidades_previas, selected = calidades_previas, server = FALSE)
-      updateNumericInput(session, "CampoConsumoEsperado", value = suppressWarnings(as.numeric(datos_potencial$ConsumoEsperado[[1]])))
-      updatePickerInput(session, "CampoUnidadConsumo", selected = datos_potencial$UnidadConsumo[[1]] %||% "SACOS/MES")
+      racafeForms::racafeUpdateNumeric(session = session,
+                              value = suppressWarnings(as.numeric(datos_potencial$ConsumoEsperado[[1]])),
+                              id = "CampoConsumoEsperado")
+      racafeForms::racafeUpdateSelect(session = session, selected = datos_potencial$UnidadConsumo[[1]] %||% "SACOS/MES",
+                              id = "CampoUnidadConsumo")
       
       certificaciones_previas <- if (!EsVacio(datos_potencial$CertificacionesInteres[[1]])) {
         strsplit(datos_potencial$CertificacionesInteres[[1]], "\\|")[[1]]
       } else {
         NULL
       }
-      updateSelectizeInput(session, "CampoCertificaciones", selected = certificaciones_previas)
+      racafeForms::racafeUpdateSelect(session, "CampoCertificaciones", selected = certificaciones_previas)
       updateTextAreaInput(session, "CampoObservaciones", value = datos_potencial$Observaciones[[1]] %||% "")
     })
     
@@ -1142,7 +1169,8 @@ Potencial <- function(id, usuario, codigo_contacto) {
           observaciones = input$CampoObservaciones,
           usr = usuario()
         )
-        showNotification("Potencial de negocio guardado", duration = 3, type = "message")
+        racafeForms::racafeNotify(duration = 3, type = "success", title = "Potencial de negocio guardado",
+                                session = shiny::getDefaultReactiveDomain())
       }, error = function(error) {
         .ManejarErrorAccion(
           error = error,
@@ -1178,28 +1206,31 @@ Editar <- function(id, usuario, codigo_contacto) {
 }
 
 # App de prueba ----
-ui <- bs4DashPage(
-  title = "Prueba Accion Editar",
-  header = bs4DashNavbar(),
-  sidebar = bs4DashSidebar(),
-  controlbar = bs4DashControlbar(),
-  footer = bs4DashFooter(),
-  body = bs4DashBody(
-    useShinyjs(),
-    includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/", "refs/heads/main/Styles/style.css")),
-    box(
-      title = "Editar Contacto (prueba)",
-      width = 12,
-      textInput("CodigoContactoPrueba", label = "Codigo de Contacto a editar", value = ""),
-      EditarUI("AccionEditar")
+DemoAccionesEditar <- function() {
+  ui <- bs4DashPage(
+    title = "Prueba Accion Editar",
+    header = bs4DashNavbar(),
+    sidebar = bs4DashSidebar(),
+    controlbar = bs4DashControlbar(),
+    footer = bs4DashFooter(),
+    body = bs4DashBody(
+      useShinyjs(),
+      includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
+                        "refs/heads/main/Styles/style.css")),
+      box(
+        title = "Editar Contacto (prueba)",
+        width = 12,
+        racafeForms::racafeInputText(id = "CodigoContactoPrueba", label = "Codigo de Contacto a editar", value = ""),
+        EditarUI("AccionEditar")
+      )
     )
   )
-)
 
-server <- function(input, output, session) {
-  usuario_sesion <- reactive("CMEDINA")
-  codigo_contacto_prueba <- reactive(input$CodigoContactoPrueba)
-  Editar("AccionEditar", usuario = usuario_sesion, codigo_contacto = codigo_contacto_prueba)
+  server <- function(input, output, session) {
+    usuario_sesion <- reactive("CMEDINA")
+    codigo_contacto_prueba <- reactive(input$CodigoContactoPrueba)
+    Editar("AccionEditar", usuario = usuario_sesion, codigo_contacto = codigo_contacto_prueba)
+  }
+
+  shinyApp(ui, server)
 }
-
-shinyApp(ui, server)

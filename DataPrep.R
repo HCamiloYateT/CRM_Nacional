@@ -1120,7 +1120,7 @@ contactos_clientes <- .asegurar_contactos_clientes(
 contactos_raw <- contactos_clientes
 
 
-racafeBD::ConsultaSistema("syscafe", "select top 10 * from EXPPEDI1 where PdcCod = 46589") %>% glimpse()
+
   
 
 # Pedidos activos de venta nacional
@@ -2282,10 +2282,8 @@ saveRDS(lotes_raw, ruta_lotes_cache)
     group_by(
       !!!grp_vars
     ) %>%
-    filter(
-      FecProceso == max(FecProceso)
-    ) %>%
-    slice(1L) %>%
+    arrange(desc(FecProceso), .by_group = TRUE) %>%
+    slice_head(n = 1L) %>%
     ungroup()
 }
 .process_rfm <- function(dat, suffix) {
@@ -2381,14 +2379,19 @@ productos_snap <- racafeBD::CargarDatos("CRMNALPRODS") %>%
   ) %>%
   .snapshot_max(LinNegCod, LinProCod, MCCod, MrcCod)
 
+# Una fila por lote conserva todas sus órdenes sin duplicar ventas al cruzar en Shiny.
 ord_cmp <- racafeBD::CargarDatos("CRMNALORDCMP") %>%
-  select(CLLotCod = Lote, OrdenCompra)
+  transmute(CLLotCod = as.numeric(Lote), OrdenCompra = trimws(as.character(OrdenCompra))) %>%
+  filter(!is.na(CLLotCod), CLLotCod != 0) %>%
+  group_by(CLLotCod) %>%
+  summarise(OrdenCompra = paste(sort(unique(OrdenCompra[!is.na(OrdenCompra) & nzchar(OrdenCompra)])),
+                                collapse = ", "), .groups = "drop")
 
 fact_lote <- fact %>%
   group_by(CLLotCod) %>%
   summarise(
-    FecPrimerFact = min(FecPrimerFact, na.rm = TRUE),
-    FecFact = max(FecFact, na.rm = TRUE),
+    FecPrimerFact = if (all(is.na(FecPrimerFact))) as.Date(NA) else min(FecPrimerFact, na.rm = TRUE),
+    FecFact = if (all(is.na(FecFact))) as.Date(NA) else max(FecFact, na.rm = TRUE),
     SacosFact = sum(SacosFact, na.rm = TRUE),
     Facturado = any(coalesce(Facturado, FALSE)),
     .groups = "drop"
@@ -2430,18 +2433,20 @@ oportunidades <- racafeBD::CargarDatos("CRMNALCLOPT") %>%
 competencia <- racafeBD::CargarDatos("CRMNALCOMPETENCIA")
 notas <- racafeBD::CargarDatos("CRMNALNOTAS")
 
-# Conservar solo los objetos necesarios para la app Shiny
-gdata::keep(data, n_cliente, fact_cliente, contactos_raw, contactos_clientes, cliente_actual_map,
-            clientes_raw, clientes_hist, clientes_actual, clientes_snap, clientes_sin_lote, pend, segmentos_raw,
-            segmentos_hist_mes, segmentos_snap, segmentaciones_hist, segmentaciones_actual,
-            rfm_snap, rfmm_snap, clv_snap, fact, nit_ppal, margenes_pyg, 
-            productos_snap, ord_cmp, fact_lote, lin_neg, lin_pro, n_marcom, n_marcas, lotes_asig, leads, oportunidades,
-            competencia, notas, sure = TRUE)
+# Exportación explícita y validada ----
+objetos_app <- c("data", "n_cliente", "fact_cliente", "contactos_raw", "contactos_clientes", "cliente_actual_map",
+                 "clientes_raw", "clientes_hist", "clientes_actual", "clientes_snap", "clientes_sin_lote", "pend",
+                 "segmentos_raw", "segmentos_hist_mes", "segmentos_snap", "segmentaciones_hist",
+                 "segmentaciones_actual", "rfm_snap", "rfmm_snap", "clv_snap", "fact", "nit_ppal", "margenes_pyg",
+                 "productos_snap", "ord_cmp", "fact_lote", "lin_neg", "lin_pro", "n_marcom", "n_marcas",
+                 "lotes_asig", "leads", "oportunidades", "competencia", "notas", "ultimo_periodo_pyg",
+                 "crm_detalle_operaciones")
 
-if (!dir.exists("APP/data")) {
-  dir.create("APP/data", recursive = TRUE)
-}
+sys.source("APP/misc/data_contract.R", envir = environment())
+crm_detalle_operaciones <- .crm_preparar_operaciones(base_operativa, ped, fact_lote, productos_snap)
+.crm_validar_exportacion(environment())
 
-save.image("APP/data/data.RData")
+if (!dir.exists("APP/data")) dir.create("APP/data", recursive = TRUE)
+save(list = objetos_app, file = "APP/data/data.RData")
 
 tictoc::toc()

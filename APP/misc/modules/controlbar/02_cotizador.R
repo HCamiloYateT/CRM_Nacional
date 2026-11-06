@@ -19,8 +19,7 @@
   candidatos <- c(getwd(), file.path(getwd(), "APP"))
   
   validos <- vapply(candidatos, function(path) {
-    file.exists(file.path(path, "misc", "modules", "controlbar", "cotizacion.Rmd")) &&
-      file.exists(file.path(path, "www", "logo2.png"))
+    dir.exists(file.path(path, "misc", "modules", "controlbar"))
   }, logical(1))
   
   if (!any(validos)) {
@@ -34,12 +33,8 @@
 .COT_RMD_PATH <- file.path(.COT_APP_ROOT, "misc", "modules", "controlbar", "cotizacion.Rmd")
 .COT_LOGO_PATH <- file.path(.COT_APP_ROOT, "www", "logo2.png")
 
-if (!file.exists(.COT_RMD_PATH)) {
-  stop(paste0("No se encontró la plantilla de cotización en: ", .COT_RMD_PATH))
-}
-
 if (!file.exists(.COT_LOGO_PATH)) {
-  stop(paste0("No se encontró el logo de cotización en: ", .COT_LOGO_PATH))
+  .COT_LOGO_PATH <- file.path(.COT_APP_ROOT, "vendor", "Compartido", "img", "logo2.png")
 }
 
 VENDEDORES_DATA <- data.frame(
@@ -479,7 +474,9 @@ Cotizacion <- function(id, usuario, dat) {
       lineas <- .cot_choices(catalogo$linneg)
       
       if (length(lineas) == 0L) {
-        showNotification("CRMNALPRODS no contiene líneas de negocio disponibles", type = "error", duration = 6)
+        racafeForms::racafeNotify(type = "error", duration = 6,
+                                title = "CRMNALPRODS no contiene líneas de negocio disponibles",
+                                session = shiny::getDefaultReactiveDomain())
         
         return(invisible(NULL))
       }
@@ -839,7 +836,8 @@ Cotizacion <- function(id, usuario, dat) {
       if (!isTRUE(validador_pdf$validate())) return(invisible(NULL))
       errores <- .validar_formulario()
       if (length(errores)) {
-        showNotification(paste(errores, collapse = " "), type = "error", duration = 5)
+        racafeForms::racafeNotify(type = "error", duration = 5, title = paste(errores, collapse = " "),
+                                session = shiny::getDefaultReactiveDomain())
         return(invisible(NULL))
       }
       if (!isTRUE(.cot_formulario_completo())) {
@@ -913,6 +911,9 @@ Cotizacion <- function(id, usuario, dat) {
             logo = normalizePath(.COT_LOGO_PATH, winslash = "/", mustWork = TRUE)
           )
           
+          if (!file.exists(.COT_RMD_PATH)) {
+            stop("Falta la plantilla cotizacion.Rmd para generar el PDF. Contacte al administrador.", call. = FALSE)
+          }
           rmarkdown::render(input = .COT_RMD_PATH, output_file = file, params = params,
                             envir = new.env(parent = globalenv()), quiet = FALSE, encoding = "UTF-8")
           
@@ -933,8 +934,9 @@ Cotizacion <- function(id, usuario, dat) {
                                     "El documento PDF se generó correctamente.",
                                     type = "success", duration = 4)
         }, error = function(error) {
-          showNotification(paste0("Error al generar cotización: ", conditionMessage(error)),
-                           type = "error", duration = 10)
+          racafeForms::racafeNotify(type = "error", duration = 10,
+                                  title = paste0("Error al generar cotización: ", conditionMessage(error)),
+                                  session = shiny::getDefaultReactiveDomain())
           
           stop(conditionMessage(error), call. = FALSE)
         })

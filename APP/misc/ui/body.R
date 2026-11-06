@@ -1,8 +1,8 @@
 body <- bs4DashBody(
   useShinyjs(),
-  includeCSS("https://raw.githubusercontent.com/HCamiloYateT/Compartido/refs/heads/main/Styles/style.css"),
+  .recursos_compartidos,
   racafeShiny::racafeLoaderUI(startup = FALSE, busy = FALSE),
-  shiny::tags$head(shiny::tags$script(src = "https://raw.githubusercontent.com/HCamiloYateT/Compartido/refs/heads/main/Scripts/controlbar.js")),
+  shiny::tags$head(shiny::tags$script(src = "racafe-shared-1-1-0-scripts/controlbar.js")),
   bs4TabItems(
     # Generalidades ----
     bs4TabItem(tabName = "GE_Resumen", uiOutput("ui_GE_Resumen")),

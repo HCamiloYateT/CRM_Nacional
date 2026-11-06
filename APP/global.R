@@ -118,32 +118,23 @@ library("racafeModulos")
 racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", "tidyverse", "scales", "rlang",
                       "waiter", "glue", "lubridate", "stringr", "purrr", "gt", "plotly"))
 
+# Versiones de componentes y recursos compartidos ----
+stopifnot(utils::packageVersion("racafeForms") >= "0.7.0",
+          utils::packageVersion("racafeShiny") >= "1.4.1",
+          utils::packageVersion("racafeModulos") >= "0.5.1")
+.recursos_compartidos <- racafeForms::racafeSharedAssets("vendor/Compartido", version = "1.1.0")
+
 # Impresiones ----
 tit_app <- "Análisis de Ofertas"
 # valores: prototipo, pruebas, staging, produccion, demo, mantenimiento, ninguno
 badge_estado <- "staging"
 
 # Datos ----
-# Carga datos precargados desde RData
-if (file.exists("data/data.RData")) {
-  tryCatch(
-    {
-      load("data/data.RData", envir = globalenv())
-      if (verbose) message("[OK] Datos cargados desde data/data.RData")
-    },
-    error = function(e) {
-      # Error real de lectura: siempre visible independiente de verbose
-      message(sprintf("[ERROR] Fallo leyendo data/data.RData: %s", e$message))
-    }
-  )
-} else {
-  if (verbose) message("[INFO] data/data.RData no encontrado. App inicia sin datos precargados.")
-}
-
+sys.source("misc/data_contract.R", envir = globalenv())
+.crm_cargar_exportacion("data/data.RData")
 
 # Constantes ----
 uid <- Sys.getenv("SYS_UID")
 pwd <- Sys.getenv("SYS_PWD")
 # Sources ----
-load_modules(verbose = verbose)
- 
+racafeCore::load_modules(verbose = verbose)

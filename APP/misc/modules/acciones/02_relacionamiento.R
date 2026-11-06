@@ -10,13 +10,14 @@ RelacionamientoUI <- function(id) {
         fluidRow(
           column(6,
                  h5("Nuevo Relacionamiento"),
-                 ListaDesplegable(ns("GES_Tipo"), label = Obligatorio("Tipo de Gestión"),
-                                  choices = .TIPOS_RELACIONAMIENTO, selected = NULL, multiple = FALSE),
-                 textAreaInput(ns("GES_Comentario"), label = Obligatorio("Comentario"), value = "",
-                               placeholder = "Describa la gestión realizada", width = "100%", height = "100px"),
-                 racafeShiny::Boton(id = ns("GES_Guardar"), label = "Guardar",
-                                    icono = "save", align = "right", size = "xs",
-                                    color_fondo = "#C11007", color_fuente = "#FFFFFF")
+                 racafeForms::racafeInputSelect(id = ns("GES_Tipo"), label = Obligatorio("Tipo de Gestión"),
+                                         choices = .TIPOS_RELACIONAMIENTO, selected = NULL, multiple = FALSE,
+                                         empty = FALSE),
+                 racafeForms::racafeInputTextArea(id = ns("GES_Comentario"), label = Obligatorio("Comentario"),
+                                         value = "", placeholder = "Describa la gestión realizada", width = "100%",
+                                         rows = 4),
+                 racafeForms::racafeButton(id = ns("GES_Guardar"), label = "Guardar", size = "xs", variant = "primary",
+                                         icon = "save")
           ),
           column(6,
                  h5("Historial de Gestiones"),
@@ -31,20 +32,18 @@ RelacionamientoUI <- function(id) {
         fluidRow(
           column(6,
                  h5("Programar Recordatorio"),
-                 ListaDesplegable(ns("REC_Asesor"), label = Obligatorio("Asesor"),
-                                  choices = Choices()$personas, selected = NULL, multiple = FALSE),
-                 ListaDesplegable(ns("REC_Canal"), label = Obligatorio("Canal"),
-                                  choices = .CANALES_RECORDATORIO, selected = NULL, multiple = FALSE),
-                 airDatepickerInput(ns("REC_Fecha"), label = Obligatorio("Fecha y Hora"),
-                                    minDate = Sys.time(), timepicker = TRUE,
-                                    timepickerOpts = timepickerOptions(minHours = 7, maxHours = 17),
-                                    width = "100%"),
-                 textAreaInput(ns("REC_Mensaje"), label = Obligatorio("Mensaje"), value = "",
-                               placeholder = "Ingrese el mensaje del recordatorio", width = "100%",
-                               height = "80px"),
-                 racafeShiny::Boton(id = ns("REC_Programar"), label = "Programar",
-                                    icono = "calendar", align = "right", size = "xs",
-                                    color_fondo = "#C11007", color_fuente = "#FFFFFF")
+                 racafeForms::racafeInputSelect(id = ns("REC_Asesor"), label = Obligatorio("Asesor"),
+                                         choices = Choices()$personas, selected = NULL, multiple = FALSE,
+                                           empty = FALSE),
+                 racafeForms::racafeInputSelect(id = ns("REC_Canal"), label = Obligatorio("Canal"),
+                                         choices = .CANALES_RECORDATORIO, selected = NULL, multiple = FALSE,
+                                         empty = FALSE),
+                 racafeForms::racafeInputDateTime("REC_Fecha", label = Obligatorio("Fecha y Hora"),
+                                                       min = Sys.time(), ns = ns),
+                 racafeForms::racafeInputTextArea(id = ns("REC_Mensaje"), label = Obligatorio("Mensaje"), value = "",
+                                         placeholder = "Ingrese el mensaje del recordatorio", width = "100%", rows = 3),
+                 racafeForms::racafeButton(id = ns("REC_Programar"), label = "Programar", size = "xs",
+                                         variant = "primary", icon = "calendar")
           ),
           column(6,
                  h5("Recordatorios Programados"),
@@ -129,7 +128,9 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
       cond <- c("El tipo de gestión es obligatorio" = EsVacio(input$GES_Tipo),
                 "El comentario es obligatorio" = EsVacio(input$GES_Comentario))
       if (any(cond)) {
-        sapply(names(cond), function(x) if (cond[[x]]) showNotification(x, duration = 4, type = "error"))
+        sapply(names(cond), function(x) {
+          if (cond[[x]]) racafeForms::racafeNotify(session, title = x, type = "error", duration = 4)
+        })
         return(invisible(NULL))
       }
       racafeShiny::MostrarModalConfirmacion(
@@ -146,11 +147,13 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
         removeModal()
         updateTextAreaInput(session, "GES_Comentario", value = "")
         gestion_trigger(gestion_trigger() + 1)
-        showNotification("Gestión registrada exitosamente", duration = 3, type = "message")
+        racafeForms::racafeNotify(duration = 3, type = "success", title = "Gestión registrada exitosamente",
+                                session = shiny::getDefaultReactiveDomain())
       }, error = function(e) {
         removeModal()
-        showNotification(paste("Error al registrar la gestión:", conditionMessage(e)),
-                         duration = 6, type = "error")
+        racafeForms::racafeNotify(duration = 6, type = "error",
+                                title = paste("Error al registrar la gestión:", conditionMessage(e)),
+                                session = shiny::getDefaultReactiveDomain())
       })
     })
     
@@ -176,12 +179,10 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
           header = tagList(.badge_canal(dat$Canal[i]), " ",
                            tags$strong(dat$Asesor[i]), " — ",
                            format(dat$FechaRecordatorio[i], "%d/%m/%Y %H:%M")),
-          extra_header = racafeShiny::Boton(id = ns(paste0("REC_Cumplir_", dat$IdRecordatorio[i])),
-                                            label = if (cumplido) NULL else "Marcar cumplido",
-                                            icono = if (cumplido) "check-double" else "check",
-                                            size = "xxs",
-                                            color_fondo = if (cumplido) "#1a7a3f" else "#C11007",
-                                            color_fuente = "#FFFFFF"),
+          extra_header = racafeForms::racafeButton(id = ns(paste0("REC_Cumplir_", dat$IdRecordatorio[i])),
+                                                   label = if (cumplido) NULL else "Marcar cumplido",
+                                                   icon = if (cumplido) "check-double" else "check", size = "xxs",
+                                                   variant = if (cumplido) "success" else "primary"),
           cuerpo = cuerpo_ui
         )
       }))
@@ -200,11 +201,11 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
       tryCatch({
         racafeBD::ReemplazarDatos(fila_actual, "CRMNALRECORDATORIO", list(IdRecordatorio = id_rec))
         recordatorio_trigger(recordatorio_trigger() + 1)
-        showNotification("Recordatorio marcado como cumplido", duration = 3, type = "message")
-      }, error = function(e) showNotification(
-        paste("Error al marcar el recordatorio como cumplido:", conditionMessage(e)),
-        duration = 5, type = "error"
-      ))
+        racafeForms::racafeNotify(duration = 3, type = "success", title = "Recordatorio marcado como cumplido",
+                                session = shiny::getDefaultReactiveDomain())
+      }, error = function(e) racafeForms::racafeNotify(duration = 5, type = "error",
+                              title = paste("Error al marcar el recordatorio como cumplido:", conditionMessage(e)),
+                              session = shiny::getDefaultReactiveDomain()))
     }
     
     # Registro dinamico de observers para "Marcar cumplido" + su confirmacion.
@@ -260,9 +261,14 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
       cond <- c("El Asesor es obligatorio" = EsVacio(input$REC_Asesor),
                 "El Canal es obligatorio" = EsVacio(input$REC_Canal),
                 "La fecha y hora son obligatorias" = is.null(input$REC_Fecha),
+                "El horario permitido es de 07:00 a 17:59" =
+                  !is.null(input$REC_Fecha) && !lubridate::hour(input$REC_Fecha) %in% 7:17,
+                "La fecha debe ser futura" = !is.null(input$REC_Fecha) && input$REC_Fecha < Sys.time(),
                 "El mensaje es obligatorio" = EsVacio(input$REC_Mensaje))
       if (any(cond)) {
-        sapply(names(cond), function(x) if (cond[[x]]) showNotification(x, duration = 4, type = "error"))
+        sapply(names(cond), function(x) {
+          if (cond[[x]]) racafeForms::racafeNotify(session, title = x, type = "error", duration = 4)
+        })
         return(invisible(NULL))
       }
       racafeShiny::MostrarModalConfirmacion(
@@ -281,11 +287,13 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
         removeModal()
         updateTextAreaInput(session, "REC_Mensaje", value = "")
         recordatorio_trigger(recordatorio_trigger() + 1)
-        showNotification("Recordatorio programado exitosamente", duration = 3, type = "message")
+        racafeForms::racafeNotify(duration = 3, type = "success", title = "Recordatorio programado exitosamente",
+                                session = shiny::getDefaultReactiveDomain())
       }, error = function(e) {
         removeModal()
-        showNotification(paste("Error al programar el recordatorio:", conditionMessage(e)),
-                         duration = 6, type = "error")
+        racafeForms::racafeNotify(duration = 6, type = "error",
+                                title = paste("Error al programar el recordatorio:", conditionMessage(e)),
+                                session = shiny::getDefaultReactiveDomain())
       })
     })
     # Retorno ----
@@ -294,30 +302,31 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
 }
 
 # App de prueba ----
-ui <- bs4DashPage(
-  title = "Prueba Accion Editar",
-  header = bs4DashNavbar(),
-  sidebar = bs4DashSidebar(),
-  controlbar = bs4DashControlbar(),
-  footer = bs4DashFooter(),
-  body = bs4DashBody(
-    useShinyjs(),
-    includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/", "refs/heads/main/Styles/style.css")),
-    box(
-      title = "Editar Contacto (prueba)",
-      width = 12,
-      textInput("CodigoContactoPrueba", label = "Codigo de Contacto a editar", value = ""),
-      RelacionamientoUI("AccionEditar")
+DemoAccionesRelacionamiento <- function() {
+  ui <- bs4DashPage(
+    title = "Prueba Accion Editar",
+    header = bs4DashNavbar(),
+    sidebar = bs4DashSidebar(),
+    controlbar = bs4DashControlbar(),
+    footer = bs4DashFooter(),
+    body = bs4DashBody(
+      useShinyjs(),
+      includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
+                        "refs/heads/main/Styles/style.css")),
+      box(
+        title = "Editar Contacto (prueba)",
+        width = 12,
+        racafeForms::racafeInputText(id = "CodigoContactoPrueba", label = "Codigo de Contacto a editar", value = ""),
+        RelacionamientoUI("AccionEditar")
+      )
     )
   )
-)
 
-server <- function(input, output, session) {
-  usuario_sesion <- reactive("CMEDINA")
-  codigo_contacto_prueba <- reactive(input$CodigoContactoPrueba)
-  Relacionamiento("AccionEditar", usuario_sesion, codigo_contacto_prueba)
+  server <- function(input, output, session) {
+    usuario_sesion <- reactive("CMEDINA")
+    codigo_contacto_prueba <- reactive(input$CodigoContactoPrueba)
+    Relacionamiento("AccionEditar", usuario_sesion, codigo_contacto_prueba)
+  }
+
+  shinyApp(ui, server)
 }
-
-shinyApp(ui, server)
-
-

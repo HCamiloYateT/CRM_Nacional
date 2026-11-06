@@ -7,15 +7,14 @@ DetalleDescartadosUI <- function(id) {
   
   tagList(
     fluidRow(
-      column(3, CajaModalUI(ns("kpi_contacto"))),
-      column(3, CajaModalUI(ns("kpi_prospecto"))),
-      column(3, CajaModalUI(ns("kpi_lead"))),
-      column(3, CajaModalUI(ns("kpi_cliente")))
+      column(3, racafeModulos::CajaModalUI(ns("kpi_contacto"))),
+      column(3, racafeModulos::CajaModalUI(ns("kpi_prospecto"))),
+      column(3, racafeModulos::CajaModalUI(ns("kpi_lead"))),
+      column(3, racafeModulos::CajaModalUI(ns("kpi_cliente")))
     ),
     div(style = "width:220px;",
-        ListaDesplegable(ns("FiltroEtapa"),
-                         label = h6("Filtrar por Etapa de Descarte"),
-                         choices = c(
+        racafeForms::racafeInputSelect(id = ns("FiltroEtapa"), label = h6("Filtrar por Etapa de Descarte"),
+                                choices = c(
                            "Todas" = "TODAS",
                            setNames(
                              c("CONTACTO", "PROSPECTO", "LEAD", "CLIENTE"),
@@ -25,7 +24,7 @@ DetalleDescartadosUI <- function(id) {
                                .ETIQUETA_DESCARTE_ETAPA[["CLIENTE"]])
                            )
                          ),
-                         selected = "TODAS", multiple = FALSE)
+                                selected = "TODAS", multiple = FALSE, empty = FALSE)
     ),
     br(),
     fluidRow(
@@ -33,13 +32,13 @@ DetalleDescartadosUI <- function(id) {
         8,
         box(title = "Motivos de Descarte", width = 12,
             collapsible = TRUE, collapsed = FALSE,
-            TablaReactable2UI(ns("tabla_razon1")),
+            racafeModulos::TablaReactable2UI(ns("tabla_razon1")),
             shinyjs::hidden(
               tags$div(id = ns("BloqueOtrosRazon1"),
                        tags$hr(),
                        FormatearTexto("Categorías agrupadas en OTROS",
                                       tamano_pct = 0.8, color = "#64748B"),
-                       TablaReactable2UI(ns("tabla_otros_razon1")))
+                       racafeModulos::TablaReactable2UI(ns("tabla_otros_razon1")))
             )
         )
       ),
@@ -89,7 +88,7 @@ DetalleDescartados <- function(id, usuario) {
     })
     
     # Cuenta y calcula el porcentaje de descartados vigentes desde CONTACTO.
-    CajaModal(
+    racafeModulos::CajaModal(
       "kpi_contacto",
       valor = reactive({
         n_etapa <- sum(
@@ -120,7 +119,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Cuenta y calcula el porcentaje de descartados vigentes desde PROSPECTO.
-    CajaModal(
+    racafeModulos::CajaModal(
       "kpi_prospecto",
       valor = reactive({
         n_etapa <- sum(
@@ -151,7 +150,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Cuenta y calcula el porcentaje de descartados vigentes desde LEAD.
-    CajaModal(
+    racafeModulos::CajaModal(
       "kpi_lead",
       valor = reactive({
         n_etapa <- sum(
@@ -182,7 +181,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Cuenta y calcula el porcentaje de descartados vigentes desde CLIENTE.
-    CajaModal(
+    racafeModulos::CajaModal(
       "kpi_cliente",
       valor = reactive({
         n_etapa <- sum(
@@ -222,7 +221,7 @@ DetalleDescartados <- function(id, usuario) {
     estilo_razon1 <- .estilo_fila_total(datos_razon1_r, "Categoria")
     
     # Construye la tabla principal de razones.
-    modulo_tabla_razon1 <- TablaReactable2(
+    modulo_tabla_razon1 <- racafeModulos::TablaReactable2(
       id = "tabla_razon1", data = datos_razon1_r, columnas = NULL,
       col_specs = .col_specs_resumen_etapa(estilo_razon1, "Razón"),
       modo_seleccion = "fila", id_col = "Categoria",
@@ -336,7 +335,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Construye la tabla de razones agrupadas.
-    modulo_tabla_otros_razon1 <- TablaReactable2(
+    modulo_tabla_otros_razon1 <- racafeModulos::TablaReactable2(
       id = "tabla_otros_razon1", data = detalle_otros_razon1_r,
       columnas = NULL,
       col_specs = .col_specs_resumen_etapa(
@@ -382,33 +381,34 @@ DetalleDescartados <- function(id, usuario) {
       contenido_razon2 <- if (es_numerico) {
         tagList(
           fluidRow(
-            column(3, CajaModalUI(ns("kpi_precio_min"))),
-            column(3, CajaModalUI(ns("kpi_precio_prom"))),
-            column(3, CajaModalUI(ns("kpi_precio_mediana"))),
-            column(3, CajaModalUI(ns("kpi_precio_max")))
+            column(3, racafeModulos::CajaModalUI(ns("kpi_precio_min"))),
+            column(3, racafeModulos::CajaModalUI(ns("kpi_precio_prom"))),
+            column(3, racafeModulos::CajaModalUI(ns("kpi_precio_mediana"))),
+            column(3, racafeModulos::CajaModalUI(ns("kpi_precio_max")))
           ),
           plotly::plotlyOutput(ns("histograma_precio"), height = "260px")
         )
       } else {
         tagList(
-          TablaReactable2UI(ns("tabla_razon2_modal")),
+          racafeModulos::TablaReactable2UI(ns("tabla_razon2_modal")),
           shinyjs::hidden(
             tags$div(
               id = ns("BloqueOtrosRazon2"), tags$hr(),
               FormatearTexto("Categorías agrupadas en OTROS",
                              tamano_pct = 0.8, color = "#64748B"),
-              TablaReactable2UI(ns("tabla_otros_razon2"))
+              racafeModulos::TablaReactable2UI(ns("tabla_otros_razon2"))
             )
           )
         )
       }
       
-      modalDialog(
-        title = paste("Detalle de la razón:", razon1),
-        size = "xl", easyClose = TRUE, footer = modalButton("Cerrar"),
-        contenido_razon2, tags$hr(),
-        PanelEtapaUI(ns("panel_contactos_razon1"))
-      )
+      racafeForms::racafeModal(title = paste("Detalle de la razón:", razon1),
+        size = "ventana",
+        easy_close = TRUE,
+        footer = modalButton("Cerrar"),
+        contenido_razon2,
+        tags$hr(),
+        PanelEtapaUI(ns("panel_contactos_razon1")))
     }
     
     ### Analisis Numerico ----
@@ -422,7 +422,7 @@ DetalleDescartados <- function(id, usuario) {
     })
     
     # Muestra el precio minimo.
-    CajaModal(
+    racafeModulos::CajaModal(
       "kpi_precio_min",
       valor = reactive({
         p <- precios_modal_r()
@@ -433,7 +433,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Muestra el precio promedio.
-    CajaModal(
+    racafeModulos::CajaModal(
       "kpi_precio_prom",
       valor = reactive({
         p <- precios_modal_r()
@@ -444,7 +444,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Muestra la mediana del precio.
-    CajaModal(
+    racafeModulos::CajaModal(
       "kpi_precio_mediana",
       valor = reactive({
         p <- precios_modal_r()
@@ -455,7 +455,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Muestra el precio maximo.
-    CajaModal(
+    racafeModulos::CajaModal(
       "kpi_precio_max",
       valor = reactive({
         p <- precios_modal_r()
@@ -507,7 +507,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Construye la tabla de razones secundarias.
-    TablaReactable2(
+    racafeModulos::TablaReactable2(
       id = "tabla_razon2_modal", data = datos_razon2_modal_r,
       columnas = NULL,
       col_specs = .col_specs_resumen_etapa(
@@ -531,7 +531,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Construye la tabla secundaria de categorias agrupadas.
-    TablaReactable2(
+    racafeModulos::TablaReactable2(
       id = "tabla_otros_razon2", data = detalle_otros_razon2_r,
       columnas = NULL,
       col_specs = .col_specs_resumen_etapa(
@@ -560,32 +560,34 @@ DetalleDescartados <- function(id, usuario) {
 }
 
 ### App de Prueba ----
-# Ejecuta el modulo utilizando los datos reales del CRM.
-ui <- bs4DashPage(
-  title = "Prueba Detalle Descartados",
-  header = bs4DashNavbar(),
-  sidebar = bs4DashSidebar(),
-  controlbar = bs4DashControlbar(),
-  footer = bs4DashFooter(),
-  body = bs4DashBody(
-    shinyjs::useShinyjs(),
-    waiter::use_waiter(),
-    htmltools::includeCSS(
-      paste0(
-        "https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
-        "refs/heads/main/Styles/style.css"
-      )
-    ),
-    DetalleDescartadosUI("AccionDetalleDescartados")
+DemoProspeccionDetalleDescartados <- function() {
+  # Ejecuta el modulo utilizando los datos reales del CRM.
+  ui <- bs4DashPage(
+    title = "Prueba Detalle Descartados",
+    header = bs4DashNavbar(),
+    sidebar = bs4DashSidebar(),
+    controlbar = bs4DashControlbar(),
+    footer = bs4DashFooter(),
+    body = bs4DashBody(
+      shinyjs::useShinyjs(),
+      waiter::use_waiter(),
+      htmltools::includeCSS(
+        paste0(
+          "https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
+          "refs/heads/main/Styles/style.css"
+        )
+      ),
+      DetalleDescartadosUI("AccionDetalleDescartados")
+    )
   )
-)
 
-server <- function(input, output, session) {
-  usuario_sesion <- reactive("CMEDINA")
-  DetalleDescartados(
-    id = "AccionDetalleDescartados",
-    usuario = usuario_sesion
-  )
+  server <- function(input, output, session) {
+    usuario_sesion <- reactive("CMEDINA")
+    DetalleDescartados(
+      id = "AccionDetalleDescartados",
+      usuario = usuario_sesion
+    )
+  }
+
+  shinyApp(ui = ui, server = server)
 }
-
-shinyApp(ui = ui, server = server)

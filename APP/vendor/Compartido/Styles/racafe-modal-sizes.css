@@ -1,0 +1,19 @@
+/* Fuente canónica de tamaños: compartida con racafeForms; no modifica modales ajenos. */
+:root {
+  --rf-modal-sizes-ready:1;
+  --rf-modal-max-ventana:min(96vw,1200px);
+  --rf-modal-max-subventana1:min(94vw,1050px);
+  --rf-modal-max-subventana2:min(92vw,900px);
+  --rf-modal-max-subventana3:min(90vw,760px);
+  --rf-modal-max-subventana4:min(88vw,620px);
+  --rf-modal-max-subventana5:min(86vw,500px);
+  --rf-modal-max-aviso:min(84vw,380px);
+}
+.rf-modal .modal-dialog {width:calc(100% - 24px);max-width:var(--rf-modal-max-subventana3);}
+.rf-modal.ventana .modal-dialog {max-width:var(--rf-modal-max-ventana);}
+.rf-modal.subventana1 .modal-dialog {max-width:var(--rf-modal-max-subventana1);}
+.rf-modal.subventana2 .modal-dialog {max-width:var(--rf-modal-max-subventana2);}
+.rf-modal.subventana3 .modal-dialog {max-width:var(--rf-modal-max-subventana3);}
+.rf-modal.subventana4 .modal-dialog {max-width:var(--rf-modal-max-subventana4);}
+.rf-modal.subventana5 .modal-dialog {max-width:var(--rf-modal-max-subventana5);}
+.rf-modal.aviso .modal-dialog {max-width:var(--rf-modal-max-aviso);}

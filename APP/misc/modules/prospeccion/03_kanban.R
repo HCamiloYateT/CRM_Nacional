@@ -63,8 +63,8 @@ KanbanEmbudo <- function(id, usuario) {
     # generaba el desalineado visual entre Asesor y Origen/DetOrigen)
     output$Origen_ui <- renderUI({
       origenes <- pipeline_raw()$Origen %>% unique() %>% sort()
-      ListaDesplegable(ns("filtro_origen"), label = h6("Origen"),
-                       choices = c("Todos", origenes), selected = "Todos", multiple = FALSE, size = 8)
+      racafeForms::racafeInputSelect(id = ns("filtro_origen"), label = h6("Origen"), choices = c("Todos", origenes),
+                              selected = "Todos", multiple = FALSE, size = 8, empty = FALSE)
     })
     output$DetOrigen_ui <- renderUI({
       req(input$filtro_origen)
@@ -74,13 +74,13 @@ KanbanEmbudo <- function(id, usuario) {
         pipeline_raw() %>% filter(Origen == input$filtro_origen) %>% pull(DetOrigen)
       }
       det <- det[!is.na(det)] %>% unique() %>% sort()
-      ListaDesplegable(ns("filtro_detorigen"), label = h6("Detalle Origen"),
-                       choices = c("Todos", det), selected = "Todos", multiple = FALSE, size = 8)
+      racafeForms::racafeInputSelect(id = ns("filtro_detorigen"), label = h6("Detalle Origen"),
+                              choices = c("Todos", det), selected = "Todos", multiple = FALSE, size = 8, empty = FALSE)
     })
     output$Asesor_ui <- renderUI({
       asesores <- pipeline_raw()$Asesor %>% unique() %>% sort()
-      ListaDesplegable(ns("filtro_asesor"), label = h6("Asesor"),
-                       choices = c("Todos", asesores), selected = "Todos", multiple = FALSE, size = 8)
+      racafeForms::racafeInputSelect(id = ns("filtro_asesor"), label = h6("Asesor"), choices = c("Todos", asesores),
+                              selected = "Todos", multiple = FALSE, size = 8, empty = FALSE)
     })
     
     pipeline_filtrado <- reactive({
@@ -153,7 +153,9 @@ KanbanEmbudo <- function(id, usuario) {
             div(class = "kpb-col-body", cuerpo))
       }
       
-      boton_nuevo_contacto <- actionButton(ns("btn_nuevo_contacto"), label = tagList(icon("plus"), "Añadir"), class = "kpb-col-add")
+      boton_nuevo_contacto <- shiny::tagAppendAttributes(
+        racafeForms::racafeButton("btn_nuevo_contacto", "Añadir", icon = "plus", size = "xs", ns = ns),
+        class = "kpb-col-add")
       
       # Badges de conversion en la columna CLIENTE (punto 5): % Lead->Cliente
       # y % Contacto->Cliente, en vez del KPI global que se retiro
@@ -216,9 +218,12 @@ KanbanEmbudo <- function(id, usuario) {
       
       clase_modal <- .CONFIG_ACCIONES_EMBUDO[[seleccion$accion]]$modal %||% "subventana2"
       
-      modal_construido <- modalDialog(title = titulo_modal_actual(), uiOutput(ns("ModalContenido")),
-                                      easyClose = TRUE, footer = modalButton("Cerrar"))
-      showModal(htmltools::tagAppendAttributes(modal_construido, class = clase_modal))
+      modal_construido <- racafeForms::racafeModal(size = clase_modal,
+        title = titulo_modal_actual(),
+        uiOutput(ns("ModalContenido")),
+        easy_close = TRUE,
+        footer = modalButton("Cerrar"))
+      showModal(modal_construido)
     })
     output$ModalContenido <- renderUI({
       req(accion_seleccionada())
@@ -252,8 +257,11 @@ KanbanEmbudo <- function(id, usuario) {
     # Alta de contacto ----
     contacto_mod <- CrearContacto(id = "mod_nuevo_contacto", usuario = usuario)
     observeEvent(input$btn_nuevo_contacto, {
-      showModal(modalDialog(title = "Nuevo Contacto", size = "l", easyClose = TRUE, footer = modalButton("Cerrar"),
-                            CrearContactoUI(ns("mod_nuevo_contacto"))))
+      showModal(racafeForms::racafeModal(title = "Nuevo Contacto",
+        size = "subventana1",
+        easy_close = TRUE,
+        footer = modalButton("Cerrar"),
+        CrearContactoUI(ns("mod_nuevo_contacto"))))
     })
     observeEvent(contacto_mod$n(), { removeModal(); trigger_refresco_kanban() })
     
@@ -262,16 +270,19 @@ KanbanEmbudo <- function(id, usuario) {
 }
 
 # App de prueba ----
-ui <- bs4DashPage(
-  title = "Prueba Kanban Embudo",
-  header = bs4DashNavbar(), sidebar = bs4DashSidebar(), controlbar = bs4DashControlbar(), footer = bs4DashFooter(),
-  body = bs4DashBody(
-    useShinyjs(),
-    includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/", "refs/heads/main/Styles/style.css")),
-    KanbanEmbudoUI("EmbudoKanban")
+DemoProspeccionKanban <- function() {
+  ui <- bs4DashPage(
+    title = "Prueba Kanban Embudo",
+    header = bs4DashNavbar(), sidebar = bs4DashSidebar(), controlbar = bs4DashControlbar(), footer = bs4DashFooter(),
+    body = bs4DashBody(
+      useShinyjs(),
+      includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
+                        "refs/heads/main/Styles/style.css")),
+      KanbanEmbudoUI("EmbudoKanban")
+    )
   )
-)
-server <- function(input, output, session) {
-  KanbanEmbudo("EmbudoKanban", usuario = reactive("CMEDINA"))
+  server <- function(input, output, session) {
+    KanbanEmbudo("EmbudoKanban", usuario = reactive("CMEDINA"))
+  }
+  shinyApp(ui, server)
 }
-shinyApp(ui, server)

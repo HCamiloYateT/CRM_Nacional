@@ -5,13 +5,12 @@ FormularioDescartarUI <- function(id, etapa) {
   etiqueta <- .ETIQUETA_DESCARTE_ETAPA[[etapa]] %||% "Registro"
   tagList(
     box(title = paste("Descartar", etiqueta), width = 12, collapsible = FALSE,
-        ListaDesplegable(ns("DES_Razon"), label = Obligatorio("Razón de Descarte"),
-                         choices = .RAZONES_DESCARTE[[etapa]], selected = NULL, multiple = FALSE),
+        racafeForms::racafeInputSelect(id = ns("DES_Razon"), label = Obligatorio("Razón de Descarte"),
+                                choices = .RAZONES_DESCARTE[[etapa]], selected = NULL, multiple = FALSE, empty = FALSE),
         uiOutput(ns("DetalleRazon")),
         uiOutput(ns("DetalleOtro")),
-        racafeShiny::Boton(id = ns("DES_Solicitar"), label = paste("Descartar", etiqueta),
-                           icono = "ban", align = "right", size = "xs",
-                           color_fondo = "#C11007", color_fuente = "#FFFFFF")
+        racafeForms::racafeButton(id = ns("DES_Solicitar"), label = paste("Descartar", etiqueta), size = "xs",
+                                variant = "primary", icon = "ban")
     )
   )
 }
@@ -68,15 +67,15 @@ FormularioDescartar <- function(id, usuario, cod_contacto, etapa, data_contacto 
     output$DetalleRazon <- renderUI({
       cfg <- detalle_config()
       if (identical(cfg$tipo, "numero")) {
-        racafeShiny::InputNumerico(id = "DES_Detalle", label = Obligatorio(cfg$label),
-                                   value = NA, dec = 0, min = 0, ns = ns)
+        racafeForms::racafeInputNumeric(id = "DES_Detalle", label = Obligatorio(cfg$label), value = NA, min = 0,
+                                ns = ns, decimals = 0, format = "number")
       } else if (identical(cfg$tipo, "lista")) {
-        ListaDesplegable(ns("DES_Detalle"), label = Obligatorio(cfg$label),
-                         choices = choices_lista(), selected = NULL,
-                         multiple = isTRUE(cfg$multiple))
+        racafeForms::racafeInputSelect(id = ns("DES_Detalle"), label = Obligatorio(cfg$label),
+                                choices = choices_lista(), selected = NULL, multiple = isTRUE(cfg$multiple),
+                                empty = FALSE)
       } else {
-        textAreaInput(ns("DES_Detalle"), label = Obligatorio(cfg$label), value = "",
-                      placeholder = cfg$placeholder, width = "100%", height = "70px")
+        racafeForms::racafeInputTextArea(id = ns("DES_Detalle"), label = Obligatorio(cfg$label), value = "",
+                                placeholder = cfg$placeholder, width = "100%", rows = 3)
       }
     })
     
@@ -86,8 +85,8 @@ FormularioDescartar <- function(id, usuario, cod_contacto, etapa, data_contacto 
     output$DetalleOtro <- renderUI({
       req(muestra_detalle_otro())
       otro <- .opcion_otro(choices_lista())
-      textAreaInput(ns("DES_DetalleOtro"), label = Obligatorio(paste("Especifique:", otro)),
-                    value = "", placeholder = "Describa el detalle", width = "100%", height = "60px")
+      racafeForms::racafeInputTextArea(id = ns("DES_DetalleOtro"), label = Obligatorio(paste("Especifique:", otro)),
+                              value = "", placeholder = "Describa el detalle", width = "100%", rows = 2)
     })
     
     # Detalle estructurado "crudo" (sin sustituir la opcion "Otro...") — es
@@ -145,7 +144,9 @@ FormularioDescartar <- function(id, usuario, cod_contacto, etapa, data_contacto 
     observeEvent(input$DES_Solicitar, {
       cond <- validar_campos_descarte()
       if (any(cond)) {
-        sapply(names(cond), function(x) if (cond[[x]]) showNotification(x, duration = 4, type = "error"))
+        sapply(names(cond), function(x) {
+          if (cond[[x]]) racafeForms::racafeNotify(session, title = x, type = "error", duration = 4)
+        })
         return(invisible(NULL))
       }
       racafeShiny::MostrarModalConfirmacion(
@@ -168,12 +169,14 @@ FormularioDescartar <- function(id, usuario, cod_contacto, etapa, data_contacto 
         descartar_generico(cod_contacto(), etapa, motivo_final(), usuario(), razon1 = input$DES_Razon,
                            razon2 = detalle_valor(), razon3 = razon3_valor())
         removeModal()
-        showNotification(paste(etiqueta, "descartado exitosamente"), duration = 4, type = "message")
+        racafeForms::racafeNotify(duration = 4, type = "success", title = paste(etiqueta, "descartado exitosamente"),
+                                session = shiny::getDefaultReactiveDomain())
         ret(ret() + 1)
       }, error = function(e) {
         removeModal()
-        showNotification(paste0("Error al descartar el ", tolower(etiqueta), ": ", conditionMessage(e)),
-                         duration = 6, type = "error")
+        racafeForms::racafeNotify(duration = 6, type = "error",
+                                title = paste0("Error al descartar el ", tolower(etiqueta), ": ", conditionMessage(e)),
+                                session = shiny::getDefaultReactiveDomain())
       })
     })
     
@@ -258,28 +261,31 @@ Descartar <- function(id, usuario, codigo_contacto) {
 }
 
 # App de prueba ----
-ui <- bs4DashPage(
-  title = "Prueba Accion Descartar",
-  header = bs4DashNavbar(),
-  sidebar = bs4DashSidebar(),
-  controlbar = bs4DashControlbar(),
-  footer = bs4DashFooter(),
-  body = bs4DashBody(
-    useShinyjs(),
-    includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/", "refs/heads/main/Styles/style.css")),
-    box(
-      title = "Descartar Contacto (prueba)",
-      width = 12,
-      textInput("CodigoContactoPrueba", label = "Codigo de Contacto a descartar", value = ""),
-      DescartarUI("AccionDescartar")
+DemoAccionesDescartar <- function() {
+  ui <- bs4DashPage(
+    title = "Prueba Accion Descartar",
+    header = bs4DashNavbar(),
+    sidebar = bs4DashSidebar(),
+    controlbar = bs4DashControlbar(),
+    footer = bs4DashFooter(),
+    body = bs4DashBody(
+      useShinyjs(),
+      includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
+                        "refs/heads/main/Styles/style.css")),
+      box(
+        title = "Descartar Contacto (prueba)",
+        width = 12,
+        racafeForms::racafeInputText(id = "CodigoContactoPrueba", label = "Codigo de Contacto a descartar", value = ""),
+        DescartarUI("AccionDescartar")
+      )
     )
   )
-)
 
-server <- function(input, output, session) {
-  usuario_sesion         <- reactive("CMEDINA")
-  codigo_contacto_prueba <- reactive(input$CodigoContactoPrueba)
-  Descartar("AccionDescartar", usuario = usuario_sesion, codigo_contacto = codigo_contacto_prueba)
+  server <- function(input, output, session) {
+    usuario_sesion         <- reactive("CMEDINA")
+    codigo_contacto_prueba <- reactive(input$CodigoContactoPrueba)
+    Descartar("AccionDescartar", usuario = usuario_sesion, codigo_contacto = codigo_contacto_prueba)
+  }
+
+  shinyApp(ui, server)
 }
-
-shinyApp(ui, server)

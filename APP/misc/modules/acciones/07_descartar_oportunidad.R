@@ -5,13 +5,13 @@ DescartarOportunidadUI <- function(id) {
   tagList(
     uiOutput(ns("ResumenOportunidad")),
     box(title = "Descartar Oportunidad", width = 12, collapsible = FALSE,
-        ListaDesplegable(ns("DES_Razon"), label = Obligatorio("Razón de Descarte"),
-                         choices = .RAZONES_DESCARTE_OPORTUNIDAD, selected = NULL, multiple = FALSE),
-        textAreaInput(ns("DES_Comentario"), label = h6("Comentario adicional"), value = "",
-                      placeholder = "Detalle opcional del descarte", width = "100%", height = "70px"),
-        racafeShiny::Boton(id = ns("DES_Solicitar"), label = "Descartar Oportunidad",
-                           icono = "ban", align = "right", size = "xs",
-                           color_fondo = "#C11007", color_fuente = "#FFFFFF")
+        racafeForms::racafeInputSelect(id = ns("DES_Razon"), label = Obligatorio("Razón de Descarte"),
+                                choices = .RAZONES_DESCARTE_OPORTUNIDAD, selected = NULL, multiple = FALSE,
+                                empty = FALSE),
+        racafeForms::racafeInputTextArea(id = ns("DES_Comentario"), label = h6("Comentario adicional"), value = "",
+                                placeholder = "Detalle opcional del descarte", width = "100%", rows = 3),
+        racafeForms::racafeButton(id = ns("DES_Solicitar"), label = "Descartar Oportunidad", size = "xs",
+                                variant = "primary", icon = "ban")
     )
   )
 }
@@ -44,7 +44,8 @@ DescartarOportunidad <- function(id, usuario, id_oportunidad) {
     observeEvent(input$DES_Solicitar, {
       cond <- c("La razón de descarte es obligatoria" = EsVacio(input$DES_Razon))
       if (any(cond)) {
-        sapply(names(cond[cond]), function(msg) showNotification(msg, duration = 4, type = "error"))
+        sapply(names(cond[cond]), function(msg) racafeForms::racafeNotify(duration = 4, type = "error", title = msg,
+                                session = shiny::getDefaultReactiveDomain()))
         return(invisible(NULL))
       }
       racafeShiny::MostrarModalConfirmacion(
@@ -61,13 +62,15 @@ DescartarOportunidad <- function(id, usuario, id_oportunidad) {
       tryCatch({
         descartar_oportunidad(id_oportunidad(), motivo_final(), usuario())
         removeModal()
-        showNotification("Oportunidad descartada exitosamente", duration = 4, type = "message")
+        racafeForms::racafeNotify(duration = 4, type = "success", title = "Oportunidad descartada exitosamente",
+                                session = shiny::getDefaultReactiveDomain())
         updateTextAreaInput(session, "DES_Comentario", value = "")
         ret(ret() + 1)
       }, error = function(e) {
         removeModal()
-        showNotification(paste0("Error al descartar la oportunidad: ", conditionMessage(e)),
-                         duration = 6, type = "error")
+        racafeForms::racafeNotify(duration = 6, type = "error",
+                                title = paste0("Error al descartar la oportunidad: ", conditionMessage(e)),
+                                session = shiny::getDefaultReactiveDomain())
       })
     })
     
@@ -76,28 +79,31 @@ DescartarOportunidad <- function(id, usuario, id_oportunidad) {
 }
 
 # App de prueba ----
-ui <- bs4DashPage(
-  title = "Prueba Accion Editar",
-  header = bs4DashNavbar(),
-  sidebar = bs4DashSidebar(),
-  controlbar = bs4DashControlbar(),
-  footer = bs4DashFooter(),
-  body = bs4DashBody(
-    useShinyjs(),
-    includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/", "refs/heads/main/Styles/style.css")),
-    box(
-      title = "Editar Contacto (prueba)",
-      width = 12,
-      textInput("id_oportunidad", label = "Codigo de Contacto a editar", value = ""),
-      DescartarOportunidadUI("AccionEditar")
+DemoAccionesDescartarOportunidad <- function() {
+  ui <- bs4DashPage(
+    title = "Prueba Accion Editar",
+    header = bs4DashNavbar(),
+    sidebar = bs4DashSidebar(),
+    controlbar = bs4DashControlbar(),
+    footer = bs4DashFooter(),
+    body = bs4DashBody(
+      useShinyjs(),
+      includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
+                        "refs/heads/main/Styles/style.css")),
+      box(
+        title = "Editar Contacto (prueba)",
+        width = 12,
+        racafeForms::racafeInputText(id = "id_oportunidad", label = "Codigo de Contacto a editar", value = ""),
+        DescartarOportunidadUI("AccionEditar")
+      )
     )
   )
-)
 
-server <- function(input, output, session) {
-  usuario_sesion <- reactive("CMEDINA")
-  id_oportunidad <- reactive(input$id_oportunidad)
-  DescartarOportunidad("AccionEditar", usuario = usuario_sesion, id_oportunidad = id_oportunidad)
+  server <- function(input, output, session) {
+    usuario_sesion <- reactive("CMEDINA")
+    id_oportunidad <- reactive(input$id_oportunidad)
+    DescartarOportunidad("AccionEditar", usuario = usuario_sesion, id_oportunidad = id_oportunidad)
+  }
+
+  shinyApp(ui, server)
 }
-
-shinyApp(ui, server)

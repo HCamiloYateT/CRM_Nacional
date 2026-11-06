@@ -98,8 +98,7 @@
     return(shiny::tags$div(
       style = "padding:12px;color:#995b00;",
       shiny::tags$strong("Resumen operativo no disponible"),
-      shiny::tags$p("El ETL aún no exporta crm_detalle_operaciones. ",
-                    "Ejecute DataPrep_CRM_corregido.R y reinicie Shiny.")
+      shiny::tags$p("Actualice los datos para consultar pedidos, lotes y facturación.")
     ))
   }
   
@@ -384,7 +383,7 @@ HeaderTareasServer <- function(session, usuario, notas = NULL, actualizaciones =
 
 # Clientes ----
 HeaderClientesServer <- function(data_c, datos_rv, clientes_raw, usuario,
-                                 ncliente, output, es_admin) {
+                                 ncliente, output, es_admin, operaciones = NULL) {
   crm_reciente <- shiny::reactive({
     clientes_raw() %>%
       dplyr::mutate(FecProceso = as.Date(FecProceso)) %>%
@@ -563,7 +562,7 @@ HeaderClientesServer <- function(data_c, datos_rv, clientes_raw, usuario,
   resumen_nuevo <- shiny::reactive({
     .header_resumen_cliente(identidad_nueva(), datos_rv(), clientes_raw(),
                             ncliente = ncliente(), por_clinit = TRUE,
-                            operaciones = get0("crm_detalle_operaciones", envir = .GlobalEnv))
+                            operaciones = if (shiny::is.reactive(operaciones)) operaciones() else operaciones)
   })
   
   .header_kpis_server(resumen_nuevo, on_detail = function(key) {

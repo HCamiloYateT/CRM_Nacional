@@ -6,18 +6,37 @@ permanecen en CRM Nacional. No se instalan paquetes ni se ejecutan migraciones d
 ## Actualizar dependencias antes de desplegar
 
 Se requieren racafeForms >= 0.7.0, racafeShiny >= 1.4.1 y racafeModulos >= 0.5.1.
-Mientras se revisan estos cambios, usar `ref = "codex/kpi-colors-actions"` para racafeModulos.
-racafeShiny puede instalarse desde main. Tras integrar los PR puede omitirse ese argumento.
+Las referencias revisadas y los cambios de contrato están documentados en
+[docs/DATA_PREP_INTEGRATION.md](docs/DATA_PREP_INTEGRATION.md).
 
 ```r
 install.packages("remotes")
 remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeForms")
 remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeShiny")
-remotes::install_github("HCamiloYateT/racafeModulos", ref = "codex/kpi-colors-actions")
+remotes::install_github("HCamiloYateT/racafeModulos", ref = "a13fd7e06b628c8ef72c4e1c201a3d9084c78aa8")
 ```
 
 Instalar las librerías antes de actualizar los scripts del CRM. racafeShiny 1.3.1 conserva los nombres antiguos de
 CajaValor como alias opcionales; el resumen ejecutivo llama directamente a racafeModulos.
+
+## Integración con la exportación actual
+
+Después de instalar las dependencias, ejecutar `DataPrep.R` en el entorno que ya tiene acceso a las fuentes.
+La app requiere regenerar `APP/data/data.RData`: ahora se valida antes de cargarlo y se exportan también
+`ultimo_periodo_pyg` y `crm_detalle_operaciones`. `data` mantiene sus 67 columnas y sus hechos financieros.
+
+Los controles de acciones y prospección utilizan racafeForms; las tablas, menús y cajas se llaman desde
+racafeModulos. Los recursos de Compartido 1.1.0 están incluidos en `APP/vendor/Compartido` y se sirven localmente.
+Las apps de prueba de los módulos se abren mediante funciones `Demo*()`; no se ejecutan durante el arranque.
+
+Prueba de contrato y enriquecimiento con datos ficticios, sin conexiones de negocio:
+
+```sh
+Rscript tests/test_data_contract.R .
+```
+
+La plantilla `APP/misc/modules/controlbar/cotizacion.Rmd` no está versionada en este repositorio. El cotizador
+comprueba su presencia al generar el PDF; esa ausencia ya no impide cargar el resto de la aplicación.
 
 ## Cambios por área
 

@@ -9,19 +9,19 @@ CrearOportunidadUI <- function(id) {
     box(title = "Información del Producto", width = 12, collapsible = FALSE,
         fluidRow(
           column(6,
-                 ListaDesplegable(ns("OP_LinNeg"), label = Obligatorio("Línea de Negocio"),
-                                  choices = c("", Choices()$linneg), selected = "", multiple = FALSE,
-                                  size = 8)
+                 racafeForms::racafeInputSelect(id = ns("OP_LinNeg"), label = Obligatorio("Línea de Negocio"),
+                                         choices = c("", Choices()$linneg), selected = "", multiple = FALSE, size = 8,
+                                         empty = FALSE)
           )
         ),
         fluidRow(
           column(6,
-                 ListaDesplegable(ns("OP_Categoria"), label = Obligatorio("Categoría"),
-                                  choices = "", selected = NULL, multiple = FALSE, size = 8)
+                 racafeForms::racafeInputSelect(id = ns("OP_Categoria"), label = Obligatorio("Categoría"), choices = "",
+                                         selected = NULL, multiple = FALSE, size = 8, empty = FALSE)
           ),
           column(6,
-                 ListaDesplegable(ns("OP_Producto"), label = Obligatorio("Producto"),
-                                  choices = "", selected = NULL, multiple = FALSE, size = 8)
+                 racafeForms::racafeInputSelect(id = ns("OP_Producto"), label = Obligatorio("Producto"), choices = "",
+                                         selected = NULL, multiple = FALSE, size = 8, empty = FALSE)
           )
         )
     ),
@@ -29,21 +29,20 @@ CrearOportunidadUI <- function(id) {
     box(title = "Detalles de la Oportunidad", width = 12, collapsible = FALSE,
         fluidRow(
           column(6,
-                 dateInput(ns("OP_Fecha"), label = Obligatorio("Fecha de Cumplimiento"),
-                           value = Sys.Date() + 7, min = Sys.Date(), language = "es", width = "100%"),
+                 racafeForms::racafeInputDate(id = ns("OP_Fecha"), label = Obligatorio("Fecha de Cumplimiento"),
+                                         value = Sys.Date() + 7, min = Sys.Date(), width = "100%"),
                  uiOutput(ns("OP_Sacos_UI")),
-                 InputNumerico(ns("OP_Frecuencia"), type = "numero",
-                               label = Obligatorio("Frecuencia (días)"), value = NA, dec = 0),
-                 InputNumerico(ns("OP_Margen"), type = "dinero",
-                               label = Obligatorio("Margen por Kilo"), value = NA, dec = 0)
+                 racafeForms::racafeInputNumeric(id = ns("OP_Frecuencia"), label = Obligatorio("Frecuencia (días)"),
+                                         value = NA, decimals = 0, format = "number"),
+                 racafeForms::racafeInputNumeric(id = ns("OP_Margen"), label = Obligatorio("Margen por Kilo"),
+                                         value = NA, decimals = 0, format = "currency")
           ),
           column(6,
                  uiOutput(ns("OP_Resumen"))
                  )
         ),
-        racafeShiny::Boton(id = ns("OP_Crear"), label = "Crear Oportunidad",
-                           icono = "save", align = "right", size = "xs",
-                           color_fondo = "#C11007", color_fuente = "#FFFFFF")
+        racafeForms::racafeButton(id = ns("OP_Crear"), label = "Crear Oportunidad", size = "xs", variant = "primary",
+                                icon = "save")
     )
   )
 }
@@ -108,16 +107,16 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
       # de actualizacion del picker — se hace visible en vez de fallar
       # en silencio
       if (length(cho_cat) == 0) {
-        showNotification(
-          paste0("No hay categorías registradas en CRMNALPRODS para '", input$OP_LinNeg, "'"),
-          duration = 5, type = "warning"
-        )
+        racafeForms::racafeNotify(duration = 5, type = "warning",
+                                title = paste0("No hay categorías registradas en CRMNALPRODS para '", input$OP_LinNeg,
+                                               "'"),
+                                session = shiny::getDefaultReactiveDomain())
       }
       
       # selected = "" evita que el picker retenga una categoria de la
       # linea de negocio anterior que ya no existe en las nuevas choices
-      updatePickerInput(session, "OP_Categoria", choices = c("", cho_cat), selected = "")
-      updatePickerInput(session, "OP_Producto", choices = "", selected = "")
+      racafeForms::racafeUpdateSelect(session = session, choices = c("", cho_cat), selected = "", id = "OP_Categoria")
+      racafeForms::racafeUpdateSelect(session = session, choices = "", selected = "", id = "OP_Producto")
     })
     
     # Actualiza productos segun categoria ----
@@ -128,7 +127,7 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
         dplyr::pull(Producto) %>%
         Unicos()
       
-      updatePickerInput(session, "OP_Producto", choices = c("", cho_prod), selected = "")
+      racafeForms::racafeUpdateSelect(session = session, choices = c("", cho_prod), selected = "", id = "OP_Producto")
     })
     
     # Label dinamico de sacos segun linea de negocio ----
@@ -139,8 +138,8 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
       } else {
         "Sacos"
       }
-      InputNumerico(ns("OP_Sacos"), type = "numero", label = Obligatorio(label_saco),
-                    value = NA, dec = 2)
+      racafeForms::racafeInputNumeric(id = ns("OP_Sacos"), label = Obligatorio(label_saco), value = NA, decimals = 2,
+                              format = "number")
     })
     
     # Resumen calculado de la oportunidad ----
@@ -205,7 +204,8 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
       
       if (any(cond)) {
         sapply(names(cond[cond]), function(msg) {
-          showNotification(msg, duration = 3, type = "error")
+          racafeForms::racafeNotify(duration = 3, type = "error", title = msg,
+                                  session = shiny::getDefaultReactiveDomain())
         })
         return(invisible(NULL))
       }
@@ -218,11 +218,10 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
       linnegcod <- as.numeric(linea$cod)
       
       if (is.na(linnegcod)) {
-        showNotification(
-          paste0("La línea de negocio '", input$OP_LinNeg, "' no está mapeada en ",
+        racafeForms::racafeNotify(duration = 6, type = "error",
+                                title = paste0("La línea de negocio '", input$OP_LinNeg, "' no está mapeada en ",
                  "determinar_linea_negocio(). Contacte a Sistemas antes de continuar."),
-          duration = 6, type = "error"
-        )
+                                session = shiny::getDefaultReactiveDomain())
         return(invisible(NULL))
       }
       
@@ -256,7 +255,8 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
           usr                  = usuario()
         )
         removeModal()
-        showNotification("Oportunidad registrada exitosamente", duration = 3, type = "message")
+        racafeForms::racafeNotify(duration = 3, type = "success", title = "Oportunidad registrada exitosamente",
+                                session = shiny::getDefaultReactiveDomain())
         
         inputs_reset <- c("OP_LinNeg", "OP_Categoria", "OP_Producto",
                           "OP_Fecha", "OP_Sacos", "OP_Frecuencia", "OP_Margen")
@@ -277,30 +277,32 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
 }
 
 # App de prueba ----
-ui <- bs4DashPage(
-  title = "Prueba Acción CrearOportunidad",
-  header = bs4DashNavbar(),
-  sidebar = bs4DashSidebar(),
-  controlbar = bs4DashControlbar(),
-  footer = bs4DashFooter(),
-  body = bs4DashBody(
-    useShinyjs(),
-    includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
-                      "refs/heads/main/Styles/style.css")),
-    box(
-      title = "Crear Oportunidad (prueba)", width = 12,
-      textInput("CodigoContactoPrueba", label = "Código de Contacto", value = ""),
-      CrearOportunidadUI("AccionCrearOportunidad")
+DemoAccionesCrearOportunidad <- function() {
+  ui <- bs4DashPage(
+    title = "Prueba Acción CrearOportunidad",
+    header = bs4DashNavbar(),
+    sidebar = bs4DashSidebar(),
+    controlbar = bs4DashControlbar(),
+    footer = bs4DashFooter(),
+    body = bs4DashBody(
+      useShinyjs(),
+      includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
+                        "refs/heads/main/Styles/style.css")),
+      box(
+        title = "Crear Oportunidad (prueba)", width = 12,
+        racafeForms::racafeInputText(id = "CodigoContactoPrueba", label = "Código de Contacto", value = ""),
+        CrearOportunidadUI("AccionCrearOportunidad")
+      )
     )
   )
-)
 
-server <- function(input, output, session) {
-  usuario_sesion <- reactive("CMEDINA")
-  codigo_contacto_prueba <- reactive(input$CodigoContactoPrueba)
-  
-  CrearOportunidad("AccionCrearOportunidad", usuario = usuario_sesion,
-                   codigo_contacto = codigo_contacto_prueba)
+  server <- function(input, output, session) {
+    usuario_sesion <- reactive("CMEDINA")
+    codigo_contacto_prueba <- reactive(input$CodigoContactoPrueba)
+
+    CrearOportunidad("AccionCrearOportunidad", usuario = usuario_sesion,
+                     codigo_contacto = codigo_contacto_prueba)
+  }
+
+  shinyApp(ui, server)
 }
-
-shinyApp(ui, server)
