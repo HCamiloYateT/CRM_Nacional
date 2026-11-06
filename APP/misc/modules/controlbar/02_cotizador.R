@@ -1,3 +1,19 @@
+# RESUMEN CORPORATIVO DE PRODUCTOS ----
+.cot_tabla_resumen_ui <- function(productos, total) {
+  datos <- data.frame(
+    PRODUCTO = vapply(productos, function(x) if (nzchar(x$producto)) x$producto else "PENDIENTE", character(1)),
+    `PRESENTACIÓN / EMPAQUE` = vapply(productos, function(x) paste(x$presentacion, x$empaque, sep = " / "), character(1)),
+    KG = vapply(productos, function(x) .cot_formatear_numero_tabla(x$cantidad, 1), character(1)),
+    `PRECIO/KG` = vapply(productos, function(x) .cot_formatear_pesos(x$precio), character(1)),
+    TOTAL = vapply(productos, function(x) .cot_formatear_pesos(x$total), character(1)), check.names = FALSE
+  )
+  shiny::tags$div(class = "cot-resumen-tabla",
+    racafeShiny::racafeCompactTable(datos, backend = "html",
+      align = c(KG = "right", `PRECIO/KG` = "right", TOTAL = "right")),
+    racafeForms::racafeMoneyTotal("TOTAL", total, currency = "COP", digits = 0)
+  )
+}
+
 # Constantes ----
 .cot_resolver_app_root <- function() {
   candidatos <- c(getwd(), file.path(getwd(), "APP"))
@@ -589,45 +605,17 @@ Cotizacion <- function(id, usuario, dat) {
           racafeForms::racafeInfoItem("VIGENCIA", paste(fecha_ini, "a", fecha_fin)),
           columns = 2
         ),
-        shiny::tags$div(
-          class = "d-flex flex-wrap align-items-center mt-2 mb-2",
-          shiny::tags$span(class = "badge badge-light border mr-2",
-                           paste(length(productos), "PRODUCTOS")),
-          shiny::tags$span(class = "badge badge-light border mr-2",
-                           paste(.cot_formatear_numero_tabla(
-                             sum(vapply(productos, `[[`, numeric(1), "cantidad")), dec = 1), "KG")),
-          shiny::tags$span(class = "badge badge-danger",
-                           paste("TOTAL", .cot_formatear_pesos(total_general_r())))
+        racafeForms::racafeInfoGrid(
+          racafeForms::racafeDataBadge("PRODUCTOS", length(productos)),
+          racafeForms::racafeDataBadge("KG", .cot_formatear_numero_tabla(
+            sum(vapply(productos, `[[`, numeric(1), "cantidad")), dec = 1)),
+          racafeForms::racafeDataBadge("TOTAL", .cot_formatear_pesos(total_general_r()), variant = "danger"),
+          columns = 3
         ),
         if (!length(productos)) {
           racafeForms::racafeFormMessage("No hay productos agregados", type = "muted", size = "compact")
         } else {
-          shiny::tags$div(class = "table-responsive cot-resumen-tabla",
-                          shiny::tags$table(class = "table table-sm table-hover mb-0",
-                                            shiny::tags$thead(shiny::tags$tr(
-                                              shiny::tags$th("PRODUCTO"),
-                                              shiny::tags$th("PRESENTACIÓN / EMPAQUE"),
-                                              shiny::tags$th(class = "text-right", "KG"),
-                                              shiny::tags$th(class = "text-right", "PRECIO/KG"),
-                                              shiny::tags$th(class = "text-right", "TOTAL")
-                                            )),
-                                            shiny::tags$tbody(lapply(productos, function(producto) {
-                                              shiny::tags$tr(
-                                                shiny::tags$td(shiny::tags$strong(
-                                                  if (nzchar(producto$producto)) producto$producto else "PENDIENTE")),
-                                                shiny::tags$td(shiny::tags$small(paste(producto$presentacion, producto$empaque, sep = " / "))),
-                                                shiny::tags$td(class = "text-right text-nowrap",
-                                                               .cot_formatear_numero_tabla(producto$cantidad, 1)),
-                                                shiny::tags$td(class = "text-right text-nowrap", .cot_formatear_pesos(producto$precio)),
-                                                shiny::tags$td(class = "text-right text-nowrap", .cot_formatear_pesos(producto$total))
-                                              )
-                                            })),
-                                            shiny::tags$tfoot(shiny::tags$tr(
-                                              shiny::tags$th(colspan = 4, class = "text-right", "TOTAL"),
-                                              shiny::tags$th(class = "text-right text-nowrap", .cot_formatear_pesos(total_general_r()))
-                                            ))
-                          )
-          )
+          .cot_tabla_resumen_ui(productos, total_general_r())
         }
       )
     })
@@ -859,7 +847,7 @@ Cotizacion <- function(id, usuario, dat) {
                                   "Complete la cotización antes de generar el PDF.", type = "warning")
         return(invisible(NULL))
       }
-      showModal(racafeForms::racafeModal(
+      showModal(racafeForms::racafeModalDetail(
         title = "Confirmar cotización", size = "subventana3",
         shiny::tags$p("Revise el resumen antes de generar y registrar el PDF."),
         shiny::tags$div(class = "cot-resumen-modal", .cot_resumen_ui()),

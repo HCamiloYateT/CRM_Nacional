@@ -330,10 +330,11 @@ CrearNotas <- function(id, usuario) {
       es_tarea <- identical(input$NOT_Tipo, "list")
       
       confirmacion_rv(TRUE)
-      showModal(racafeForms::racafeModal(
+      showModal(racafeForms::racafeModalDetail(
         title = if (es_tarea) "Confirmar tarea" else "Confirmar nota",
         size = "subventana3",
-        .resumen_confirmacion_ui(),
+        racafeShiny::racafeOverlayLoader("guardar", .resumen_confirmacion_ui(),
+          triggers = "NOT_Confirmar", ns = ns),
         footer = racafeForms::racafeModalFooter(
           racafeForms::racafeButtonCancel("NOT_Cancelar", "Cancelar",
                                           ns = ns, size = "xs"),
@@ -350,6 +351,7 @@ CrearNotas <- function(id, usuario) {
     })
     
     observeEvent(input$NOT_Confirmar, {
+      on.exit(racafeShiny::racafeUpdateOverlayLoader(session, "guardar", FALSE), add = TRUE)
       if (!isTRUE(confirmacion_rv()) || isTRUE(guardando_rv())) return(invisible(NULL))
       errores <- .validar_formulario()
       if (length(errores)) {
@@ -363,9 +365,7 @@ CrearNotas <- function(id, usuario) {
       guardando_rv(TRUE)
       confirmacion_rv(FALSE)
       on.exit(guardando_rv(FALSE), add = TRUE)
-      waiter_show(html = preloader_calculando$html, color = preloader_calculando$color)
-      
-      on.exit(waiter_hide(), add = TRUE)
+      racafeShiny::racafeUpdateOverlayLoader(session, "guardar", TRUE)
       
       tryCatch({
         req(usuario())

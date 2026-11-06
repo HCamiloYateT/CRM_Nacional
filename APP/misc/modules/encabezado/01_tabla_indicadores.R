@@ -1,56 +1,16 @@
 # Indicadores ----
 TablaIndicadoresUI <- function(id) {
   ns <- shiny::NS(id)
-  shiny::tags$div(
-    style = "position:relative;min-width:0;",
-    racafeForms::racafeForm(
-      size = "compact", variant = "plain",
-      shiny::tags$div(
-        id = ns("indicadores_contenido"),
-        style = "min-width:0;",
-        shiny::tags$div(class = "font-weight-bold",
-                        style = "font-size:11px;padding:5px 8px 4px;",
-                        "Indicadores de mercado"),
-        shiny::tags$div(style = "max-height:390px;overflow-y:auto;",
-                        gt::gt_output(ns("tabla_indicadores"))),
-        shiny::uiOutput(ns("ultima_actualizacion")),
-        shiny::tags$div(class = "font-weight-bold",
-                        style = "font-size:11px;padding:8px 8px 4px;",
-                        "Posición"),
-        gt::gt_output(ns("tabla_disponible")),
-        shiny::uiOutput(ns("pie_disponible"))
-      ),
-      racafeForms::racafeFormFooter(
-        shiny::tags$div(
-          style = "margin-right:12px;",
-          shiny::tagAppendAttributes(
-            racafeForms::racafeButton(
-              "actualizar", label = "Actualizar", icon = "sync",
-              variant = "primary", size = "xxs", ns = ns,
-              title = "Actualizar indicadores"
-            ),
-            onclick = sprintf(
-              "document.getElementById('%s').style.display='flex';",
-              ns("indicadores_loader")
-            )
-          )
-        ), align = "right"
-      )
-    ),
-    shiny::tags$div(
-      id = ns("indicadores_loader"),
-      style = paste0(
-        "position:absolute;inset:0;z-index:1050;",
-        "display:flex;align-items:center;justify-content:center;",
-        "background:rgba(255,255,255,0.88);border-radius:4px;"
-      ),
-      shiny::tags$img(
-        src = "indicadores_loader.gif", width = "96", height = "96",
-        style = "display:block;max-width:30%;height:auto;",
-        alt = "Cargando indicadores", title = "Cargando indicadores"
-      )
-    )
-  )
+  racafeShiny::racafeOverlayLoader("indicadores_loader", ns = ns,
+    visible = TRUE, image = "indicadores_loader.gif", triggers = "actualizar",
+    racafeForms::racafeForm(size = "compact", variant = "plain",
+      shiny::tags$div(id = ns("indicadores_contenido"),
+        racafeForms::racafeDetailSection("Indicadores de mercado",
+          gt::gt_output(ns("tabla_indicadores")), shiny::uiOutput(ns("ultima_actualizacion"))),
+        racafeForms::racafeDetailSection("Posición",
+          gt::gt_output(ns("tabla_disponible")), shiny::uiOutput(ns("pie_disponible")))),
+      racafeForms::racafeFormFooter(racafeForms::racafeButton("actualizar", "Actualizar", icon = "sync",
+        variant = "primary", size = "xxs", ns = ns, title = "Actualizar indicadores"))))
 }
 
 TablaIndicadores <- function(id) {
@@ -73,30 +33,8 @@ TablaIndicadores <- function(id) {
     }
     
     .estilo_tabla <- function(tabla) {
-      tabla |>
-        gt::gt() |>
-        gt::cols_align(align = "right", columns = 2) |>
-        gt::tab_style(style = gt::cell_fill(color = "transparent"),
-                      locations = gt::cells_body()) |>
-        gt::opt_row_striping(row_striping = FALSE) |>
-        gt::tab_options(
-          table.width = gt::pct(100),
-          container.width = gt::pct(100),
-          table.font.size = gt::px(10),
-          table.background.color = "transparent",
-          table.border.left.style = "none",
-          table.border.right.style = "none",
-          table_body.border.top.style = "none",
-          table_body.border.bottom.style = "none",
-          data_row.padding = gt::px(1),
-          column_labels.hidden = TRUE,
-          row.striping.include_table_body = FALSE,
-          table.border.top.style = "none",
-          table.border.bottom.style = "none",
-          heading.border.bottom.style = "none",
-          table_body.hlines.style = "none",
-          table_body.vlines.style = "none"
-        )
+      racafeShiny::racafeCompactTable(tabla, backend = "gt", show_header = FALSE,
+        font_size = 10, row_padding = 1, align = c("left", "right"))
     }
     
     .limpiar_html <- function(x) {
@@ -111,7 +49,7 @@ TablaIndicadores <- function(id) {
     .leer_indicadores <- function() {
       on.exit({
         actualizando_rv(FALSE)
-        shinyjs::hide(id = session$ns("indicadores_loader"), asis = TRUE, anim = FALSE)
+        racafeShiny::racafeUpdateOverlayLoader(session, "indicadores_loader", FALSE)
       }, add = TRUE)
       
       tryCatch({

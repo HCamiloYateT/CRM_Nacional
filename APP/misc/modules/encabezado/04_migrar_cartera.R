@@ -4,7 +4,7 @@ MigrarCarteraUI <- function(ns) {
   personas <- as.character(personas %||% character())
   personas <- personas[!is.na(personas) & nzchar(personas)]
 
-  shiny::tagList(
+  racafeShiny::racafeOverlayLoader("migracion_loader", ns = ns, triggers = "confirm_migracion",
     racafeForms::racafeForm(
       size = "compact", variant = "plain",
       racafeForms::racafeFormRow(
@@ -148,9 +148,8 @@ MigrarCartera <- function(id, usr, es_admin, clientes_raw,
 
       guardando(TRUE)
       on.exit(guardando(FALSE), add = TRUE)
-      preloader <- racafeShiny::racafePreloader("calculando", "Migrando cartera...")
-      waiter::waiter_show(html = preloader$html, color = preloader$color)
-      on.exit(waiter::waiter_hide(), add = TRUE)
+      racafeShiny::racafeUpdateOverlayLoader(session, "migracion_loader", TRUE)
+      on.exit(racafeShiny::racafeUpdateOverlayLoader(session, "migracion_loader", FALSE), add = TRUE)
 
       tryCatch({
         actual <- ultimo_registro(racafeBD::CargarDatos("CRMNALCLIENTE"))

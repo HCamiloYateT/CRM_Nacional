@@ -136,17 +136,19 @@ RegistrarCompetencia <- function(id, usr) {
       registro_pendiente_rv(pendiente)
       accion <- if (pendiente$existe) "Agregar comentario" else "Registrar competencia"
 
-      showModal(racafeForms::racafeModal(
+      showModal(racafeForms::racafeModalDetail(
         title = "Confirmar competencia", size = "subventana5",
-        racafeForms::racafeInfoGrid(
-          racafeForms::racafeInfoItem("ACCIÓN", accion),
-          racafeForms::racafeInfoItem("COMPETENCIA", pendiente$competencia),
-          columns = 2
-        ),
-        racafeForms::racafeInfoItem(
-          "OBSERVACIONES",
-          if (nzchar(pendiente$observaciones)) pendiente$observaciones else "Sin observaciones"
-        ),
+        racafeShiny::racafeOverlayLoader("guardar",
+          racafeForms::racafeInfoGrid(
+            racafeForms::racafeInfoItem("ACCIÓN", accion),
+            racafeForms::racafeInfoItem("COMPETENCIA", pendiente$competencia),
+            columns = 2
+          ),
+          racafeForms::racafeInfoItem(
+            "OBSERVACIONES",
+            if (nzchar(pendiente$observaciones)) pendiente$observaciones else "Sin observaciones"
+          ),
+          triggers = "COMP_Confirmar", ns = ns),
         footer = racafeForms::racafeModalFooter(
           racafeForms::racafeButtonCancel("COMP_Cancelar", "Cancelar", ns = ns, size = "xs"),
           racafeForms::racafeButton("COMP_Confirmar", "Confirmar", icon = "floppy-disk",
@@ -161,14 +163,14 @@ RegistrarCompetencia <- function(id, usr) {
     })
 
     observeEvent(input$COMP_Confirmar, {
+      on.exit(racafeShiny::racafeUpdateOverlayLoader(session, "guardar", FALSE), add = TRUE)
       pendiente <- isolate(registro_pendiente_rv())
       if (is.null(pendiente) || isTRUE(guardando_rv())) return(invisible(NULL))
       registro_pendiente_rv(NULL)
       guardando_rv(TRUE)
       on.exit(guardando_rv(FALSE), add = TRUE)
 
-      waiter_show(html = preloader_calculando$html, color = preloader_calculando$color)
-      on.exit(waiter_hide(), add = TRUE)
+      racafeShiny::racafeUpdateOverlayLoader(session, "guardar", TRUE)
 
       tryCatch({
         accion <- .registrar_o_comentar(pendiente)

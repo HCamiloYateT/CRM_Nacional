@@ -153,7 +153,7 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
           racafeForms::racafeInfoItem("PRIORIDAD", registro$Prioridad[[1]]),
           racafeForms::racafeInfoItem("CREADOR", registro$Usuario[[1]]),
           racafeForms::racafeInfoItem("RESPONSABLE", registro$Responsable[[1]]),
-          racafeForms::racafeInfoItem("VENCIMIENTO", registro$FechaCumplimiento[[1]]),
+          racafeForms::racafeInfoItem("VENCIMIENTO", racafeForms::racafeDateLabel(registro$FechaCumplimiento[[1]])),
           racafeForms::racafeInfoItem("ETIQUETAS", registro$Etiquetas[[1]]),
           columns = 2
         ),
@@ -163,16 +163,12 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
         contenido <- c(contenido, list(
           racafeForms::racafeFormGroup(
             title = "Actividades", divider = FALSE,
-            do.call(shiny::tagList, lapply(seq_along(actividades$textos), function(i) {
-              racafeForms::racafeInputCheckbox(
-                paste0("actividad_", i), actividades$textos[[i]],
-                value = actividades$cumplidas[[i]], ns = ns
-              )
-            }))
+            racafeForms::racafeChecklist("actividades", actividades$textos,
+              checked = actividades$cumplidas, ns = ns)
           )
         ))
       }
-      shiny::showModal(racafeForms::racafeModal(
+      shiny::showModal(racafeForms::racafeModalDetail(
         title = stringr::str_to_title(stringr::str_to_lower(
           as.character(registro$titulo[[1]]))), size = "subventana3",
         do.call(shiny::tagList, contenido),
@@ -225,11 +221,9 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
       }
       datos <- resultado$datos
       if (!nrow(datos)) {
-        return(shiny::tags$div(
-          class = "dropdown-item", "CRMNALNOTAS no tiene registros."
-        ))
+        return(racafeShiny::racafeListGroup(empty_message = "CRMNALNOTAS no tiene registros."))
       }
-      shiny::tagList(lapply(seq_len(nrow(datos)), function(i) {
+      do.call(racafeShiny::racafeListGroup, lapply(seq_len(nrow(datos)), function(i) {
         fila <- datos[i, , drop = FALSE]
         id <- as.character(fila$cons[[1]])
         titulo <- .header_nombre(fila$titulo, "Sin título")
@@ -259,10 +253,7 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
         .header_lista_item(
           titulo = titulo,
           detalle = paste(responsable, "·", fecha), badges = badges,
-          onclick = sprintf(
-            "event.stopPropagation();Shiny.setInputValue('%s',%s,{priority:'event'});",
-            ns("abrir"), jsonlite::toJSON(id, auto_unbox = TRUE)
-          )
+          id = ns("abrir"), value = id
         )
       }))
     })
@@ -289,7 +280,7 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
       shiny::req(registro)
       actividades <- .tareas_actividades(registro)
       estados <- vapply(seq_along(actividades$textos), function(i) {
-        isTRUE(input[[paste0("actividad_", i)]])
+        as.character(i) %in% input$actividades
       }, logical(1))
       guardar("actividades", estados)
     })
