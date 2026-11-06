@@ -21,9 +21,7 @@
 }
 
 .header_badge <- function(nombre, valor) {
-  racafeForms::racafeStatusBadge(
-    paste(nombre, valor), variant = "neutral", size = "xs"
-  )
+  racafeForms::racafeDataBadge(sub("[[:space:]:]+$", "", nombre), valor, variant = "neutral", size = "xs")
 }
 
 .header_tarjeta <- function(nombre, valor, detalle = NULL) {
@@ -33,32 +31,10 @@
 }
 
 .header_tabla <- function(datos) {
-  shiny::tags$div(
-    style = "overflow:auto;max-height:190px;",
-    shiny::tags$table(
-      class = "table table-sm crm-header-table",
-      style = "font-size:11px;white-space:nowrap;margin-bottom:0;background:transparent;",
-      shiny::tags$thead(shiny::tags$tr(lapply(names(datos), shiny::tags$th))),
-      shiny::tags$tbody(lapply(seq_len(nrow(datos)), function(i) {
-        shiny::tags$tr(lapply(datos[i, , drop = FALSE], shiny::tags$td))
-      }))
-    )
-  )
+  racafeShiny::racafeCompactTable(datos, backend = "html", max_height = "190px")
 }
 
-.header_modal_compacto <- function(altura = "75vh") {
-  shinyjs::runjs(paste0(
-    "$(document).one('show.bs.modal', '.modal', function() {",
-    "$(this).addClass('subventana2');",
-    "$(this).find('.modal-dialog').addClass('subventana2');",
-    "$(this).find('.modal-body').css({'max-height':'", altura, "','overflow-y':'auto'});",
-    "$(this).attr('data-keyboard', 'false');",
-    "var modal = $(this).data('bs.modal');",
-    "if (modal && modal._config) modal._config.keyboard = false;",
-    "$(this).off('keydown.dismiss.bs.modal');",
-    "});"
-  ))
-}
+
 
 .header_resumen_cliente <- function(identidad, data_c, crm, antigua = FALSE,
                                     ncliente = NULL, por_clinit = FALSE,
@@ -288,16 +264,8 @@
 
 
 # Listados del header ----
-.header_lista_item <- function(titulo, detalle, badges = NULL, onclick = NULL) {
-  shiny::tags$a(
-    class = "dropdown-item crm-header-item",
-    href = "javascript:void(0);", onclick = onclick,
-    shiny::tags$div(class = "crm-header-item-titulo", titulo),
-    shiny::tags$div(class = "crm-header-item-detalle", detalle),
-    if (length(badges)) shiny::tags$div(
-      class = "crm-header-item-badges", do.call(shiny::tagList, badges)
-    )
-  )
+.header_lista_item <- function(titulo, detalle, badges = NULL, id = NULL, value = NULL) {
+  racafeShiny::racafeListItem(titulo, subtitle = detalle, badges = badges, id = id, value = value)
 }
 
 .header_lista_badge <- function(texto, variante = "neutral") {
@@ -306,10 +274,9 @@
 
 .header_items_clientes <- function(datos, tipo, input_id) {
   if (!nrow(datos)) {
-    return(shiny::tags$div(class = "dropdown-item crm-header-vacio",
-                           "No hay clientes por revisar."))
+    return(racafeShiny::racafeListGroup(empty_message = "No hay clientes por revisar."))
   }
-  shiny::tagList(lapply(seq_len(nrow(datos)), function(i) {
+  do.call(racafeShiny::racafeListGroup, lapply(seq_len(nrow(datos)), function(i) {
     fila <- datos[i, , drop = FALSE]
     nit <- as.character(fila$CLCliNit[[1]])
     linea <- .header_nombre(fila$CLLinNegNo, as.character(fila$LinNegCod[[1]]))
@@ -323,10 +290,7 @@
     }
     .header_lista_item(
       titulo = razon, detalle = paste("NIT:", nit), badges = badges,
-      onclick = sprintf(
-        "event.stopPropagation();Shiny.setInputValue('%s',%s,{priority:'event'});",
-        input_id, jsonlite::toJSON(list(nit = nit, linneg = as.character(fila$LinNegCod[[1]])), auto_unbox = TRUE)
-      )
+      id = input_id, value = list(nit = nit, linneg = as.character(fila$LinNegCod[[1]]))
     )
   }))
 }
@@ -565,7 +529,7 @@ HeaderClientesServer <- function(data_c, datos_rv, clientes_raw, usuario,
                       linneg_cod = fila$LinNegCod[[1]])
     if (antiguo) identidad_antigua(identidad) else identidad_nueva(identidad)
     titulo <- .header_nombre(fila$PerRazSoc, paste("NIT", identidad$nit))
-    shiny::showModal(racafeForms::racafeModal(
+    shiny::showModal(racafeForms::racafeModalDetail(
       title = titulo, size = "subventana2",
       if (antiguo) shiny::tagList(
         shiny::tags$div(style = "display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap;",
@@ -632,8 +596,7 @@ HeaderMigrarCarteraServer <- function(usuario, clientes_raw, es_admin) {
     showHeader = FALSE,
     href = NULL,
     modal_icon = NULL,
-    modal_size = "m",
-    modal_pre_fn = function(sel) .header_modal_compacto("75vh"),
+    modal_size = "subventana2",
     modal_titulo_fn = function(sel) "Migrar cartera entre asesores",
     modal_contenido_fn = function(sel) {
       MigrarCarteraUI(shiny::NS("MenuMigrarCartera"))
@@ -644,38 +607,6 @@ HeaderMigrarCarteraServer <- function(usuario, clientes_raw, es_admin) {
     id = "MenuMigrarCartera", usr = usuario,
     es_admin = es_admin, clientes_raw = clientes_raw
   )
-  
-  shinyjs::runjs("
-    if (!window.crmMigracionAccesoDirecto) {
-      window.crmMigracionAccesoDirecto = true;
-      document.addEventListener('click', function(e) {
-        var acceso = e.target.closest('#li_menu_migrar_cartera');
-        if (!acceso) return;
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        if (window.Shiny) {
-          Shiny.setInputValue('crm_abrir_migracion', Date.now(),
-                              {priority: 'event'});
-        }
-      }, true);
-    }
-  ")
-  
-  shiny::observeEvent(shiny::getDefaultReactiveDomain()$input$crm_abrir_migracion, {
-    modal <- shiny::modalDialog(
-      title = "Migrar cartera entre asesores",
-      shiny::tags$style(shiny::HTML(
-        ".crm-modal-migracion .modal-dialog {width:calc(100% - 24px)!important;
-         max-width:720px!important;margin:30px auto!important;}
-         .crm-modal-migracion .modal-body {max-height:75vh;overflow-y:auto;}"
-      )),
-      MigrarCarteraUI(shiny::NS("MenuMigrarCartera")),
-      footer = racafeForms::racafeModalFooter(), size = "m", easyClose = FALSE
-    )
-    modal$attribs$class <- paste(modal$attribs$class, "crm-modal-migracion")
-    shiny::showModal(modal)
-  }, ignoreInit = TRUE)
-  
+
   invisible(menu)
 }

@@ -112,7 +112,7 @@
     onkeydown = sprintf(paste0("if(event.key==='Enter'||event.key===' '){",
                                "event.preventDefault();Shiny.setInputValue('%s',",
                                "Date.now(),{priority:'event'});}"), evento),
-    racafeShiny::cajaValor_ui(ns(caja$id), icono = caja$icono,
+    racafeModulos::cajaValor_ui(ns(caja$id), icono = caja$icono,
                               texto = caja$texto, mostrar_boton = FALSE)
   )
 }
@@ -197,7 +197,7 @@ ResumenEjecutivo <- function(id, valores = NULL) {
             }
             actual$valor
           })
-          racafeShiny::cajaValor_server(actual$id, valor_r = valor_r,
+          racafeModulos::cajaValor_server(actual$id, valor_r = valor_r,
                                         formato = actual$formato)
           shiny::observeEvent(input[[paste0("nav_", actual$id)]], {
             bs4Dash::updateTabItems(session = session$rootScope(),
