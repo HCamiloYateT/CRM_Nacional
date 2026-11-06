@@ -132,22 +132,15 @@ stopifnot(utils::packageVersion("racafeForms") >= "0.7.0",
   normalizePath(candidatas[which(validas)[[1]]], winslash = "/", mustWork = TRUE)
 }
 
-.crm_ruta_compartido <- function(ruta_app, ruta = getOption("racafeForms.shared_path",
-                                                           Sys.getenv("RACAFE_SHARED_PATH", unset = ""))) {
-  if (!is.character(ruta) || length(ruta) != 1L || is.na(ruta)) {
-    stop("La ruta de Compartido debe ser una cadena de texto válida.", call. = FALSE)
-  }
-  if (!nzchar(trimws(ruta))) ruta <- file.path(ruta_app, "vendor", "Compartido")
-  if (!file.exists(file.path(ruta, "ASSETS_VERSION"))) {
-    stop(paste0("No se encontró Compartido en: ", ruta,
-                ". Copie la carpeta APP/vendor/Compartido completa al despliegue o configure RACAFE_SHARED_PATH."),
-         call. = FALSE)
-  }
-  normalizePath(ruta, winslash = "/", mustWork = TRUE)
-}
-
 .ruta_app <- .crm_ruta_app()
-.recursos_compartidos <- racafeForms::racafeSharedAssets(.crm_ruta_compartido(.ruta_app), version = "1.1.0")
+.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/refs/heads/main"
+.recursos_compartidos <- shiny::tagList(
+  racafeForms::racafeFormsDependencies(),
+  shiny::includeCSS(paste0(.url_compartido, "/Styles/style.css")),
+  lapply(c("scripts", "clipboard.js", "forms.js", "controlbar.js"), function(archivo) {
+    shiny::includeScript(paste0(.url_compartido, "/Scripts/", archivo))
+  })
+)
 
 # Impresiones ----
 tit_app <- "Análisis de Ofertas"

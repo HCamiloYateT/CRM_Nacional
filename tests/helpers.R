@@ -3,6 +3,7 @@
   env <- new.env(parent = globalenv())
   env$Choices <- function() list(personas = c("Ana", "Luis"), formapago = "PAGO ANTICIPADO")
   env$`%||%` <- function(x, y) if (is.null(x)) y else x
+  env$.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/refs/heads/main"
   env$SEP_MILES <- ","
   env$SEP_DECIMAL <- "."
   env$.TSK_PRIORIDADES <- c("URGENTE", "IMPORTANTE", "MEDIA", "BAJA")

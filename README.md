@@ -29,12 +29,14 @@ necesarias para los módulos. La carga valida ambos objetos y deriva las vistas 
 Las proyecciones y sus métricas permanecen disponibles en `crm_maestro`.
 
 Los controles de acciones y prospección utilizan racafeForms; las tablas, menús y cajas se llaman desde
-racafeModulos. Los recursos de Compartido 1.1.0 están incluidos en `APP/vendor/Compartido` y se sirven localmente.
+racafeModulos. Los estilos y scripts se leen desde `HCamiloYateT/Compartido`, rama `main`, al arrancar la app.
 Las apps de prueba de los módulos se abren mediante funciones `Demo*()`; no se ejecutan durante el arranque.
 
 Iniciar con `shiny::runApp("APP")` desde la raíz del repositorio o con `shiny::runApp(".")` desde `APP`.
-El despliegue debe incluir `APP/vendor/Compartido` completo. La ruta se resuelve respecto a APP; para usar
-una copia externa puede definir `RACAFE_SHARED_PATH` o `options(racafeForms.shared_path = "/ruta/Compartido")`.
+No se requiere `vendor/Compartido`: `includeCSS()` e `includeScript()` leen los archivos de GitHub y los
+incluyen en la UI. Los logos usan URLs del mismo repositorio; para el PDF se descarga un logo temporal que
+se elimina al terminar. El servidor necesita acceso HTTPS a `raw.githubusercontent.com` al iniciar la app
+y generar el PDF; el navegador también debe poder cargar los logos desde ese dominio.
 
 
 Prueba de contrato y enriquecimiento con datos ficticios, sin conexiones de negocio:

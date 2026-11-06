@@ -31,10 +31,17 @@
 
 .COT_APP_ROOT <- .cot_resolver_app_root()
 .COT_RMD_PATH <- file.path(.COT_APP_ROOT, "misc", "modules", "controlbar", "cotizacion.Rmd")
-.COT_LOGO_PATH <- file.path(.COT_APP_ROOT, "www", "logo2.png")
-
-if (!file.exists(.COT_LOGO_PATH)) {
-  .COT_LOGO_PATH <- file.path(.COT_APP_ROOT, "vendor", "Compartido", "img", "logo2.png")
+# El documento PDF necesita un archivo; obtener el logo del mismo repositorio compartido.
+.cot_logo_compartido <- function(base_url = .url_compartido) {
+  ruta <- tempfile("crm-logo-", fileext = ".png")
+  completo <- FALSE
+  on.exit(if (!completo) unlink(ruta), add = TRUE)
+  estado <- utils::download.file(paste0(base_url, "/img/logo2.png"), ruta, mode = "wb", quiet = TRUE)
+  if (estado != 0L || !file.exists(ruta) || file.info(ruta)$size == 0) {
+    stop("No fue posible descargar el logo de Compartido para la cotización.", call. = FALSE)
+  }
+  completo <- TRUE
+  normalizePath(ruta, winslash = "/", mustWork = TRUE)
 }
 
 VENDEDORES_DATA <- data.frame(
@@ -908,9 +915,10 @@ Cotizacion <- function(id, usuario, dat) {
             encabezado = tabla_encabezado, productos = tabla_productos,
             forma_pago = input$COT_FPago %||% "PAGO ANTICIPADO", total_general = total_general_r(),
             divisa = stringr::str_to_upper(input$COT_Divisa %||% "PESO COLOMBIANO"),
-            logo = normalizePath(.COT_LOGO_PATH, winslash = "/", mustWork = TRUE)
+            logo = .cot_logo_compartido()
           )
           
+          on.exit(unlink(params$logo), add = TRUE)
           if (!file.exists(.COT_RMD_PATH)) {
             stop("Falta la plantilla cotizacion.Rmd para generar el PDF. Contacte al administrador.", call. = FALSE)
           }
