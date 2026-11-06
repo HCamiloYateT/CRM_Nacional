@@ -20,8 +20,8 @@ const {chromium} = require('playwright');
         width:table.getBoundingClientRect().width,parent:table.parentElement.getBoundingClientRect().width};
     });
     const def=await styles('default_table'), custom=await styles('custom_table'), old=await styles('existing_table');
-    check(def.headerLine.bottom==='2px' && def.headerLine.bottomColor==='rgb(218, 41, 28)' && def.headerLine.bottomStyle==='solid',
-      'Línea roja continua de 2px bajo todos los encabezados');
+    check(def.headerLine.bottom==='1px' && def.headerLine.bottomColor==='rgb(218, 41, 28)' && def.headerLine.bottomStyle==='solid',
+      'Línea roja continua de 1px bajo todos los encabezados');
     check(def.headers.every(h=>h.topStyle==='none' && h.left==='none' && h.right==='none'), 'Encabezado sin otros bordes');
     check(def.rows[0][0].topStyle==='none' && def.rows[0][0].bottomStyle==='none', 'Cuerpo sin cuadrícula');
     check(def.rows.flat().every(c=>c.left==='none' && c.right==='none'), 'Sin bordes verticales');
@@ -53,6 +53,7 @@ const {chromium} = require('playwright');
       return {border:style.borderTopColor,width:style.borderTopWidth,icon:!!icon,color:icon&&getComputedStyle(icon).color};}));
     const heights=await modal.locator('.racafe-caja-valor').evaluateAll(nodes=>nodes.map(el=>el.getBoundingClientRect().height));
     check(Math.max(...heights)-Math.min(...heights)<2, 'Cajas de altura uniforme');
+    check(Math.max(...heights)<100, 'Cajas compactas de menos de 100px');
     check(cards.every(c=>c.border==='rgb(218, 41, 28)' && c.width==='1px' && c.icon && c.color==='rgb(218, 41, 28)'),
       'Todas las cajas con borde e icono rojos');
     check((await modal.textContent()).includes('Creación: 20/10/2026'), 'Conserva fecha de creación');
