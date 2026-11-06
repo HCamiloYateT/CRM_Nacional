@@ -7,21 +7,18 @@ ComparacionIndicadoresUI <- function(id) {
       style = "display:flex; gap:8px; flex-wrap:wrap; align-items:flex-start;",
       shiny::div(
         style = "width:220px;",
-        shiny::dateInput(ns("fecha_anterior"), label = shiny::h6("Fecha Inicial"),
-                         value = Sys.Date() - 1, format = "yyyy-mm-dd",
-                         language = "es", width = "100%")
+        racafeForms::racafeInputDate(id = ns("fecha_anterior"), label = shiny::h6("Fecha Inicial"),
+                                value = Sys.Date() - 1, width = "100%")
       ),
       shiny::div(
         style = "width:220px;",
-        shiny::dateInput(ns("fecha_actual"), label = shiny::h6("Fecha Final"),
-                         value = Sys.Date(), format = "yyyy-mm-dd",
-                         language = "es", width = "100%")
+        racafeForms::racafeInputDate(id = ns("fecha_actual"), label = shiny::h6("Fecha Final"), value = Sys.Date(),
+                                width = "100%")
       ),
       shiny::div(
         style = "width:100px; height:38px; margin-top:35px; display:flex; align-items:center;",
-        racafeShiny::Boton(id = ns("actualizar"), label = NULL, icono = "code-compare",
-                           align = "right", size = "xs", color_fondo = "#C11007",
-                           titulo = "Comparar", color_fuente = "#FFFFFF")
+        racafeForms::racafeButton(id = ns("actualizar"), label = NULL, size = "xs", variant = "primary",
+                                icon = "code-compare", title = "Comparar")
       )
     ),
     shiny::br(),
@@ -37,7 +34,7 @@ ComparacionIndicadores <- function(id) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-    formato <- racafe::DefinirFormato("dolares")
+    formato <- racafeShiny::DefinirFormato("dolares")
     
     datos_comparacion_r <- shiny::eventReactive(input$actualizar, ignoreNULL = FALSE, {
       waiter_show(html = preloader_actualizar$html, color = preloader_actualizar$color)
@@ -46,8 +43,9 @@ ComparacionIndicadores <- function(id) {
       shiny::req(input$fecha_anterior, input$fecha_actual)
       
       if (input$fecha_anterior > input$fecha_actual) {
-        shiny::showNotification("La fecha inicial no puede ser posterior a la fecha final",
-                                type = "error", duration = 5)
+        racafeForms::racafeNotify(type = "error", duration = 5,
+                                title = "La fecha inicial no puede ser posterior a la fecha final",
+                                session = shiny::getDefaultReactiveDomain())
         return(NULL)
       }
       
@@ -57,16 +55,17 @@ ComparacionIndicadores <- function(id) {
         datos_actuales_raw <- tryCatch(
           .ObtenerIndicadoresActuales(uid = uid, pwd = pwd),
           error = function(e) {
-            shiny::showNotification("No fue posible cargar los datos vigentes",
-                                    type = "error", duration = 5)
+            racafeForms::racafeNotify(type = "error", duration = 5, title = "No fue posible cargar los datos vigentes",
+                                    session = shiny::getDefaultReactiveDomain())
             warning("[Comparacion Indicadores] ", e$message)
             NULL
           }
         )
         
         if (is.null(datos_actuales_raw) || nrow(datos_actuales_raw) == 0L) {
-          shiny::showNotification("No hay datos vigentes disponibles para comparar",
-                                  type = "error", duration = 5)
+          racafeForms::racafeNotify(type = "error", duration = 5,
+                                  title = "No hay datos vigentes disponibles para comparar",
+                                  session = shiny::getDefaultReactiveDomain())
           return(NULL)
         }
         
@@ -76,10 +75,9 @@ ComparacionIndicadores <- function(id) {
         datos_actuales <- .CargarHistoricoIndicadores(input$fecha_actual)
         
         if (nrow(datos_actuales) == 0L) {
-          shiny::showNotification(
-            paste("No se encontraron datos para la fecha final:", input$fecha_actual),
-            type = "error", duration = 5
-          )
+          racafeForms::racafeNotify(type = "error", duration = 5,
+                                  title = paste("No se encontraron datos para la fecha final:", input$fecha_actual),
+                                  session = shiny::getDefaultReactiveDomain())
           return(NULL)
         }
         
@@ -89,10 +87,9 @@ ComparacionIndicadores <- function(id) {
       datos_anteriores <- .CargarHistoricoIndicadores(input$fecha_anterior)
       
       if (nrow(datos_anteriores) == 0L) {
-        shiny::showNotification(
-          paste("No se encontraron datos para la fecha inicial:", input$fecha_anterior),
-          type = "error", duration = 5
-        )
+        racafeForms::racafeNotify(type = "error", duration = 5,
+                                title = paste("No se encontraron datos para la fecha inicial:", input$fecha_anterior),
+                                session = shiny::getDefaultReactiveDomain())
         return(NULL)
       }
       
@@ -252,22 +249,24 @@ ComparacionIndicadores <- function(id) {
 }
 
 # App de Prueba ----
-ui <- bs4DashPage(
-  title = "Prueba Comparacion Indicadores",
-  header = bs4DashNavbar(),
-  sidebar = bs4DashSidebar(),
-  controlbar = bs4DashControlbar(),
-  footer = bs4DashFooter(),
-  body = bs4DashBody(
-    useShinyjs(),
-    use_waiter(),
-    includeCSS("https://raw.githubusercontent.com/HCamiloYateT/Compartido/refs/heads/main/Styles/style.css"),
-    ComparacionIndicadoresUI("CompIndicadores")
+DemoGeneralidadesComparacionIndicadores <- function() {
+  ui <- bs4DashPage(
+    title = "Prueba Comparacion Indicadores",
+    header = bs4DashNavbar(),
+    sidebar = bs4DashSidebar(),
+    controlbar = bs4DashControlbar(),
+    footer = bs4DashFooter(),
+    body = bs4DashBody(
+      useShinyjs(),
+      use_waiter(),
+      includeCSS("https://raw.githubusercontent.com/HCamiloYateT/Compartido/refs/heads/main/Styles/style.css"),
+      ComparacionIndicadoresUI("CompIndicadores")
+    )
   )
-)
 
-server <- function(input, output, session) {
-  ComparacionIndicadores("CompIndicadores")
+  server <- function(input, output, session) {
+    ComparacionIndicadores("CompIndicadores")
+  }
+
+  shinyApp(ui, server)
 }
-
-shinyApp(ui, server)

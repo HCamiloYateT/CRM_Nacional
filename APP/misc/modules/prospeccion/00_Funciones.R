@@ -678,7 +678,7 @@ cargar_pipeline_embudo <- function() {
   )
 }
 # Detecta Leads con primera factura y los convierte a Cliente, registrando la transicion
-detectar_conversion_leads <- function(usr = "SISTEMA") {
+detectar_conversion_leads <- function(usr = "SISTEMA", facturas = fact_cliente) {
   leads_activos <- derivar_etapa_actual() %>% filter(Etapa == "LEAD") %>% select(CodContacto, PerCod)
   ya_convertidos <- tryCatch(CargarDatos("CRMNALLEADCLIENTE")$CodContacto, error = function(e) character(0))
   leads_activos <- leads_activos %>% filter(!CodContacto %in% ya_convertidos)
@@ -689,10 +689,12 @@ detectar_conversion_leads <- function(usr = "SISTEMA") {
     left_join(vinculos %>% select(CodContacto, NitVinculado), by = "CodContacto") %>%
     mutate(NitEfectivo = suppressWarnings(as.numeric(ifelse(!is.na(NitVinculado), NitVinculado, PerCod)))) %>%
     filter(!is.na(NitEfectivo))
-  primera_factura_por_nit <- data %>%
-    filter(!is.na(CLCliNit), !is.na(FecFact)) %>%
+  # La facturación por NIT conserva la primera compra, independientemente del cierre PyG.
+  primera_factura_por_nit <- facturas %>%
+    transmute(CLCliNit = suppressWarnings(as.numeric(FctNit)), FechaConversion = as.Date(MinFecFact)) %>%
+    filter(!is.na(CLCliNit), !is.na(FechaConversion), is.finite(as.numeric(FechaConversion))) %>%
     group_by(CLCliNit) %>%
-    summarise(FechaConversion = min(FecFact, na.rm = TRUE), .groups = "drop")
+    summarise(FechaConversion = min(FechaConversion), .groups = "drop")
   convertidos <- leads_activos %>% inner_join(primera_factura_por_nit, by = c("NitEfectivo" = "CLCliNit"))
   for (i in seq_len(nrow(convertidos))) {
     fila <- data.frame(CodContacto = convertidos$CodContacto[i], NitFacturacion = convertidos$NitEfectivo[i],
@@ -2164,4 +2166,3 @@ tokenizar_motivos_libres <- function(cod_contacto_vec, historial_dat) {
     }
   )
 }
-

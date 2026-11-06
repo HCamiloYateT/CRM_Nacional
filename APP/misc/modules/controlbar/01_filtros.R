@@ -86,7 +86,7 @@ Filtros <- function(id, usuario, es_admin, dat) {
       asesores_permitidos(permitidos)
       actualizar("FT_Asesor", permitidos, .filtros_seleccion(isolate(input$FT_Asesor), permitidos))
       racafeForms::racafeUpdateEnabled(session, "FT_Asesor", enabled = autorizado)
-      segmentos <- .filtros_choices(catalogos$segmento)
+      segmentos <- .filtros_choices(c(catalogos$segmento, x$Segmento))
       lineas <- .filtros_choices(catalogos$linneg, incluir_sin_dato = FALSE)
       actualizar("FT_Segmento", segmentos, .filtros_seleccion(isolate(input$FT_Segmento), segmentos))
       actualizar("FT_LinNeg", lineas, .filtros_seleccion(isolate(input$FT_LinNeg), lineas))
@@ -109,6 +109,9 @@ Filtros <- function(id, usuario, es_admin, dat) {
       categorias <- unique(unlist(lapply(lineas, function(linea) {
         .admon_choices_valores(catalogos, "categoria", linea)
       }), use.names = FALSE))
+      # Conservar categorías presentes en los hechos, incluido PyG sin marca o empaque.
+      observadas <- disponibles() %>% filter(CLLinNegNo %in% lineas) %>% pull(Categoria)
+      categorias <- .filtros_choices(c(categorias, observadas))
       actualizar("FT_Categoria", categorias, .filtros_seleccion(isolate(input$FT_Categoria), categorias))
     }, ignoreNULL = FALSE)
     
@@ -122,6 +125,9 @@ Filtros <- function(id, usuario, es_admin, dat) {
           .admon_choices_valores(catalogos, "producto", linea, categoria)
         }), use.names = FALSE)
       }), use.names = FALSE))
+      observados <- disponibles() %>%
+        filter(CLLinNegNo %in% lineas, Categoria %in% categorias) %>% pull(Producto)
+      productos <- .filtros_choices(c(productos, observados))
       actualizar("FT_Producto", productos, .filtros_seleccion(isolate(input$FT_Producto), productos))
     }, ignoreNULL = FALSE)
     

@@ -1,0 +1,9 @@
+// Tooltips delegados para contenido estático y dinámico de Shiny.
+(function ($) {
+  "use strict";
+  $(function () {
+    if (!$.fn.tooltip || $.data(document, "rfSharedTooltips")) return;
+    $.data(document, "rfSharedTooltips", true);
+    $(document.body).tooltip({ selector: "[title]", placement: "right", container: "body" });
+  });
+}(window.jQuery));

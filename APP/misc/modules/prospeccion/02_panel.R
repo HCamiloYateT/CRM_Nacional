@@ -3,7 +3,7 @@ PanelEtapaUI <- function(id) {
   ns <- NS(id)
   tagList(
     uiOutput(ns("Titulo")),
-    TablaReactableUI(ns("TablaEtapa"), titulo = NULL),
+    racafeModulos::TablaReactableUI(ns("TablaEtapa"), titulo = NULL),
     tags$script(
       HTML(
         "document.addEventListener('click', function(e){
@@ -388,7 +388,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
       )
     }
     
-    modulo_tabla <- TablaReactable(
+    modulo_tabla <- racafeModulos::TablaReactable(
       id = "TablaEtapa",
       data = datos_etapa,
       columnas = columnas_visibles_panel(etapa),
@@ -509,7 +509,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
       
       clase_modal <- .CONFIG_ACCIONES_EMBUDO[[seleccion$accion]]$modal %||% "subventana2"
       
-      modal_construido <- modalDialog(
+      modal_construido <- racafeForms::racafeModal(size = clase_modal,
         title = titulo_modal_actual(),
         tagList(
           shinyjs::hidden(
@@ -527,15 +527,11 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
             ns("ModalContenido")
           )
         ),
-        easyClose = TRUE,
-        footer = modalButton("Cerrar")
-      )
+        easy_close = TRUE,
+        footer = modalButton("Cerrar"))
       
       showModal(
-        htmltools::tagAppendAttributes(
-          modal_construido,
-          class = clase_modal
-        )
+        modal_construido
       )
     })
     
@@ -664,101 +660,103 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
 }
 
 # App de prueba ----
-ui <- bs4DashPage(
-  title = "Prueba Panel Etapa",
-  header = bs4DashNavbar(),
-  sidebar = bs4DashSidebar(),
-  controlbar = bs4DashControlbar(),
-  footer = bs4DashFooter(),
-  body = bs4DashBody(
-    includeCSS(
-      paste0(
-        "https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
-        "refs/heads/main/Styles/style.css"
+DemoProspeccionPanel <- function() {
+  ui <- bs4DashPage(
+    title = "Prueba Panel Etapa",
+    header = bs4DashNavbar(),
+    sidebar = bs4DashSidebar(),
+    controlbar = bs4DashControlbar(),
+    footer = bs4DashFooter(),
+    body = bs4DashBody(
+      includeCSS(
+        paste0(
+          "https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
+          "refs/heads/main/Styles/style.css"
+        )
+      ),
+      useShinyjs(),
+      box(
+        title = "Etapa CONTACTO — sin filtro",
+        width = 12,
+        PanelEtapaUI("PanelContacto")
+      ),
+      box(
+        title = "Etapa CONTACTO — solo 30+ dias (filtro_extra)",
+        width = 12,
+        PanelEtapaUI("PanelContacto30")
+      ),
+      box(
+        title = "Etapa LEAD (sin cambios)",
+        width = 12,
+        PanelEtapaUI("PanelLead")
+      ),
+      box(
+        title = "Etapa DESCARTADO (nueva)",
+        width = 12,
+        PanelEtapaUI("PanelDescartado")
       )
-    ),
-    useShinyjs(),
-    box(
-      title = "Etapa CONTACTO — sin filtro",
-      width = 12,
-      PanelEtapaUI("PanelContacto")
-    ),
-    box(
-      title = "Etapa CONTACTO — solo 30+ dias (filtro_extra)",
-      width = 12,
-      PanelEtapaUI("PanelContacto30")
-    ),
-    box(
-      title = "Etapa LEAD (sin cambios)",
-      width = 12,
-      PanelEtapaUI("PanelLead")
-    ),
-    box(
-      title = "Etapa DESCARTADO (nueva)",
-      width = 12,
-      PanelEtapaUI("PanelDescartado")
     )
   )
-)
 
-server <- function(input, output, session) {
-  usuario_sesion <- reactive("CMEDINA")
-  
-  PanelEtapa(
-    "PanelContacto",
-    usuario = usuario_sesion,
-    etapa = "CONTACTO",
-    acciones = c(
-      Editar = "Editar Contacto",
-      Relacionamiento = "Gestión Comercial",
-      Promover = "Promover Etapa",
-      Descartar = "Descartar Registro",
-      CrearOportunidad = "Nueva Oportunidad"
-    )
-  )
-  
-  PanelEtapa(
-    "PanelContacto30",
-    usuario = usuario_sesion,
-    etapa = "CONTACTO",
-    filtro_extra = function(df) {
-      filter(
-        df,
-        DiasSinGestion >= 30
+  server <- function(input, output, session) {
+    usuario_sesion <- reactive("CMEDINA")
+
+    PanelEtapa(
+      "PanelContacto",
+      usuario = usuario_sesion,
+      etapa = "CONTACTO",
+      acciones = c(
+        Editar = "Editar Contacto",
+        Relacionamiento = "Gestión Comercial",
+        Promover = "Promover Etapa",
+        Descartar = "Descartar Registro",
+        CrearOportunidad = "Nueva Oportunidad"
       )
-    },
-    acciones = c(
-      Editar = "Editar Contacto",
-      Relacionamiento = "Gestión Comercial",
-      Promover = "Promover Etapa",
-      Descartar = "Descartar Registro",
-      CrearOportunidad = "Nueva Oportunidad"
     )
-  )
-  
-  PanelEtapa(
-    "PanelLead",
-    usuario = usuario_sesion,
-    etapa = "LEAD",
-    acciones = c(
-      Editar = "Editar Contacto",
-      Relacionamiento = "Gestión Comercial",
-      Promover = "Promover Etapa",
-      Descartar = "Descartar Registro",
-      CrearOportunidad = "Nueva Oportunidad"
+
+    PanelEtapa(
+      "PanelContacto30",
+      usuario = usuario_sesion,
+      etapa = "CONTACTO",
+      filtro_extra = function(df) {
+        filter(
+          df,
+          DiasSinGestion >= 30
+        )
+      },
+      acciones = c(
+        Editar = "Editar Contacto",
+        Relacionamiento = "Gestión Comercial",
+        Promover = "Promover Etapa",
+        Descartar = "Descartar Registro",
+        CrearOportunidad = "Nueva Oportunidad"
+      )
     )
-  )
-  
-  PanelEtapa(
-    "PanelDescartado",
-    usuario = usuario_sesion,
-    etapa = "DESCARTADO",
-    acciones = c(
-      Editar = "Editar Contacto",
-      Relacionamiento = "Comentar",
-      Reactivar = "Reactivar"
+
+    PanelEtapa(
+      "PanelLead",
+      usuario = usuario_sesion,
+      etapa = "LEAD",
+      acciones = c(
+        Editar = "Editar Contacto",
+        Relacionamiento = "Gestión Comercial",
+        Promover = "Promover Etapa",
+        Descartar = "Descartar Registro",
+        CrearOportunidad = "Nueva Oportunidad"
+      )
     )
-  )
+
+    PanelEtapa(
+      "PanelDescartado",
+      usuario = usuario_sesion,
+      etapa = "DESCARTADO",
+      acciones = c(
+        Editar = "Editar Contacto",
+        Relacionamiento = "Comentar",
+        Reactivar = "Reactivar"
+      )
+    )
+  }
+
+  shinyApp(ui, server)
 }
-
-shinyApp(ui, server)

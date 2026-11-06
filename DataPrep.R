@@ -2544,7 +2544,11 @@ homologaciones <- list(
   marcas = n_marcas,
   productos = productos_hom,
   ordenes_compra = ordenes_hom,
-  sucursales = sucs
+  sucursales = sucs,
+  clientes_sistema = n_cliente,
+  facturacion = fact,
+  margenes_pyg = margenes_pyg,
+  lotes = lotes_raw
 )
 
 # TRAZABILIDAD FACTURAS ----
@@ -2777,6 +2781,10 @@ cat("\nCRM MAESTRO | Registros:", nrow(crm_maestro),
 
 # PERSISTENCIA ----
 if (!dir.exists("APP/data")) dir.create("APP/data", recursive = TRUE)
+
+# Validar el contrato compartido sin cambiar los dos objetos publicados.
+sys.source("APP/misc/data_contract.R", envir = environment())
+.crm_validar_maestro(crm_maestro, homologaciones)
 
 save(crm_maestro, homologaciones, file = "APP/data/data.RData",
      compress = "xz")

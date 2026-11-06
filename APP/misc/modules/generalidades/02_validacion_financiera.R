@@ -2154,14 +2154,11 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
           shiny::fluidRow(
             shiny::column(
               12,
-              racafeShiny::BotonDescarga(
-                button_id = paste0("dl_", prefijo),
+              shiny::tagAppendAttributes(racafeForms::racafeButtonDownload(id = paste0("dl_", prefijo),
                 label = "Descargar detalle",
-                ns = ns,
-                size = "xs",
-                align = "right"
-              ),
-              racafe::Saltos()
+                                      icon = "download", ns = ns, size = "xs", variant = "success"),
+                                        title = "Descargar"),
+              racafeCore::Saltos()
             )
           ),
           if (isTRUE(mostrar_cajas)) {
@@ -2419,14 +2416,10 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         shiny::fluidRow(
           shiny::column(
             12,
-            racafeShiny::BotonDescarga(
-              button_id = "dl_segmentos",
-              label = "Descargar detalle",
-              ns = ns,
-              size = "xs",
-              align = "right"
-            ),
-            racafe::Saltos()
+            shiny::tagAppendAttributes(racafeForms::racafeButtonDownload(id = "dl_segmentos",
+              label = "Descargar detalle", icon = "download",
+                                    ns = ns, size = "xs", variant = "success"), title = "Descargar"),
+            racafeCore::Saltos()
           )
         ),
         shiny::fluidRow(
@@ -2436,19 +2429,14 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         shiny::fluidRow(
           shiny::column(
             12,
-            racafeShiny::ListaDesplegable(
-              inputId = "VF_SegMetrica",
-              label = "Métrica de las matrices",
-              choices = c(
+            racafeForms::racafeInputSelect(id = "VF_SegMetrica", label = "Métrica de las matrices",
+                                    choices = c(
                 "UNIDADES COMERCIALES",
                 "SACOS 70 KG",
                 "MARGEN"
               ),
-              selected = "UNIDADES COMERCIALES",
-              multiple = FALSE,
-              ns = ns,
-              size = 3
-            )
+                                    selected = "UNIDADES COMERCIALES", multiple = FALSE, ns = ns, size = 3,
+                                    empty = FALSE)
           )
         ),
         shiny::tags$hr(),

@@ -75,11 +75,9 @@ NotificarError <- function(error, operacion, codigo_contacto = NULL) {
     ""
   }
   
-  showNotification(
-    paste0("Error al ", operacion, mensaje_contacto, ": ", conditionMessage(error)),
-    duration = 6,
-    type = "error"
-  )
+  racafeForms::racafeNotify(duration = 6, type = "error",
+                          title = paste0("Error al ", operacion, mensaje_contacto, ": ", conditionMessage(error)),
+                          session = shiny::getDefaultReactiveDomain())
 }
 # Registra el error en log de consola/servidor
 RegistrarError <- function(error, operacion, usuario = NULL, codigo_contacto = NULL) {
@@ -578,7 +576,9 @@ listar_recordatorio <- function(cod_contacto) {
 ## Promover ----
 # Choices "NIT - Razon Social" del cliente principal, para vincular alianzas
 .choices_cliente_ppal <- function() {
-  data %>%
+  clientes_actual %>%
+    distinct(CliNitPpal) %>%
+    left_join(n_cliente %>% select(CliNitPpal = PerCod, PerRazSoc), by = "CliNitPpal") %>%
     distinct(CliNitPpal, PerRazSoc) %>%
     filter(!is.na(CliNitPpal), !is.na(PerRazSoc)) %>%
     arrange(PerRazSoc) %>%

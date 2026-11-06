@@ -126,13 +126,14 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
       payload$FecProceso <- Sys.time()
       payload$Usr <- as.character(usr())
       racafeBD::AgregarDatos(payload, "CRMNALCLIENTE")
-      showNotification(mensaje, type = "message")
+      racafeForms::racafeNotify(type = "success", title = mensaje, session = shiny::getDefaultReactiveDomain())
       refresh(isolate(refresh()) + 1L)
     }
     
     observeEvent(input$btn_guardar_hijo, {
       if (!isTRUE(es_admin())) {
-        shiny::showNotification("Solo puede ser guardado por el administrador.", type = "warning")
+        racafeForms::racafeNotify(type = "warning", title = "Solo puede ser guardado por el administrador.",
+                                session = shiny::getDefaultReactiveDomain())
         return()
       }
       req(identidad_activa())
@@ -144,19 +145,20 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
         limpiar_seleccion(input$frm_CuentaPadreNueva)
       }
       if (is.na(nuevo_padre)) {
-        showNotification("Seleccione una cuenta principal o active Independizar cuenta.",
-                         type = "error")
+        racafeForms::racafeNotify(type = "error",
+                                title = "Seleccione una cuenta principal o active Independizar cuenta.",
+                                session = shiny::getDefaultReactiveDomain())
         return()
       }
       if (!nuevo_padre %in% as.character(ncliente()$PerCod)) {
-        showNotification("La cuenta principal seleccionada no es válida.",
-                         type = "error")
+        racafeForms::racafeNotify(type = "error", title = "La cuenta principal seleccionada no es válida.",
+                                session = shiny::getDefaultReactiveDomain())
         return()
       }
       
       if (!convertir && identical(nuevo_padre, cuenta_hija)) {
-        showNotification("Para independizar esta cuenta, active el interruptor.",
-                         type = "warning")
+        racafeForms::racafeNotify(type = "warning", title = "Para independizar esta cuenta, active el interruptor.",
+                                session = shiny::getDefaultReactiveDomain())
         return()
       }
       
@@ -171,8 +173,8 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
         dplyr::filter(as.character(CliNitPpal) == cuenta_hija,
                       as.character(CLCliNit) != cuenta_hija)
       if (nrow(dependencia) || (!convertir && nrow(propios))) {
-        showNotification("La jerarquía indicada genera una dependencia inválida.",
-                         type = "error")
+        racafeForms::racafeNotify(type = "error", title = "La jerarquía indicada genera una dependencia inválida.",
+                                session = shiny::getDefaultReactiveDomain())
         return()
       }
       
@@ -232,8 +234,9 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
       tryCatch({
         guardar_registro(pendiente$payload, "Jerarquía guardada correctamente.")
       }, error = function(e) {
-        showNotification(paste("Error al guardar jerarquía:", conditionMessage(e)),
-                         type = "error", duration = NULL)
+        racafeForms::racafeNotify(type = "error", duration = NULL,
+                                title = paste("Error al guardar jerarquía:", conditionMessage(e)),
+                                session = shiny::getDefaultReactiveDomain())
       })
     })
     
@@ -301,7 +304,8 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
     # Guardado comercial ----
     observeEvent(input$btn_guardar, {
       if (!isTRUE(es_admin())) {
-        shiny::showNotification("Solo puede ser guardado por el administrador.", type = "warning")
+        racafeForms::racafeNotify(type = "warning", title = "Solo puede ser guardado por el administrador.",
+                                session = shiny::getDefaultReactiveDomain())
         return()
       }
       req(identidad_activa())
@@ -312,8 +316,8 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
       payload$Excluir <- input$frm_Excluir %||% "NO"
       meses <- suppressWarnings(as.numeric(input$frm_NumMesesRecuperar))
       if (length(meses) != 1L || is.na(meses) || meses < 1) {
-        showNotification("Meses para recuperar debe ser mayor que cero.",
-                         type = "error")
+        racafeForms::racafeNotify(type = "error", title = "Meses para recuperar debe ser mayor que cero.",
+                                session = shiny::getDefaultReactiveDomain())
         return()
       }
       payload$NumMesesRecuperar <- as.integer(meses)
@@ -345,8 +349,9 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
       tryCatch({
         guardar_registro(pendiente$payload, "Información comercial guardada correctamente.")
       }, error = function(e) {
-        showNotification(paste("Error al guardar:", conditionMessage(e)),
-                         type = "error", duration = NULL)
+        racafeForms::racafeNotify(type = "error", duration = NULL,
+                                title = paste("Error al guardar:", conditionMessage(e)),
+                                session = shiny::getDefaultReactiveDomain())
       })
     })
     

@@ -40,7 +40,8 @@ Reactivar <- function(id, usuario, codigo_contacto, disparador = codigo_contacto
       tryCatch({
         reactivar_contacto(codigo_contacto(), usuario())
         removeModal()
-        showNotification("Registro reactivado exitosamente", duration = 4, type = "message")
+        racafeForms::racafeNotify(duration = 4, type = "success", title = "Registro reactivado exitosamente",
+                                session = shiny::getDefaultReactiveDomain())
         ret(ret() + 1)
       }, error = function(error) {
         removeModal()
