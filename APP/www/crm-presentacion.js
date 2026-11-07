@@ -30,6 +30,13 @@
     if (sidebar) new MutationObserver(syncSidebarTitles).observe(sidebar, {childList: true, subtree: true});
     $(document).on("shiny:value.crmSidebar shown.lte.pushmenu collapsed.lte.pushmenu", syncSidebarTitles);
 
+    $(document).on("click", "[data-crm-crear-tarea]", function () {
+      document.body.classList.add("control-sidebar-slide-open");
+      var link = $(".control-sidebar .nav-link").filter(function () {
+        return $(this).text().toLowerCase().indexOf("crear tareas") >= 0;
+      }).first();
+      if (link.length) link.tab("show");
+    });
     function hideTooltips() {
       $("[aria-describedby]").each(function () {
         if ($(this).data("bs.tooltip")) $(this).tooltip("hide");
@@ -48,3 +55,4 @@
     window.addEventListener("scroll", hideTooltips, true);
   });
 }(window.jQuery));
+

@@ -14,7 +14,6 @@ sidebar <- bs4DashSidebar(
     ),
     # Gestión Comercial ----
     bs4SidebarMenuItem("Gestión Comercial", icon = icon("briefcase"), selected = FALSE,
-                       bs4SidebarMenuSubItem("Resumen", tabName = "GC_Resumen", icon = icon("gauge-high")),
                        bs4SidebarMenuSubItem("Presupuesto", tabName = "GC_Presupuesto", icon = icon("money-bill-trend-up")),
                        bs4SidebarMenuSubItem("Variables (Bono)", tabName = "GC_Variables", icon = icon("medal")),
                        bs4SidebarMenuSubItem("Oportunidades", tabName = "GC_Oportunidades", icon = icon("bullseye")),
@@ -65,3 +64,4 @@ sidebar <- bs4DashSidebar(
     menuItemOutput("ui_menu_admin")
   )
 )
+

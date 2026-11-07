@@ -14,8 +14,6 @@
          formato = "entero", valor = 420L, tab = "GE_Inventarios")
   )),
   list(seccion = "Gestión Comercial", icono = "briefcase", cajas = list(
-    list(id = "gc_resumen", texto = "Resumen", icono = "gauge-high",
-         formato = "entero", valor = 82L, tab = "GC_Resumen"),
     list(id = "gc_presupuesto_sacos", texto = "Cumplimiento total de sacos", icono = "weight-hanging",
          formato = "porcentaje", valor = NA_real_, footer = "Sacos facturados / presupuesto anual de sacos.",
          tab = "GC_Presupuesto"),
@@ -153,4 +151,5 @@ ResumenEjecutivo <- function(id, valores = NULL) {
     }
   })
 }
+
 

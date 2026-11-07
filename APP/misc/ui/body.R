@@ -1,7 +1,10 @@
 body <- bs4DashBody(
   useShinyjs(),
   .recursos_compartidos,
-  racafeShiny::racafeLoaderUI(startup = FALSE, busy = TRUE),
+  racafeShiny::racafeLoaderUI(startup = FALSE, busy = TRUE,
+    triggers = c(actualizar = "FT_Actualizar", actualizar = "ind_kpis-actualizar", consultar = "Tareas-actualizar",
+      calculando = "Calculadora-pesos-Calcular", calculando = "Calculadora-dolares-Calcular",
+      calculando = "Calculadora-coproductos-Calcular")),
   bs4TabItems(
     # Generalidades ----
     bs4TabItem(tabName = "GE_Resumen", uiOutput("ui_GE_Resumen")),
@@ -12,7 +15,6 @@ body <- bs4DashBody(
     bs4TabItem(tabName = "GE_Inventarios", uiOutput("ui_GE_Inventarios")),
     
     # Gestión Comercial ----
-    bs4TabItem(tabName = "GC_Resumen", uiOutput("ui_GC_Resumen")),
     bs4TabItem(tabName = "GC_Presupuesto", uiOutput("ui_GC_Presupuesto")),
     bs4TabItem(tabName = "GC_Variables", uiOutput("ui_GC_Variables")),
     bs4TabItem(tabName = "GC_Oportunidades", uiOutput("ui_GC_Oportunidades")),
@@ -59,3 +61,4 @@ body <- bs4DashBody(
     bs4TabItem(tabName = "IN_Consulta", uiOutput("ui_IN_Consulta"))
   )
 )
+

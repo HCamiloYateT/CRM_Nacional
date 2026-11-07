@@ -96,7 +96,7 @@ server <- function(input, output, session) {
   })
   
   ### Indicadores ----
-  TablaIndicadores("ind_kpis")
+  indicadores_mod <- TablaIndicadores("ind_kpis")
   res_ind <- racafeModulos::MenuHeaderServer(id = "MenuIndicadores", items_r = TablaIndicadoresUI("ind_kpis"),
                                             headerText = NULL, href = "#", footerText = "Comparación de indicadores")
   
@@ -104,8 +104,15 @@ server <- function(input, output, session) {
     bs4Dash::updateTabItems(session, "menu_principal", selected = "GE_Comparacion")
   })
   ### Tareas ----
-  HeaderTareasServer(session = session, usuario = usuario,
-                    actualizaciones = notas_creadas$actualizaciones)
+  notas_revision <- reactiveVal(0L)
+  notas_datos <- reactive({
+    notas_revision()
+    notas_creadas$actualizaciones()
+    racafeBD::CargarDatos("CRMNALNOTAS")
+  })
+  menu_tareas <- HeaderTareasServer(session = session, usuario = usuario, notas = notas_datos,
+    actualizaciones = notas_creadas$actualizaciones,
+    on_success = function() notas_revision(isolate(notas_revision()) + 1L))
   ### Clientes ----
   clientes_raw_cache <- reactiveVal(CargarDatos("CRMNALCLIENTE"))
   
@@ -184,7 +191,6 @@ server <- function(input, output, session) {
   CargarTabUnaVez("GE_Inventarios", "ui_GE_Inventarios", function() h4("Inventarios"))
   
   ### Gestión Comercial ----
-  CargarTabUnaVez("GC_Resumen", "ui_GC_Resumen", function() h4("Resumen"))
   #### Presupuesto ----
   
   CargarTabUnaVez("GC_Presupuesto", "ui_GC_Presupuesto", function() {
@@ -194,7 +200,10 @@ server <- function(input, output, session) {
   CargarTabUnaVez("GC_Variables", "ui_GC_Variables", function() h4("Variables para Bonificación"))
   CargarTabUnaVez("GC_Oportunidades", "ui_GC_Oportunidades", function() h4("Oportunidades"))
   CargarTabUnaVez("GC_Pendientes", "ui_GC_Pendientes", function() h4("Pendientes de Gestión"))
-  CargarTabUnaVez("GC_Tareas", "ui_GC_Tareas", function() h4("Notas y Tareas"))
+  CargarTabUnaVez("GC_Tareas", "ui_GC_Tareas", function() TableroTareasUI("Tareas"), function() {
+    TableroTareas("Tareas", usuario = usuario, datos = menu_tareas$tareas$datos,
+      abrir = menu_tareas$tareas$abrir, refrescar = menu_tareas$tareas$refrescar)
+  })
   CargarTabUnaVez("GC_Alertas", "ui_GC_Alertas", function() h4("Alertas y Notificaciones"))
   CargarTabUnaVez("GC_Fidelidad", "ui_GC_Fidelidad", function() h4("Fidelidad y Riesgo"))
   CargarTabUnaVez("GC_Cartera", "ui_GC_Cartera", function() h4("Cartera"))
@@ -238,7 +247,9 @@ server <- function(input, output, session) {
   CargarTabUnaVez("CO_Frecuencia", "ui_CO_Frecuencia", function() h4("Frecuencia"))
   
   ### Herramientas ----
-  CargarTabUnaVez("HE_Calculadoras", "ui_HE_Calculadoras", function() h4("Calculadoras"))
+  CargarTabUnaVez("HE_Calculadoras", "ui_HE_Calculadoras", function() CalculadoraUI("Calculadora"), function() {
+    Calculadora("Calculadora", dat_ind = indicadores_mod$datos_r, usr = usuario, clientes = clientes_raw_cache)
+  })
   
   CargarTabUnaVez("HE_Conversion", "ui_HE_Conversion", function() h4("Tablas de Conversión"))
   
@@ -264,4 +275,5 @@ server <- function(input, output, session) {
   CargarTabUnaVez("IN_Consulta", "ui_IN_Consulta", function() h4("Consulta Individual"))
   
 }
+
 
