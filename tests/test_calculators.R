@@ -48,3 +48,26 @@ testServer(CalculadoraPesosExcelso, args = list(dat_ind = reactive(.ind_prueba),
   stopifnot(length(.guardados_prueba) == 1L)
 })
 cat("OK: guardado autorizado, confirmado una vez y con los valores revisados.\n")
+
+
+# Sin clientes, fechas ausentes y selección sin datos no deben advertir en max().
+for (.fuente_vacia in list(
+  data.frame(LinNegCod = numeric(), CliNitPpal = numeric(), Segmento = character(),
+    FecProceso = as.Date(character()), MNFCCPpto = numeric(), SSPpto = numeric()),
+  data.frame(LinNegCod = 10000, CliNitPpal = 1, Segmento = "MEDIANO",
+    FecProceso = as.Date(NA), MNFCCPpto = 14000, SSPpto = 1))) {
+  local({
+    advertencias <- character()
+    anterior <- options(warn = 2)
+    on.exit(options(anterior))
+    withCallingHandlers(testServer(CalculadoraCoproductos, args = list(dat_ind = reactive(.ind_prueba),
+      usr = reactive("ANALISTA"), clientes = .fuente_vacia), {
+      session$setInputs(Segmento = "MEDIANO")
+      session$flushReact()
+      session$setInputs(Segmento = "DETAL")
+      session$flushReact()
+    }), warning = function(w) advertencias <<- c(advertencias, conditionMessage(w)))
+    stopifnot(!length(advertencias))
+  })
+}
+cat("OK: coproductos sin advertencias con clientes vacíos o fechas ausentes.\n")
