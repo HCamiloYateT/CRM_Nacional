@@ -371,9 +371,10 @@ HeaderIndicadoresServer <- function(session) {
 }
 
 # Tareas ----
-HeaderTareasServer <- function(session, usuario, notas = NULL, actualizaciones = NULL, on_success = NULL) {
+HeaderTareasServer <- function(session, usuario, notas = NULL, actualizaciones = NULL, on_success = NULL,
+                               es_admin = function() FALSE) {
   drop <- NotificacionesTareas("HeaderTareas", usuario = usuario, notas = notas,
-                               actualizaciones = actualizaciones, on_success = on_success)
+                               actualizaciones = actualizaciones, on_success = on_success, es_admin = es_admin)
   menu <- racafeModulos::MenuHeaderServer(
     id = "MenuTareas", items_r = drop$items,
     badgeStatus_r = drop$badge_st, badge_n_r = drop$n,
@@ -667,5 +668,6 @@ HeaderMigrarCarteraServer <- function(usuario, clientes_raw, es_admin) {
 
   invisible(menu)
 }
+
 
 
