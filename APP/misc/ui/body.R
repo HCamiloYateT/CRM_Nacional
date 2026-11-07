@@ -1,7 +1,7 @@
 body <- bs4DashBody(
   useShinyjs(),
   .recursos_compartidos,
-  racafeShiny::racafeLoaderUI(startup = FALSE, busy = FALSE),
+  racafeShiny::racafeLoaderUI(startup = FALSE, busy = TRUE),
   bs4TabItems(
     # Generalidades ----
     bs4TabItem(tabName = "GE_Resumen", uiOutput("ui_GE_Resumen")),

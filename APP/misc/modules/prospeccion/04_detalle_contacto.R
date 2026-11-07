@@ -174,8 +174,7 @@ DetalleContacto <- function(id, usuario) {
     
     # Datos ----
     contactos_raw <- reactive({
-      waiter_show(html = preloader_actualizar$html, color = preloader_actualizar$color)
-      on.exit(waiter_hide(), add = TRUE)
+
       refresh_trigger()
       derivar_etapa_actual() %>%
         filter(Etapa == "CONTACTO", Estado == "ACTIVO") %>%
@@ -186,8 +185,7 @@ DetalleContacto <- function(id, usuario) {
         )
     })
     contactos_enriquecidos <- reactive({
-      waiter_show(html = preloader_actualizar$html, color = preloader_actualizar$color)
-      on.exit(waiter_hide(), add = TRUE)
+
       
       base  <- contactos_raw()
       relac <- .dias_sin_relacionamiento_bulk(base$CodContacto, base$FechaHoraCrea)

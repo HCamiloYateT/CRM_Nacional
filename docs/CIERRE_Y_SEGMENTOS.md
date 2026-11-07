@@ -1,12 +1,14 @@
 # Cierre financiero y revisión comercial de segmentos
 
-- El calendario usa `ultimo_periodo_pyg` exportado por DataPrep. La fecha se limita
-  al último mes calendario terminado. Los movimientos provisionales del mes en
-  curso no definen el cierre. Sin cierre válido se muestran 12 meses pendientes.
-- La tabla anual y las series muestran toda la facturación disponible dentro de los filtros,
-  incluidos meses abiertos y futuros. El cierre financiero limita los indicadores cerrados
-  y determina los meses pendientes; no elimina filas de la fuente de facturación. En noviembre de 2026, con cierre a octubre, quedan
-  noviembre y diciembre: dos meses. Un cierre más antiguo conserva ese rezago.
+- El cierre financiero usa `ultimo_periodo_pyg` exportado por DataPrep, limitado al
+  último mes calendario terminado. Define la validación financiera y los indicadores
+  cerrados; los movimientos provisionales no lo adelantan.
+- La planificación del presupuesto usa el mes vigente del calendario. En noviembre
+  de 2026 quedan noviembre y diciembre: dos meses, aunque el cierre financiero sea septiembre.
+- La tabla anual y las series muestran toda la facturación disponible dentro de los
+  filtros, incluidos meses abiertos y futuros. El cierre no elimina esas filas.
+- La meta roja solo se dibuja para el mes vigente y los siguientes. Su base de
+  ejecución no incorpora facturas futuras.
 - El presupuesto oculta las cuatro columnas de comparación con el período anterior;
   conserva el año anterior y las columnas de ejecución, presupuesto y cumplimiento.
 - Las convenciones aparecen en una fila y se adaptan a pantallas pequeñas.
@@ -18,7 +20,7 @@
 - Cuadre mensual: gt rechaza `inherit` como color. Se sustituye por gris #495057
   y el adaptador omite ese valor CSS si aparece en otras definiciones de columna.
 - Segmentos: la comparación principal usa PyG financiero frente al snapshot de
-  CRMNALCLIENTE por NIT principal y línea. La segmentación de creación no determina
+  clientes del CRM por NIT principal y línea. La segmentación de creación no determina
   diferencias. Las matrices se reemplazan por una lista de clientes, con asesor,
   segmento PyG, segmento CRM y estado. Inicialmente se muestran los casos por
   revisar; se puede consultar el universo completo y descargar el detalle.
@@ -48,3 +50,26 @@ No se ejecutó la aplicación completa con servicios y datos de negocio.
 
 La prueba `tests/test_budget_open_billing.R` verifica la fuente real del módulo con
 facturas en septiembre, octubre, noviembre y diciembre, incluido un mes futuro.
+
+
+## Presentación y cargadores
+
+Los NIT se convierten a texto únicamente al presentar las tablas, sin separadores,
+decimales ni notación científica. Los valores utilizados por filtros, selección y
+operaciones de datos conservan su tipo original. Las columnas cuyo título sea NIT
+también reciben esa regla.
+
+Los enlaces del sidebar colapsado tienen hovers grises y etiquetas accesibles;
+se limpian al expandir el menú y se incluyen las opciones generadas dinámicamente.
+
+La actividad de toda la app utiliza un único `racafeShiny::racafeLoaderUI` con
+`busy = TRUE`. El inicio conserva el preset `racafePreloader` de la misma librería.
+Se eliminan spinners propios, overlays locales y llamadas manuales a waiter en los
+módulos para evitar cargadores simultáneos.
+
+Pruebas adicionales: `tests/test_budget_calendar_nit.R` y
+`tests/test_budget_red_trace.R`. El arnés local verificó 278 llamadas públicas de
+las librerías y preservó las 23 operaciones de datos de 17 scripts.
+Chromium probó hovers al colapsar/expandir y con menú dinámico, el cargador único
+busy/idle con racafeShiny y waiter reales, y NIT completos. La conexión Shiny del
+navegador se simuló; no se ejecutó la app completa con servicios de negocio.

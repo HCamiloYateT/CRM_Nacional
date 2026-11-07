@@ -237,8 +237,7 @@ DetalleAnalisisConversion <- function(id, universo_contactos, usuario) {
                               choices = c("Todos", det), selected = "Todos", multiple = FALSE, size = 8, empty = FALSE)
     })
     datos_filtrados_r <- reactive({
-      waiter_show(html = preloader_actualizar$html, color = preloader_actualizar$color)
-      on.exit(waiter_hide(), add = TRUE)
+
       req(input$Origen, input$DetOrigen)
       dat <- universo_contactos()
       if (!identical(input$Origen, "Todos")) dat <- dat %>% filter(Origen == input$Origen)
@@ -529,12 +528,7 @@ DetalleAnalisisConversion <- function(id, universo_contactos, usuario) {
       modal_construido <- racafeForms::racafeModal(size = clase_modal,
         title = titulo_modal_detalle(),
         tagList(
-          shinyjs::hidden(
-            tags$div(id = ns("PreloaderModalDetalle"),
-                     style = paste0("background:", preloader_actualizar$color,
-                                    ";text-align:center;padding:30px;"),
-                     preloader_actualizar$html)
-          ),
+          
           uiOutput(ns("ModalContenidoDetalle"))
         ),
         easy_close = TRUE,
@@ -548,14 +542,8 @@ DetalleAnalisisConversion <- function(id, universo_contactos, usuario) {
       modulo$ui()
     })
     outputOptions(output, "ModalContenidoDetalle", suspendWhenHidden = FALSE)
-    observeEvent(input$AccionSeleccionada, {
-      if (!identical(input$AccionSeleccionada$accion, "Reactivar"))
-        shinyjs::show(id = "PreloaderModalDetalle", anim = FALSE)
-    }, priority = 10)
-    observe({
-      req(accion_detalle_seleccionada())
-      shinyjs::hide(id = "PreloaderModalDetalle", anim = FALSE)
-    })
+    
+    
     modulo_editar_detalle <- Editar("EditarDetalleCohorte", usuario = usuario,
                                     codigo_contacto = reactive(codigo_detalle_seleccionado()))
     modulo_relacion_detalle <- Relacionamiento("RelacionamientoDetalleCohorte", usuario = usuario,
@@ -634,8 +622,7 @@ DetalleLeads <- function(id, usuario) {
     refresh_trigger <- reactiveVal(0)
     # Datos ----
     universo_contactos_r <- reactive({
-      waiter_show(html = preloader_actualizar$html, color = preloader_actualizar$color)
-      on.exit(waiter_hide(), add = TRUE)
+
       refresh_trigger()
       lead_data <- CargarDatos("CONTACTOLEAD") %>%
         select(CodContacto, Segmento, LinNegocio, Asesor, FechaConversion)

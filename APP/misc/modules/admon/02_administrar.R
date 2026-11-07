@@ -132,9 +132,8 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
     }
     
     .recargar <- function() {
-      preloader <- racafeShiny::racafePreloader("actualizar", "Cargando catálogos...")
-      waiter::waiter_show(html = preloader$html, color = preloader$color)
-      on.exit(waiter::waiter_hide(), add = TRUE)
+
+
       tryCatch({
         .admon_choices_migrar_relaciones()
         datos <- .admon_choices_leer()
@@ -629,10 +628,9 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
     shiny::observeEvent(input$ADM_ConfirmarGuardar, {
       shiny::req(isTRUE(es_admin()), isTRUE(confirmacion_guardado_rv()))
       confirmacion_guardado_rv(FALSE)
-      preloader <- racafeShiny::racafePreloader("calculando", "Guardando catálogos...")
+
       shiny::removeModal()
-      waiter::waiter_show(html = preloader$html, color = preloader$color)
-      on.exit(waiter::waiter_hide(), add = TRUE)
+
       tryCatch({
         .admon_choices_guardar_cambios(
           shiny::isolate(borrador_rv()), shiny::isolate(base_rv())

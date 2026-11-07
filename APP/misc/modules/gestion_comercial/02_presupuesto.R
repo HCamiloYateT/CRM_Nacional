@@ -651,7 +651,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
                                         titulo_acum, titulo_mensual,
                                         label_y_acum, label_y_mensual,
                                         formato_y = "numero") {
-      mes_actual <- calendario_r()$mes_actual
+      mes_vigente <- calendario_r()$mes_vigente
       
       datos_grafico <- datos_grafico %>%
         arrange(Mes_Num) %>%
@@ -669,21 +669,21 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         mutate(acum_real = ifelse(Mes_Num <= ultimo_mes, acum_real, NA_real_))
       
       ejec_acum <- datos_grafico %>%
-        filter(Mes_Num <= ultimo_mes, !is.na(.data[[col_real]])) %>%
+        filter(Mes_Num < mes_vigente, !is.na(.data[[col_real]])) %>%
         summarise(s = sum(.data[[col_real]], na.rm = TRUE)) %>%
         pull(s)
       
       ppto_total <- sum(datos_grafico[[col_ppto]], na.rm = TRUE)
-      meses_rest <- 12L - mes_actual
+      meses_rest <- calendario_r()$meses_rest
       meta_info <- .meta_mensual_requerida(ppto_total, ejec_acum, meses_rest)
       meta_mens <- meta_info$valor
       
       datos_grafico <- datos_grafico %>%
         mutate(
-          meta_mensual = ifelse(Mes_Num > mes_actual, meta_mens, NA_real_),
+          meta_mensual = ifelse(Mes_Num >= mes_vigente, meta_mens, NA_real_),
           meta_acum    = ifelse(
-            Mes_Num > mes_actual,
-            ejec_acum + (Mes_Num - mes_actual) * meta_mens, NA_real_
+            Mes_Num >= mes_vigente,
+            ejec_acum + (Mes_Num - mes_vigente + 1L) * meta_mens, NA_real_
           ),
           Fecha = factor(Fecha, levels = .MESES, ordered = TRUE)
         )
@@ -1047,7 +1047,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       lubridate::year(Sys.Date())
     })
     calendario_r <- reactive({
-      .crm_calendario_cierre(cierre_pyg_r(), periodo_r())
+      .crm_calendario_presupuesto(cierre_pyg_r(), periodo_r())
     })
 
     # Reactivos de datos base
@@ -1634,7 +1634,6 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     
     ## Tabla GT mensual/acumulada ----
     output$Presupuesto <- renderUI({
-      waiter_show(html = preloader_calculando$html, color = preloader_calculando$color)
       periodo     <- periodo_r()
       periodo_ant <- periodo - 1L
       cn          <- col_names_r()
@@ -1829,7 +1828,6 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         gt_var_style_local(cn$varmgn_acum) %>%
         gt::cols_hide(columns = dplyr::all_of(c("VarSS", "VarMgn", cn$varss_acum, cn$varmgn_acum)))
       
-      waiter_hide()
       return(gt1)
     })
     
@@ -1841,7 +1839,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           swatches = c("#F0FDF4", "#F8FAFC", "#EFF6FF"))),
         .crm_nota(c("Cumplimiento = ejecutado / presupuesto.",
           "La tabla y las series incluyen la facturación disponible, también en meses abiertos o futuros.",
-          "Los indicadores de meses cerrados y los meses pendientes usan el cierre financiero.")))
+          "Los indicadores cerrados usan el cierre financiero; los meses pendientes incluyen el mes vigente.")))
     })
 
     ## Titulo dinamico sub-card proyeccion ----

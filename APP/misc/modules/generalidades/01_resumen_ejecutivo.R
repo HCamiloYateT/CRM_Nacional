@@ -87,14 +87,6 @@
 # Funciones ----
 .resumen_ejecutivo_estilos <- function() {
   shiny::tags$style(shiny::HTML("\n    .resumen-ejecutivo {position:relative;min-height:260px;}
-    .resumen-ejecutivo .re-loader {position:absolute;inset:0;z-index:5;
-      display:flex;flex-direction:column;align-items:center;justify-content:center;
-      gap:12px;background:rgba(255,255,255,.93);border-radius:6px;}
-    .resumen-ejecutivo .re-loader-spinner {width:48px;height:48px;
-      border:4px solid #e5e7eb;border-top-color:#DA291C;
-      border-radius:50%;animation:re-girar .8s linear infinite;}
-    .resumen-ejecutivo .re-loader-texto {font-size:12px;color:#64748b;}
-    @keyframes re-girar {to {transform:rotate(360deg);}}
     .resumen-ejecutivo .re-seccion {display:flex;align-items:center;gap:8px;\n      margin:15px 0 8px;padding-bottom:5px;border-bottom:1px solid #e2e8f0;}\n    .resumen-ejecutivo .re-seccion i {color:#DA291C;font-size:12px;}\n    .resumen-ejecutivo .re-seccion span {font-size:12px;font-weight:700;\n      color:#374151;text-transform:uppercase;letter-spacing:.02em;}\n    .resumen-ejecutivo .re-columna {margin-bottom:10px;}\n    .resumen-ejecutivo .re-navegar {cursor:pointer;outline:none;}\n    .resumen-ejecutivo .racafe-caja-valor:not(.rmcv-card) {min-height:92px;padding:10px 12px;\n      gap:7px;border:1px solid #e5e7eb;box-shadow:0 1px 2px rgba(0,0,0,.04);\n      transition:border-color .12s,box-shadow .12s;}\n    .resumen-ejecutivo .re-navegar:hover .racafe-caja-valor:not(.rmcv-card),\n    .resumen-ejecutivo .re-navegar:focus .racafe-caja-valor:not(.rmcv-card) {\n      border-color:#DA291C;box-shadow:0 2px 7px rgba(0,0,0,.08);}\n    .resumen-ejecutivo .racafe-caja-valor:not(.rmcv-card) > div:first-child > div:first-child {\n      min-width:0;align-items:center!important;gap:8px!important;}\n    .resumen-ejecutivo .racafe-caja-valor:not(.rmcv-card) > div:first-child > div:first-child > div:first-child {\n      font-size:1.2em!important;margin-right:0!important;flex-shrink:0;
       color:#DA291C!important;}\n    .resumen-ejecutivo .racafe-caja-valor:not(.rmcv-card) > div:first-child > div:first-child > div:last-child {\n      font-size:11px!important;line-height:1.3;overflow-wrap:anywhere;}\n    .resumen-ejecutivo .racafe-caja-valor:not(.rmcv-card) > div:last-child {font-size:1.3em!important;\n      line-height:1.15;}\n  "))
 }
@@ -106,42 +98,6 @@
 .resumen_ejecutivo_caja_ui <- function(ns, caja) {
   .crm_caja_ui(ns(caja$id), icono = caja$icono, texto = caja$texto,
                 mostrar_boton = TRUE, tooltip = paste("Abrir", caja$texto))
-}
-
-# Preloader ----
-.resumen_ejecutivo_loader_js <- function(ns) {
-  cajas <- unlist(lapply(.RESUMEN_EJECUTIVO_SECCIONES, function(seccion) {
-    vapply(seccion$cajas, function(caja) {
-      ns(paste0(caja$id, "-valor_display"))
-    }, character(1))
-  }), use.names = FALSE)
-  ids <- jsonlite::toJSON(cajas, auto_unbox = FALSE)
-  loader <- jsonlite::toJSON(ns("loader"), auto_unbox = TRUE)
-  shiny::tags$script(shiny::HTML(sprintf("
-    (function() {
-      var pendientes = new Set(%s);
-      var loaderId = %s;
-      function verificar() {
-        if (pendientes.size) return;
-        var loader = document.getElementById(loaderId);
-        if (loader) {
-          loader.style.display = 'none';
-          loader.setAttribute('aria-hidden', 'true');
-        }
-        $(document).off('shiny:value.resumen_loader shiny:error.resumen_loader',
-                         registrar);
-      }
-      function registrar(event) {
-        var id = event.target && event.target.id;
-        if (!pendientes.has(id)) return;
-        pendientes.delete(id);
-        if (!pendientes.size) requestAnimationFrame(verificar);
-      }
-      $(document).on('shiny:value.resumen_loader shiny:error.resumen_loader',
-                      registrar);
-      if (!pendientes.size) verificar();
-    })();
-  ", ids, loader)))
 }
 
 # Modulo Principal ----
@@ -160,14 +116,7 @@ ResumenEjecutivoUI <- function(id) {
   shiny::tags$div(
     class = "resumen-ejecutivo",
     .resumen_ejecutivo_estilos(),
-    .resumen_ejecutivo_loader_js(ns),
-    do.call(shiny::tagList, bloques),
-    shiny::tags$div(
-      id = ns("loader"), class = "re-loader", role = "status",
-      `aria-live` = "polite", `aria-label` = "Cargando tarjetas",
-      shiny::tags$div(class = "re-loader-spinner", `aria-hidden` = "true"),
-      shiny::tags$span(class = "re-loader-texto", "Cargando indicadores...")
-    )
+    do.call(shiny::tagList, bloques)
   )
 }
 

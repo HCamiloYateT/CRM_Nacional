@@ -434,10 +434,7 @@ Cotizacion <- function(id, usuario, dat) {
         
         return(invisible(NULL))
       }
-      
-      waiter_show(html = preloader_actualizar$html, color = preloader_actualizar$color)
-      
-      on.exit(waiter_hide(), add = TRUE)
+
       
       forma_pago <- .obtener_fpg_cliente(cliente$CliNitPpal[[1]])
       
@@ -890,11 +887,8 @@ Cotizacion <- function(id, usuario, dat) {
         if (length(errores) > 0L) {
           stop(paste(errores, collapse = " "), call. = FALSE)
         }
-        
-        preloader_documento <- racafeShiny::racafePreloader("calculando", "Generando documento...")
-        waiter_show(html = preloader_documento$html, color = preloader_documento$color)
-        
-        on.exit(waiter_hide(), add = TRUE)
+
+
         
         tryCatch({
           consecutivo <- .obtener_max_cotizacion() + 1L

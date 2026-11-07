@@ -169,8 +169,7 @@ DetalleProspectos <- function(id, usuario) {
     
     # Datos ----
     prospectos_base <- reactive({
-      waiter_show(html = preloader_actualizar$html, color = preloader_actualizar$color)
-      on.exit(waiter_hide(), add = TRUE)
+
       
       refresh_trigger()
       

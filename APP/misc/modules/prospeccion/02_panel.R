@@ -512,17 +512,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
       modal_construido <- racafeForms::racafeModal(size = clase_modal,
         title = titulo_modal_actual(),
         tagList(
-          shinyjs::hidden(
-            tags$div(
-              id = ns("PreloaderModal"),
-              style = paste0(
-                "background:",
-                preloader_actualizar$color,
-                "; text-align:center; padding:30px;"
-              ),
-              preloader_actualizar$html
-            )
-          ),
+          
           uiOutput(
             ns("ModalContenido")
           )
@@ -547,16 +537,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
       modulo$ui()
     })
     
-    observeEvent(
-      input$AccionSeleccionada,
-      {
-        shinyjs::show(
-          id = "PreloaderModal",
-          anim = FALSE
-        )
-      },
-      priority = 10
-    )
+    
     
     outputOptions(
       output,
@@ -564,16 +545,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
       suspendWhenHidden = FALSE
     )
     
-    observe({
-      req(
-        accion_seleccionada()
-      )
-      
-      shinyjs::hide(
-        id = "PreloaderModal",
-        anim = FALSE
-      )
-    })
+    
     
     # Instanciacion unica de cada submodulo
     modulo_editar <- Editar(

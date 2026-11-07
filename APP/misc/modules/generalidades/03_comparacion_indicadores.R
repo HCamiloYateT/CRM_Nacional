@@ -37,8 +37,7 @@ ComparacionIndicadores <- function(id) {
     formato <- racafeShiny::DefinirFormato("dolares")
     
     datos_comparacion_r <- shiny::eventReactive(input$actualizar, ignoreNULL = FALSE, {
-      waiter_show(html = preloader_actualizar$html, color = preloader_actualizar$color)
-      on.exit(waiter_hide(), add = TRUE)
+
       
       shiny::req(input$fecha_anterior, input$fecha_actual)
       
