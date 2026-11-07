@@ -1,3 +1,14 @@
+# Población común del tablero y el dropdown ----
+.tareas_visibles_usuario <- function(datos, usuario = NULL) {
+  if (is.null(usuario)) return(datos)
+  if (length(usuario) != 1L || is.na(usuario) || !nzchar(trimws(usuario))) return(datos[0, , drop = FALSE])
+  responsable <- vapply(as.character(datos$Responsable), function(x) {
+    if (is.na(x)) return(FALSE)
+    usuario %in% trimws(strsplit(x, "|", fixed = TRUE)[[1]])
+  }, logical(1))
+  datos[(!is.na(datos$Usuario) & as.character(datos$Usuario) == usuario) | responsable, , drop = FALSE]
+}
+
 # PRESENTACION DE TAREAS DEL ENCABEZADO ----
 .tareas_lista_item <- function(fila, input_id) {
   id <- as.character(fila$cons[[1]])
@@ -66,15 +77,15 @@
          call. = FALSE)
   }
   
-  # Filtros de prueba ----
-  # datos <- datos %>% dplyr::filter(Archivado == 0, Cumplido == 0)
-  # datos <- datos %>% dplyr::filter(Usuario == usuario)
-  
+  datos <- .tareas_visibles_usuario(datos, usuario)
+  datos <- datos %>% dplyr::filter(Archivado == 0, Cumplido == 0)
+
   datos %>%
     dplyr::mutate(
       prioridad_orden = dplyr::case_when(
         toupper(trimws(as.character(Prioridad))) == "URGENTE" ~ 1L,
         toupper(trimws(as.character(Prioridad))) == "IMPORTANTE" ~ 2L,
+        toupper(trimws(as.character(Prioridad))) == "BAJA" ~ 4L,
         TRUE ~ 3L
       ),
       fecha_orden = suppressWarnings(as.Date(FechaCumplimiento))
@@ -82,12 +93,12 @@
     dplyr::arrange(prioridad_orden, is.na(fecha_orden), fecha_orden, cons)
 }
 
-.tareas_modificar_bd <- function(original, accion, cumplidas = NULL) {
+.tareas_modificar_bd <- function(original, accion, cumplidas = NULL, respuesta = NULL, usuario = NULL) {
   con <- racafeBD::ConectarBD()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   DBI::dbWithTransaction(con, {
     sql <- DBI::sqlInterpolate(
-      con, "SELECT cons, Actividades, Cumplidas, Archivado, Cumplido
+      con, "SELECT cons, Actividades, Cumplidas, Archivado, Cumplido, Respuesta, Usuario, Responsable
             FROM CRMNALNOTAS WHERE cons = ?id FOR UPDATE",
       id = as.numeric(original$cons[[1]])
     )
@@ -98,14 +109,32 @@
     }
     igual <- function(a, b) identical(as.character(a), as.character(b)) ||
       (length(a) == 1L && length(b) == 1L && is.na(a) && is.na(b))
-    campos <- c("Actividades", "Cumplidas", "Archivado", "Cumplido")
+    campos <- c("Actividades", "Cumplidas", "Archivado", "Cumplido", "Respuesta", "Usuario", "Responsable")
     if (!all(vapply(campos, function(campo) {
       igual(actual[[campo]][[1]], original[[campo]][[1]])
     }, logical(1)))) {
       stop("El registro fue modificado por otra sesión. Actualice y vuelva a abrirlo.",
            call. = FALSE)
     }
-    if (accion == "actividades") {
+    if (!is.null(usuario) && nrow(.tareas_visibles_usuario(actual, usuario)) != 1L) {
+      stop("El registro ya no está asignado a este usuario.", call. = FALSE)
+    }
+    if (accion == "eliminar" && !identical(as.character(actual$Usuario[[1]]), as.character(usuario))) {
+      stop("Solo el creador puede eliminar el registro.", call. = FALSE)
+    }
+    if (accion == "respuesta") {
+      texto <- trimws(as.character(respuesta))
+      if (length(texto) != 1L || is.na(texto) || !nzchar(texto)) stop("Escriba un comentario.", call. = FALSE)
+      anterior <- as.character(actual$Respuesta[[1]])
+      if (is.na(anterior)) anterior <- ""
+      nuevo <- paste0(if (nzchar(anterior)) paste0(anterior, "\n"),
+        format(Sys.time(), "%d/%m/%Y %H:%M"), " — ", usuario, ": ", texto)
+      comando <- DBI::sqlInterpolate(con, "UPDATE CRMNALNOTAS SET Respuesta = ?valor WHERE cons = ?id",
+        valor = nuevo, id = as.numeric(original$cons[[1]]))
+    } else if (accion == "eliminar") {
+      comando <- DBI::sqlInterpolate(con, "DELETE FROM CRMNALNOTAS WHERE cons = ?id",
+        id = as.numeric(original$cons[[1]]))
+    } else if (accion == "actividades") {
       estados <- .tareas_actividades(original)
       if (length(cumplidas) != length(estados$textos)) {
         stop("La cantidad de actividades cambió.", call. = FALSE)
@@ -153,14 +182,18 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
     guardando_rv <- shiny::reactiveVal(FALSE)
     registro_pendiente_rv <- shiny::reactiveVal(NULL)
     
+    respuesta_pendiente_rv <- shiny::reactiveVal(NULL)
     resultado_r <- shiny::reactive({
       revision_rv()
       if (shiny::is.reactive(actualizaciones)) actualizaciones()
       tryCatch({
-        datos <- racafeBD::CargarDatos("CRMNALNOTAS")
-        list(datos = .tareas_pendientes(datos), error = NULL)
+        datos <- if (is.null(notas)) racafeBD::CargarDatos("CRMNALNOTAS") else {
+          if (shiny::is.reactive(notas)) notas() else notas
+        }
+        todos <- .tareas_visibles_usuario(datos, usuario())
+        list(datos = .tareas_pendientes(todos), todos = todos, error = NULL)
       }, error = function(e) {
-        list(datos = NULL, error = conditionMessage(e))
+        list(datos = NULL, todos = NULL, error = conditionMessage(e))
       })
     })
     pendientes_r <- shiny::reactive(resultado_r()$datos)
@@ -176,6 +209,8 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
       if (is.function(on_success)) on_success()
     }
     abrir <- function(registro) {
+      registro_pendiente_rv(NULL)
+      respuesta_pendiente_rv(NULL)
       seleccionado_rv(registro)
       actividades <- .tareas_actividades(registro)
       es_tarea <- identical(as.character(registro$Tipo[[1]]), "list")
@@ -189,7 +224,9 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
           racafeForms::racafeInfoItem("ETIQUETAS", registro$Etiquetas[[1]]),
           columns = 2
         ),
-        racafeForms::racafeInfoItem("DESCRIPCIÓN", registro$Descripcion[[1]])
+        racafeForms::racafeInfoItem("DESCRIPCIÓN", registro$Descripcion[[1]]),
+        racafeForms::racafeInfoItem("COMENTARIOS", registro$Respuesta[[1]]),
+        racafeForms::racafeInputTextArea("respuesta", "Nuevo comentario", rows = 3, ns = ns)
       )
       if (es_tarea && length(actividades$textos)) {
         contenido <- c(contenido, list(
@@ -210,6 +247,10 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
             racafeForms::racafeButton("guardar_actividades", "Guardar actividades",
                                       icon = "floppy-disk", variant = "secondary",
                                       ns = ns, size = "xs"),
+          racafeForms::racafeButton("comentar", "Guardar comentario", icon = "comment", ns = ns, size = "xs"),
+          if (identical(as.character(registro$Usuario[[1]]), as.character(usuario()))) {
+            racafeForms::racafeButtonDelete("eliminar", label = "Eliminar", ns = ns, size = "xs")
+          },
           racafeForms::racafeButton("archivar", "Archivar", icon = "archive",
                                     variant = "secondary", ns = ns, size = "xs"),
           racafeForms::racafeButton("cumplir", "Marcar cumplida",
@@ -218,14 +259,14 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
         )
       ))
     }
-    guardar <- function(accion, estados = NULL) {
+    guardar <- function(accion, estados = NULL, respuesta = NULL) {
       if (isTRUE(guardando_rv())) return(invisible(NULL))
       original <- shiny::isolate(seleccionado_rv())
       shiny::req(!is.null(original))
       guardando_rv(TRUE)
       on.exit(guardando_rv(FALSE), add = TRUE)
       tryCatch({
-        .tareas_modificar_bd(original, accion, estados)
+        .tareas_modificar_bd(original, accion, estados, respuesta = respuesta, usuario = usuario())
         seleccionado_rv(NULL)
         registro_pendiente_rv(NULL)
         shiny::removeModal()
@@ -248,12 +289,12 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
       if (!is.null(resultado$error)) {
         return(shiny::tags$div(
           class = "dropdown-item", style = "white-space:normal;color:#b91c1c;",
-          paste("Error leyendo CRMNALNOTAS:", resultado$error)
+          paste("No fue posible leer las tareas:", resultado$error)
         ))
       }
       datos <- resultado$datos
       if (!nrow(datos)) {
-        return(racafeShiny::racafeListGroup(empty_message = "CRMNALNOTAS no tiene registros."))
+        return(racafeShiny::racafeListGroup(empty_message = "No hay tareas pendientes."))
       }
       do.call(racafeShiny::racafeListGroup, lapply(seq_len(nrow(datos)), function(i) {
         .tareas_lista_item(datos[i, , drop = FALSE], ns("abrir"))
@@ -330,9 +371,44 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
       registro_pendiente_rv(NULL)
     })
     
+    shiny::observeEvent(input$comentar, {
+      texto <- trimws(input$respuesta)
+      shiny::req(nzchar(texto), seleccionado_rv())
+      respuesta_pendiente_rv(texto)
+      racafeForms::racafeConfirm(session, "confirm_comentar", title = "Guardar comentario",
+        text = "¿Añadir este comentario al registro?", ns = ns, confirm_label = "Guardar")
+    })
+    shiny::observeEvent(input$confirm_comentar, {
+      if (isTRUE(input$confirm_comentar) && !is.null(respuesta_pendiente_rv())) {
+        guardar("respuesta", respuesta = respuesta_pendiente_rv())
+      }
+      respuesta_pendiente_rv(NULL)
+    })
+    shiny::observeEvent(input$eliminar, {
+      registro <- seleccionado_rv()
+      shiny::req(registro, identical(as.character(registro$Usuario[[1]]), as.character(usuario())))
+      registro_pendiente_rv("eliminar")
+      racafeForms::racafeConfirm(session, "confirm_eliminar", title = "Eliminar registro",
+        text = "Esta acción elimina la nota o tarea. ¿Desea continuar?", ns = ns,
+        type = "warning", confirm_label = "Eliminar")
+    })
+    shiny::observeEvent(input$confirm_eliminar, {
+      if (isTRUE(input$confirm_eliminar) && identical(registro_pendiente_rv(), "eliminar")) guardar("eliminar")
+      registro_pendiente_rv(NULL)
+    })
+    abrir_id <- function(id) {
+      datos <- shiny::isolate(resultado_r()$todos)
+      shiny::req(is.data.frame(datos))
+      fila <- datos[as.character(datos$cons) == as.character(id), , drop = FALSE]
+      if (nrow(fila) != 1L) stop("El registro no tiene una clave única o no está disponible.", call. = FALSE)
+      abrir(fila)
+    }
+
     # Retorno ----
-    list(n = total_r, items = items_r,
+    list(n = total_r, items = items_r, datos = shiny::reactive(resultado_r()$todos),
+         abrir = abrir_id, refrescar = refrescar,
          badge_st = shiny::reactive(if (total_r()) "danger" else NULL),
          actualizaciones = shiny::reactive(revision_rv()))
   })
 }
+

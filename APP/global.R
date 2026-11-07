@@ -120,7 +120,7 @@ racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", 
 
 # Versiones de componentes y recursos compartidos ----
 stopifnot(utils::packageVersion("racafeForms") >= "0.7.1",
-          utils::packageVersion("racafeShiny") >= "1.4.2",
+          utils::packageVersion("racafeShiny") >= "1.4.3",
           utils::packageVersion("racafeModulos") >= "0.5.1")
 # Resolver APP desde la raíz del repositorio o desde el directorio de la aplicación.
 .crm_ruta_app <- function(inicio = getwd()) {
@@ -158,4 +158,5 @@ uid <- Sys.getenv("SYS_UID")
 pwd <- Sys.getenv("SYS_PWD")
 # Sources ----
 racafeCore::load_modules(path = file.path(.ruta_app, "misc"), verbose = verbose)
+
 

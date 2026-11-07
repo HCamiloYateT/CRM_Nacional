@@ -34,3 +34,16 @@
 .rf-field[data-rf-kind="logical"] .material-switch > input[type="checkbox"] {
   display:block;position:absolute;width:1px;height:1px;clip-path:inset(50%);overflow:hidden;
 }
+
+
+.crm-tareas-tablero {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;align-items:start;}
+.crm-tareas-columna {min-width:0;border-top:2px solid #DA291C;background:#F8F9FA;padding:10px;}
+.crm-tareas-columna > header {display:flex;justify-content:space-between;gap:8px;margin-bottom:10px;}
+.crm-tareas-columna .rf-card {margin-bottom:10px;overflow-wrap:anywhere;}
+.calc-output-right {text-align:right;}.calc-output-center {text-align:center;}
+.calc-resultado {font-size:12px;color:#343A40;font-weight:600;}
+.calc-producto-row {padding:5px 0;border-bottom:1px solid #DEE2E6;align-items:center;}
+.calc-header-col {font-size:11px;font-weight:600;text-align:center;}
+.calc-header-col--left {text-align:left;}.calc-segmento-wrap {margin-bottom:14px;}
+@media (max-width:1100px) {.crm-tareas-tablero {grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media (max-width:600px) {.crm-tareas-tablero {grid-template-columns:minmax(0,1fr);}}

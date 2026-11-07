@@ -371,9 +371,9 @@ HeaderIndicadoresServer <- function(session) {
 }
 
 # Tareas ----
-HeaderTareasServer <- function(session, usuario, notas = NULL, actualizaciones = NULL) {
+HeaderTareasServer <- function(session, usuario, notas = NULL, actualizaciones = NULL, on_success = NULL) {
   drop <- NotificacionesTareas("HeaderTareas", usuario = usuario, notas = notas,
-                               actualizaciones = actualizaciones)
+                               actualizaciones = actualizaciones, on_success = on_success)
   menu <- racafeModulos::MenuHeaderServer(
     id = "MenuTareas", items_r = drop$items,
     badgeStatus_r = drop$badge_st, badge_n_r = drop$n,
@@ -383,6 +383,7 @@ HeaderTareasServer <- function(session, usuario, notas = NULL, actualizaciones =
   shiny::observeEvent(menu$footer_click(), {
     bs4Dash::updateTabItems(session, "menu_principal", selected = "GC_Tareas")
   })
+  menu$tareas <- drop
   invisible(menu)
 }
 
@@ -666,4 +667,5 @@ HeaderMigrarCarteraServer <- function(usuario, clientes_raw, es_admin) {
 
   invisible(menu)
 }
+
 
