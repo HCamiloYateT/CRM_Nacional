@@ -1,3 +1,15 @@
+# Cumplimiento total: misma base anual de la fila TOTAL ----
+.presupuesto_resumen_total <- function(datos) {
+  .cumplimiento <- function(ejecutado, presupuesto) {
+    total <- sum(presupuesto, na.rm = TRUE)
+    if (!is.finite(total) || total == 0) return(NA_real_)
+    valor <- sum(ejecutado, na.rm = TRUE) / total
+    if (is.finite(valor)) valor else NA_real_
+  }
+  list(sacos = .cumplimiento(datos$Sacos_Real, datos$Sacos_Ppto),
+    margen = .cumplimiento(datos$Margen_Real, datos$Margen_Ppto))
+}
+
 # TablaDetalleDat ----
 TablaDetalleDatUI <- function(id) {
   ns <- NS(id)
@@ -2214,9 +2226,12 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         ) %>%
         config(displayModeBar = FALSE, displaylogo = FALSE)
     })
-    
+
+    # Retorno de indicadores compartidos con el Resumen Ejecutivo ----
+    list(resumen_ejecutivo = reactive(.presupuesto_resumen_total(datos_grafico_r())))
   })
 }
+
 
 
 
