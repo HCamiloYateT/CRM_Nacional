@@ -13,13 +13,10 @@
 
 # Helpers UI internos ----
 
-# Fila estándar: label izquierda, input autonumeric derecha
+# Campos numéricos con etiqueta y formato corporativos ----
 .calc_input_fila <- function(label, input_id, value = 0, symbol = "$") {
-  fluidRow(
-    column(6, racafeShiny::FormatearTexto(label)),
-    column(6, racafeForms::racafeInputNumeric(input_id, label = NULL, value = value,
-      format = if (symbol == "$") "currency" else "number", width = "100%"))
-  )
+  racafeForms::racafeInputNumeric(input_id, label = label, value = value,
+    format = if (symbol == "$") "currency" else "number", width = "100%")
 }
 
 # Fila estándar: label izquierda, uiOutput alineado a la derecha
@@ -82,7 +79,7 @@
 # Coproductos ----
 CalculadoraCoproductosUI <- function(id) {
   ns <- NS(id)
-  tagList(
+  racafeForms::racafeForm(variant = "plain",
     # Selector de segmento
     fluidRow(
       column(12,
@@ -273,7 +270,7 @@ CalculadoraCoproductos <- function(id, dat_ind, usr, clientes = NULL) {
 # Dólares Excelso ----
 CalculadoraDolaresExcelsoUI <- function(id) {
   ns <- NS(id)
-  fluidRow(
+  racafeForms::racafeForm(variant = "plain", fluidRow(
     column(6,
            .calc_card("Parámetros",
                       .calc_input_fila("TRM",                  ns("TRM")),
@@ -296,7 +293,8 @@ CalculadoraDolaresExcelsoUI <- function(id) {
            ),
            .calc_boton_calcular(ns)
     )
-  )
+  ))
+
 }
 
 CalculadoraDolaresExcelso <- function(id, dat_ind, usr) {
@@ -354,7 +352,7 @@ CalculadoraDolaresExcelso <- function(id, dat_ind, usr) {
 # Pesos Excelso ----
 CalculadoraPesosExcelsoUI <- function(id) {
   ns <- NS(id)
-  fluidRow(
+  racafeForms::racafeForm(variant = "plain", fluidRow(
     column(6,
            .calc_card("Parámetros Generales",
                       .calc_input_fila("TRM",                ns("TRM"),           value = 4403),
@@ -421,7 +419,8 @@ CalculadoraPesosExcelsoUI <- function(id) {
            ),
            .calc_boton_calcular(ns), shiny::uiOutput(ns("guardar_margenes_ui"))
     )
-  )
+  ))
+
 }
 
 CalculadoraPesosExcelso <- function(id, dat_ind, usr, margenes = NULL, guardar_margenes = NULL) {
@@ -588,4 +587,5 @@ Calculadora <- function(id, dat_ind, usr, clientes = NULL) {
     CalculadoraCoproductos("coproductos", dat_ind, usr, clientes = clientes)
   })
 }
+
 

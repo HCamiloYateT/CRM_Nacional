@@ -173,7 +173,7 @@ server <- function(input, output, session) {
   indicadores_resumen <- reactive({
     presupuesto <- presupuesto_mod$resumen_ejecutivo()
     list(gc_presupuesto_sacos = presupuesto$sacos, gc_presupuesto_margen = presupuesto$margen,
-      ge_validacion = validacion_mod$cuadre_sacos())
+      ge_validacion = validacion_mod$cuadre_sacos(), gc_tareas = menu_tareas$tareas$n())
   })
 
   ### Generalidades ----
@@ -275,6 +275,7 @@ server <- function(input, output, session) {
   CargarTabUnaVez("IN_Consulta", "ui_IN_Consulta", function() h4("Consulta Individual"))
   
 }
+
 
 
 
