@@ -104,19 +104,18 @@ PresupuestoUI <- function(id) {
         width = 12, collapsible = FALSE,
         div(
           style = "overflow-x: auto; width: 100%;",
-          gt_output(ns("Presupuesto"))
+          uiOutput(ns("Presupuesto"))
         )
-      )
+      ),
+      column(12, uiOutput(ns("nota_presupuesto")))
     ),
     # Switch vista acumulada / mensual para graficos de serie
     fluidRow(
       column(4,
              div(
                style = "margin-left: 5px;",
-               shinyWidgets::materialSwitch(
-                 inputId = ns("vista_acumulada"), label = "Vista Acumulada",
-                 value = TRUE, status = "danger", inline = TRUE, width = "100%"
-               )
+               racafeForms::racafeInputSwitch("vista_acumulada", label = "Vista acumulada",
+                 value = TRUE, variant = "neutral", ns = ns)
              )
       )
     ),
@@ -804,10 +803,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       NULL
     }
     
-    .nota_presupuesto_ui <- function(texto) {
-      if (is.null(texto)) return(NULL)
-      racafeForms::racafeFormMessage(texto, type = "info", size = "compact")
-    }
+    .nota_presupuesto_ui <- function(texto) .crm_nota(texto)
     
     # Fuente financiera ----
     .resolver_datos <- function(x) {
@@ -1642,7 +1638,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     )
     
     ## Tabla GT mensual/acumulada ----
-    output$Presupuesto <- render_gt({
+    output$Presupuesto <- renderUI({
       waiter_show(html = preloader_calculando$html, color = preloader_calculando$color)
       periodo     <- periodo_r()
       periodo_ant <- periodo - 1L
@@ -1822,14 +1818,6 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
             cn$acum_ppto_ma, cn$acum_margen_act, cn$cumpl_mgn_acum, cn$varmgn_acum
           )))
         ) %>%
-        tab_source_note(source_note = gt::html(as.character(racafeForms::racafeNoticeList(
-          c(paste0("Año anterior: ", periodo_ant, ". Columnas verdes."),
-            paste0("Mensual: ", periodo, ". Columnas grises."),
-            paste0("Acumulado: ", periodo, ". Columnas azules.")), title = "Lectura de la tabla")))) %>%
-        tab_source_note(source_note = gt::html(as.character(racafeForms::racafeNoticeList(
-          c("Cumplimiento = ejecutado / presupuesto.",
-            "Comparación con año anterior = (actual − anterior) / |anterior|."),
-          title = "Metodología")))) %>%
         sub_missing(columns = everything(), rows = everything(), missing_text = "") %>%
         tab_style(
           style     = cell_text(weight = "bold"),
@@ -1848,6 +1836,16 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       return(gt1)
     })
     
+    output$nota_presupuesto <- renderUI({
+      shiny::tagList(
+        racafeShiny::racafeTableNote(
+          c(paste0("Año anterior: ", periodo_r() - 1L), paste0("Mensual: ", periodo_r()),
+            paste0("Acumulado: ", periodo_r())), title = "Convenciones",
+          swatches = c("#F0FDF4", "#F8FAFC", "#EFF6FF")),
+        .crm_nota(c("Cumplimiento = ejecutado / presupuesto.",
+          "Comparación con año anterior = (actual − anterior) / |anterior|.")))
+    })
+
     ## Titulo dinamico sub-card proyeccion ----
     output$titulo_proyeccion <- renderUI({
       paste0("Proyección de cierre por dimensión \u2014 ", periodo_r())
@@ -2010,7 +2008,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           "Verosimilitud: proyección / presupuesto anual.",
           "Meta mensual: max(presupuesto anual / 12, (presupuesto anual − ejecutado) / meses restantes, 0).",
           "TOTAL suma las dimensiones; los indicadores se calculan sobre esa fila, sin promediar porcentajes.",
-          "Ejecución: PyG de meses cerrados. Presupuesto: Industria Nacional."), title = "Metodología de las tablas")
+          "Ejecución: PyG de meses cerrados. Presupuesto: Industria Nacional."), title = "Metodología de las tablas",
+          font_size = 11, text_color = "#495057", accent_color = "#DA291C")
     })
 
     ## Grafico cuadrantes: proyeccion de cierre vs cumplimiento acumulado ----
@@ -2220,3 +2219,4 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     
   })
 }
+

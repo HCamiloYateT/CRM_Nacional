@@ -1,7 +1,22 @@
+# Notas compactas fuera de cajas y tablas ----
+.crm_nota <- function(texto, ...) {
+  if (is.null(texto)) return(NULL)
+  if (is.character(texto)) {
+    html <- inherits(texto, "html")
+    texto <- unlist(strsplit(texto, "\n|(?<=[.]) +(?=[[:upper:]])", perl = TRUE))
+    if (html) texto <- lapply(texto, shiny::HTML)
+  }
+  racafeShiny::racafeTableNote(texto, font_size = 11, color = "#495057", ...)
+}
+
+.crm_titulo_modal <- function(titulo, icono = NULL) {
+  shiny::tagList(shiny::icon(if (is.null(icono)) "circle-info" else icono), " ", titulo)
+}
+
 # Componentes corporativos de presentación ----
 .crm_caja_ui <- function(id, texto, icono, footer = NULL, mostrar_boton = FALSE, id_boton = "detalle",
                          tooltip = "Ver detalle", color_fondo = NULL) {
-  caja <- racafeModulos::cajaValor_ui(id, texto = texto, icono = icono, footer = footer, compact = TRUE,
+  caja <- racafeModulos::cajaValor_ui(id, texto = texto, icono = icono, footer = NULL, compact = TRUE,
                                      mostrar_boton = mostrar_boton, label_boton = NULL, id_boton = id_boton)
   if (!is.null(color_fondo)) caja <- shiny::tagAppendAttributes(caja, style = paste0("background:", color_fondo, ";"))
   if (mostrar_boton) {
@@ -9,7 +24,7 @@
       addAttrs(title = tooltip, `aria-label` = tooltip,
                style = "width:22px;height:22px;min-width:22px;padding:2px;font-size:10px;line-height:1;")$allTags()
   }
-  caja
+  shiny::tags$div(class = "crm-caja-con-nota", caja, if (!is.null(footer)) .crm_nota(footer))
 }
 
 .crm_caja_output <- function(id) shiny::uiOutput(paste0(id, "_tarjeta"))
@@ -36,8 +51,8 @@
   if (accion) {
     shiny::observeEvent(modulo$click_detalle(), {
       contenido <- if (is.function(contenido_modal)) contenido_modal() else contenido_modal
-      shiny::showModal(racafeForms::racafeModalDetail(title = shiny::tagList(
-                          if (!is.null(icono_modal)) shiny::icon(icono_modal), .valor(titulo_modal)), contenido,
+      shiny::showModal(racafeForms::racafeModalDetail(
+                        title = .crm_titulo_modal(.valor(titulo_modal), icono_modal), contenido,
                         size = .crm_tamano_modal(tamano_modal), easy_close = TRUE,
                         footer = racafeForms::racafeModalFooter()))
     }, ignoreInit = TRUE)
@@ -49,19 +64,151 @@
   racafeShiny::racafeTableVancouver(datos, header_color = "#495057", header_width = 1.5, decimals = NULL, ...)
 }
 
+# Tablas Vancouver con búsqueda, ordenamiento y selección estable ----
 .crm_tabla_ui <- function(id, titulo = NULL, subtitulo = NULL, footer = NULL, footer_tipo = "info",
-                          sortable = TRUE, mostrar_nota = TRUE, estilo = "minimal") {
-  selector <- paste0("#", shiny::NS(id)("tabla"))
+                          sortable = TRUE, mostrar_nota = TRUE, estilo = "minimal", searchable = TRUE) {
+  ns <- shiny::NS(id)
   shiny::tagList(
-    shiny::tags$style(shiny::HTML(paste0(selector, " .rt-thead.-header .rt-th {",
-                                         "border-top:0!important;border-bottom:1.5px solid #495057!important;}"))),
-    if (!is.null(titulo)) shiny::tags$div(class = "rt-titulo", titulo),
-    if (!is.null(subtitulo)) shiny::tags$div(class = "rt-subtitulo", subtitulo),
-    racafeModulos::TablaReactable2UI(id, estilo = estilo),
-    if (!is.null(footer)) racafeForms::racafeFormMessage(footer, type = "info", size = "compact") else {
-      shiny::uiOutput(paste0(id, "_nota"))
+    if (!is.null(titulo)) shiny::tags$strong(titulo),
+    if (!is.null(subtitulo)) shiny::tags$div(subtitulo),
+    if (searchable) shiny::tags$div(style = "max-width:220px;margin-left:auto;",
+      racafeForms::racafeInputText("buscar", NULL, placeholder = "Buscar...", ns = ns)),
+    shiny::uiOutput(ns("tabla")),
+    shiny::uiOutput(ns("paginacion")),
+    if (!is.null(footer)) .crm_nota(footer) else shiny::uiOutput(paste0(id, "_nota")))
+}
+
+.crm_tabla_datos <- function(datos, columnas = NULL, col_specs = NULL, col_labels = NULL,
+                             on_row = NULL, on_sort = NULL, indices = seq_len(nrow(datos))) {
+  visibles <- if (is.null(columnas)) names(datos) else intersect(columnas, names(datos))
+  visibles <- visibles[!vapply(visibles, function(n) identical(col_specs[[n]]$show, FALSE), logical(1))]
+  tabla <- .crm_tabla_vancouver(datos[visibles], font_size = 11, row_padding = 2)
+  etiquetas <- stats::setNames(as.list(visibles), visibles)
+  for (nombre in visibles) {
+    spec <- col_specs[[nombre]]
+    if (!is.null(spec$name)) etiquetas[[nombre]] <- spec$name
+    if (nombre %in% names(col_labels)) etiquetas[[nombre]] <- col_labels[[nombre]]
+    formato <- spec$format
+    if (!is.null(formato$cell)) formato <- formato$cell
+    if (is.numeric(datos[[nombre]])) {
+      digitos <- if (is.null(formato$digits)) 2 else formato$digits
+      if (isTRUE(formato$percent)) {
+        tabla <- gt::fmt_percent(tabla, columns = tidyselect::all_of(nombre), decimals = digitos)
+      } else {
+        tabla <- gt::fmt_number(tabla, columns = tidyselect::all_of(nombre), decimals = digitos,
+          use_seps = is.null(formato$separators) || isTRUE(formato$separators),
+          pattern = paste0(if (!is.null(formato$prefix)) formato$prefix, "{x}", formato$suffix))
+      }
     }
-  )
+    if (is.function(spec$cell)) {
+      valores <- vapply(seq_len(nrow(datos)), function(i) as.character(spec$cell(datos[[nombre]][i])), character(1))
+      tabla <- gt::text_transform(tabla, locations = gt::cells_body(columns = tidyselect::all_of(nombre)),
+        fn = local({ texto <- valores; function(x) htmltools::htmlEscape(texto) }))
+    }
+    if (is.function(spec$style)) {
+      for (i in seq_len(nrow(datos))) {
+        estilo <- spec$style(datos[[nombre]][i])
+        estilos <- list()
+        if (!is.null(estilo$background)) estilos <- c(estilos, list(gt::cell_fill(color = estilo$background)))
+        if (!is.null(estilo$color) || !is.null(estilo$fontWeight)) {
+          estilos <- c(estilos, list(gt::cell_text(color = estilo$color, weight = estilo$fontWeight)))
+        }
+        if (length(estilos)) tabla <- gt::tab_style(tabla, style = estilos,
+          locations = gt::cells_body(columns = tidyselect::all_of(nombre), rows = i))
+      }
+    }
+  }
+  if (!is.null(on_row) && length(visibles)) {
+    primera <- visibles[[1]]
+    enlaces <- vapply(seq_len(nrow(datos)), function(i) as.character(shiny::tags$button(type = "button",
+      class = "btn btn-link crm-tabla-enlace", style = "padding:0;font:inherit;color:inherit;text-align:left;",
+      onclick = on_row(indices[[i]]), as.character(datos[[primera]][[i]]))), character(1))
+    tabla <- gt::text_transform(tabla, locations = gt::cells_body(columns = tidyselect::all_of(primera)),
+      fn = local({ texto <- enlaces; function(x) texto }))
+  }
+  if (!is.null(on_sort)) etiquetas <- lapply(names(etiquetas), function(nombre) gt::html(as.character(
+    shiny::tags$button(type = "button", class = "btn btn-link crm-tabla-enlace",
+      style = "padding:0;font:inherit;color:inherit;text-align:inherit;", onclick = on_sort(nombre),
+      etiquetas[[nombre]])))) |> stats::setNames(names(etiquetas))
+  tabla <- gt::cols_label(tabla, .list = etiquetas)
+  gt::sub_missing(tabla, missing_text = "—")
+}
+
+.crm_vancouver_server <- function(id, data, columnas = NULL, col_specs = NULL, col_labels = NULL,
+                                   id_col = NULL, modo_seleccion = "ninguno", sortable = TRUE,
+                                   searchable = TRUE, page_size = 15, titulo = NULL, subtitulo = NULL, ...) {
+  shiny::moduleServer(id, function(input, output, session) {
+    seleccion <- shiny::reactiveVal(NULL)
+    orden <- shiny::reactiveVal(list(col = NULL, desc = FALSE))
+    pagina <- shiny::reactiveVal(1L)
+    .val <- function(x) if (shiny::is.reactive(x)) x() else x
+    .datos <- shiny::reactive({ .val(data) })
+    .filas <- shiny::reactive({
+      datos <- .datos()
+      shiny::req(is.data.frame(datos))
+      indices <- seq_len(nrow(datos))
+      consulta <- if (searchable) input$buscar else NULL
+      if (!is.null(consulta) && nzchar(trimws(consulta))) {
+        visibles <- if (is.null(columnas)) names(datos) else intersect(columnas, names(datos))
+        coincide <- vapply(indices, function(i) any(vapply(datos[visibles], function(col) {
+          grepl(tolower(consulta), tolower(as.character(col[[i]])), fixed = TRUE)
+        }, logical(1)), na.rm = TRUE), logical(1))
+        indices <- indices[coincide]
+      }
+      actual <- orden()
+      if (!is.null(actual$col) && actual$col %in% names(datos)) {
+        indices <- indices[order(datos[[actual$col]][indices], decreasing = actual$desc, na.last = TRUE)]
+      }
+      if (!is.null(id_col) && id_col %in% names(datos)) {
+        total <- !is.na(datos[[id_col]][indices]) & as.character(datos[[id_col]][indices]) == "TOTAL"
+        indices <- c(indices[!total], indices[total])
+      }
+      indices
+    })
+    shiny::observeEvent(list(.datos(), input$buscar), { pagina(1L); seleccion(NULL) }, ignoreInit = TRUE)
+    shiny::observeEvent(input$ordenar, {
+      shiny::req(sortable, input$ordenar %in% names(.datos()))
+      anterior <- orden()
+      orden(list(col = input$ordenar, desc = identical(anterior$col, input$ordenar) && !anterior$desc))
+      pagina(1L)
+    })
+    .paginas <- shiny::reactive(max(1L, ceiling(length(.filas()) / page_size)))
+    shiny::observeEvent(input$anterior, pagina(max(1L, pagina() - 1L)))
+    shiny::observeEvent(input$siguiente, pagina(min(.paginas(), pagina() + 1L)))
+    .evento <- function(id, valor) paste0("Shiny.setInputValue(",
+      jsonlite::toJSON(session$ns(id), auto_unbox = TRUE), ",", jsonlite::toJSON(valor, auto_unbox = TRUE),
+      ",{priority:'event'});")
+    output$tabla <- shiny::renderUI({
+      datos <- .datos()
+      filas <- .filas()
+      desde <- (min(pagina(), .paginas()) - 1L) * page_size
+      indices <- head(filas[seq_along(filas) > desde], page_size)
+      if (!length(indices)) return(.crm_nota("Sin registros para los filtros seleccionados."))
+      shiny::tagList(
+        if (!is.null(titulo)) shiny::tags$strong(.val(titulo)),
+        if (!is.null(subtitulo)) shiny::tags$div(.val(subtitulo)),
+        .crm_tabla_datos(datos[indices, , drop = FALSE], columnas, col_specs, col_labels,
+          on_row = if (modo_seleccion == "fila") function(i) .evento("seleccionar", i),
+          on_sort = if (sortable) function(col) .evento("ordenar", col), indices = indices))
+    })
+    output$paginacion <- shiny::renderUI({
+      if (.paginas() <= 1L) return(NULL)
+      shiny::tags$div(style = "display:flex;gap:8px;align-items:center;justify-content:flex-end;",
+        racafeForms::racafeButton("anterior", NULL, icon = "angle-left", variant = "ghost", size = "xs",
+          title = "Página anterior", ns = session$ns),
+        shiny::tags$small(paste("Página", min(pagina(), .paginas()), "de", .paginas())),
+        racafeForms::racafeButton("siguiente", NULL, icon = "angle-right", variant = "ghost", size = "xs",
+          title = "Página siguiente", ns = session$ns))
+    })
+    shiny::observeEvent(input$seleccionar, {
+      fila <- suppressWarnings(as.integer(input$seleccionar))
+      shiny::req(modo_seleccion == "fila", length(fila) == 1L, fila %in% .filas())
+      datos <- .datos()
+      seleccion(list(modo = "fila", row = fila, id = if (!is.null(id_col)) datos[[id_col]][fila] else fila,
+        data = datos[fila, , drop = FALSE]))
+    })
+    list(seleccion = shiny::reactive(seleccion()), modo = modo_seleccion, limpiar = function() seleccion(NULL))
+  })
 }
 
 .crm_tabla_servidor <- function(..., footer = NULL, footer_tipo = "info", modal_titulo_fn = NULL, modal_contenido_fn = NULL,
@@ -69,31 +216,32 @@
                                 modal_size = "xl", modal_icon = NULL, modal_footer = NULL,
                                 modal_footer_tipo = "info") {
   argumentos <- list(...)
-  id <- if (!is.null(argumentos$id)) argumentos$id else argumentos[[1]]
+  id <- if (!is.null(argumentos[["id", exact = TRUE]])) argumentos[["id", exact = TRUE]] else argumentos[[1]]
   session <- shiny::getDefaultReactiveDomain()
   output <- session$output
   output[[paste0(id, "_nota")]] <- shiny::renderUI({
     nota <- if (shiny::is.reactive(footer)) footer() else footer
     if (is.null(nota)) return(NULL)
     tipo <- if (footer_tipo == "danger") "error" else if (footer_tipo == "warning") "warning" else "info"
-    racafeForms::racafeFormMessage(nota, type = tipo, size = "compact")
+    .crm_nota(nota)
   })
-  tabla <- racafeModulos::TablaReactable2(..., footer = NULL)
+  tabla <- .crm_vancouver_server(...)
   if (!is.null(modal_contenido_fn)) {
     shiny::observeEvent(tabla$seleccion(), {
       seleccion <- tabla$seleccion()
       shiny::req(seleccion)
       if (!is.null(modal_pre_fn)) modal_pre_fn(seleccion)
       titulo <- if (is.function(modal_titulo_fn)) modal_titulo_fn(seleccion) else modal_titulo_fn
-      shiny::showModal(racafeForms::racafeModalDetail(title = shiny::tagList(
-                          if (!is.null(modal_icon)) shiny::icon(modal_icon), titulo), modal_contenido_fn(seleccion),
+      shiny::showModal(racafeForms::racafeModalDetail(
+                        title = .crm_titulo_modal(titulo, modal_icon), modal_contenido_fn(seleccion),
                         size = .crm_tamano_modal(modal_size), easy_close = TRUE,
                         footer = racafeForms::racafeModalFooter(
                           left = if (!is.null(modal_footer)) {
-                            racafeForms::racafeFormMessage(modal_footer, type = "info", size = "compact")
+                            .crm_nota(modal_footer)
                           }, right = shiny::modalButton("Cerrar"))))
       tabla$limpiar()
     }, ignoreInit = TRUE)
   }
   tabla
 }
+

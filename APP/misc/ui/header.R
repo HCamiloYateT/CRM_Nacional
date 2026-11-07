@@ -11,9 +11,10 @@ header <- bs4DashNavbar(status = "white", border = FALSE, sidebarIcon = icon("ba
                                                  racafeShiny::Boton("FT_Actualizar", label = NULL, icono = "sync", size = "xxs",
                                                                     title = "Actualizar", color_fondo = "#6c757d",
                                                                     color_hover = "#DA291C"),
-                                                 racafeShiny::BotonDescarga("FT_DescargarClientes", icono = "users", size = "xxs",
-                                                                            title = "Descargar Clientes", color_fondo = "#6c757d",
-                                                                            color_hover = "#DA291C")
+                                                 shiny::tagAppendAttributes(
+                                                   racafeForms::racafeButtonDownload("FT_DescargarClientes",
+                                                     label = NULL, icon = "users", size = "xxs", variant = "secondary"),
+                                                   title = "Descargar clientes")
                                                  )
                                          ),
                         rightUi = tagList(
@@ -29,3 +30,4 @@ header <- bs4DashNavbar(status = "white", border = FALSE, sidebarIcon = icon("ba
                           racafeModulos::MenuHeaderUI("MenuMigrarCartera", icon = icon("people-arrows"),
                             min_width = "360px", title = "Migrar cartera", direct = TRUE)
                         ))
+

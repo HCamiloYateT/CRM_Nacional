@@ -119,8 +119,8 @@ racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", 
                       "waiter", "glue", "lubridate", "stringr", "purrr", "gt", "plotly"))
 
 # Versiones de componentes y recursos compartidos ----
-stopifnot(utils::packageVersion("racafeForms") >= "0.7.0",
-          utils::packageVersion("racafeShiny") >= "1.4.1",
+stopifnot(utils::packageVersion("racafeForms") >= "0.7.1",
+          utils::packageVersion("racafeShiny") >= "1.4.2",
           utils::packageVersion("racafeModulos") >= "0.5.1")
 # Resolver APP desde la raíz del repositorio o desde el directorio de la aplicación.
 .crm_ruta_app <- function(inicio = getwd()) {
@@ -139,7 +139,9 @@ stopifnot(utils::packageVersion("racafeForms") >= "0.7.0",
   shiny::includeCSS(paste0(.url_compartido, "/Styles/style.css")),
   lapply(c("scripts", "clipboard.js", "forms.js", "controlbar.js"), function(archivo) {
     shiny::includeScript(paste0(.url_compartido, "/Scripts/", archivo))
-  })
+  }),
+  shiny::includeCSS(file.path(.ruta_app, "www", "crm-presentacion.css")),
+  shiny::includeScript(file.path(.ruta_app, "www", "crm-presentacion.js"))
 )
 
 # Impresiones ----
@@ -156,3 +158,4 @@ uid <- Sys.getenv("SYS_UID")
 pwd <- Sys.getenv("SYS_PWD")
 # Sources ----
 racafeCore::load_modules(path = file.path(.ruta_app, "misc"), verbose = verbose)
+

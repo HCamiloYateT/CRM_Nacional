@@ -1,7 +1,7 @@
 # MODAL AMPLIO DEL CLIENTE ----
 .header_cliente_modal_ui <- function(titulo, fila, identidad, antiguo = FALSE) {
   racafeForms::racafeModalDetail(
-    title = titulo, size = "ventana",
+    title = .crm_titulo_modal(titulo, "building"), size = "ventana",
     if (antiguo) shiny::tagList(
       shiny::tags$div(style = "display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap;",
                       .header_badge("NIT:", identidad$nit),
@@ -24,7 +24,8 @@
 .header_cliente_detalle_ui <- function(resumen, key) {
   labels <- c(pedidos = "Pedidos", lotes = "Lotes", produccion = "Producción (sacos)",
     despachos = "Despachos (sacos)", asignados = "Sacos asignados", facturacion = "Facturación (sacos)")
-  racafeForms::racafeModalDetail(title = paste("Detalle:", labels[[key]]), size = "ventana",
+  racafeForms::racafeModalDetail(
+    title = .crm_titulo_modal(paste("Detalle:", labels[[key]]), "table-list"), size = "ventana",
     .header_tabla(attr(resumen, "header_detalle"), min_width = "1500px",
                   nota = "Detalle operativo del cliente. Cantidades en sacos equivalentes de 70 kg."),
     footer = racafeForms::racafeModalFooter(
@@ -74,7 +75,7 @@
   align <- stats::setNames(ifelse(cifras | vapply(datos, is.numeric, logical(1)), "right", "left"), names(datos))
   if ("Año" %in% names(datos)) align[["Año"]] <- "left"
   racafeShiny::racafeTableVancouver(datos, min_width = min_width, align = align, decimals = NULL,
-    font_size = 12, row_padding = 3, header_color = "#495057", header_width = 1.5, source_note = nota)
+    font_size = 11, row_padding = 2, header_color = "#495057", header_width = 1.5, source_note = nota)
 }
 
 # INDICADORES REACTIVOS DEL CLIENTE ----
@@ -208,13 +209,13 @@
         paste("Última:", .header_fecha(lotes$FecFact)), mostrar_boton = TRUE)
     ),
     shiny::tags$div(
-      style = "font-size:10px;color:#64748b;text-align:right;margin:4px 0 10px;",
+      style = "font-size:11px;color:#495057;text-align:left;margin:4px 0 8px;",
       "Cantidades expresadas en sacos equivalentes de 70 kg."
     ),
     shiny::tags$strong(style = "font-size:12px;", "Productos y cantidades"),
     .header_tabla(por_producto),
     shiny::tags$div(
-      style = "font-size:10px;color:#64748b;text-align:right;margin:4px 0 8px;",
+      style = "font-size:11px;color:#495057;text-align:left;margin:4px 0 8px;",
       "Cantidades expresadas en sacos equivalentes de 70 kg."
     ),
     if (sin_pedido > 0 || sin_operacion > 0) shiny::tags$p(
@@ -226,7 +227,7 @@
       id = "header_detalle_pedidos", title = "Detalle de pedidos, lotes y fechas", open = FALSE,
       .header_tabla(detalle, min_width = "1500px"),
       shiny::tags$div(
-        style = "font-size:10px;color:#64748b;text-align:right;margin:4px 0 8px;",
+        style = "font-size:11px;color:#495057;text-align:left;margin:4px 0 8px;",
         "Cantidades expresadas en sacos equivalentes de 70 kg."
       )
     )
@@ -664,3 +665,4 @@ HeaderMigrarCarteraServer <- function(usuario, clientes_raw, es_admin) {
 
   invisible(menu)
 }
+

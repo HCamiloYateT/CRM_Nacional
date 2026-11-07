@@ -1,0 +1,11 @@
+.crm-caja-con-nota {min-width:0;display:flex;flex-direction:column;}
+.crm-caja-con-nota > .rmcv-card {min-height:74px;}
+.crm-caja-con-nota > .rsh-table-note {margin-top:4px;padding-left:0;}
+.rsh-table-note p {margin:0;font-size:inherit;color:inherit;}
+.modal .gt_table {font-size:11px!important;}
+.modal .gt_row {padding-top:2px!important;padding-bottom:2px!important;}
+.tooltip .tooltip-inner {background:#E9ECEF;color:#343A40;border:1px solid #ADB5BD;font-size:11px;}
+.bs-tooltip-top .arrow::before {border-top-color:#ADB5BD;}
+.bs-tooltip-right .arrow::before {border-right-color:#ADB5BD;}
+.bs-tooltip-bottom .arrow::before {border-bottom-color:#ADB5BD;}
+.bs-tooltip-left .arrow::before {border-left-color:#ADB5BD;}
