@@ -26,8 +26,8 @@
          formato = "entero", valor = 37L, tab = "GC_Oportunidades"),
     list(id = "gc_pendientes", texto = "Pendientes de Gestión", icono = "list-check",
          formato = "entero", valor = 18L, tab = "GC_Pendientes"),
-    list(id = "gc_tareas", texto = "Notas y Tareas", icono = "tasks",
-         formato = "entero", valor = 9L, tab = "GC_Tareas"),
+    list(id = "gc_tareas", texto = "Tareas pendientes", icono = "tasks",
+         formato = "entero", valor = NA_real_, tab = "GC_Tareas"),
     list(id = "gc_alertas", texto = "Alertas y Notificaciones", icono = "bell",
          formato = "entero", valor = 6L, tab = "GC_Alertas"),
     list(id = "gc_fidelidad", texto = "Fidelidad y Riesgo", icono = "shield-halved",
@@ -151,5 +151,6 @@ ResumenEjecutivo <- function(id, valores = NULL) {
     }
   })
 }
+
 
 
