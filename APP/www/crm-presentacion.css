@@ -58,4 +58,4 @@
 .crm-tarea-badges {display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
 .crm-tarea-expandido {margin-top:10px;}
 .crm-tarea-expandido > p {margin-top:8px;}
-.calc-segmento-wrap {max-width:300px;text-align:left;}
+.rf-form .calc-segmento-wrap {width:100%;max-width:300px;margin:0 0 14px;text-align:left;}
