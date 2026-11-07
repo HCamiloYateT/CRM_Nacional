@@ -38,3 +38,14 @@ testServer(servidor_tabla, {
   stopifnot(grepl("Sin registros", output$`consulta-tabla`$html, fixed = TRUE))
 })
 cat("OK: tablas Vancouver, formatos, búsqueda, ordenamiento y reapertura.\n")
+
+
+# Diferencia cero: 'inherit' no es un color válido para gt::cell_text. ----
+.specs_cuadre <- list(Diferencia = list(style = function(x) list(color = "inherit")),
+  PctCuadre = list(format = list(cell = list(percent = TRUE, digits = 2))))
+.cuadre_html <- htmltools::renderTags(.crm_tabla_datos(data.frame(
+  Mes = c("ENERO", "FEBRERO"), Diferencia = c(0, 0), PctCuadre = c(1, NA_real_)),
+  col_specs = .specs_cuadre))$html
+stopifnot(grepl("ENERO", .cuadre_html, fixed = TRUE), grepl("FEBRERO", .cuadre_html, fixed = TRUE),
+  grepl("100.00%", .cuadre_html, fixed = TRUE))
+cat("OK: cuadre con diferencias cero y meses sin movimiento.\n")

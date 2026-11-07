@@ -9,3 +9,28 @@
 .bs-tooltip-right .arrow::before {border-right-color:#ADB5BD;}
 .bs-tooltip-bottom .arrow::before {border-bottom-color:#ADB5BD;}
 .bs-tooltip-left .arrow::before {border-left-color:#ADB5BD;}
+
+/* Convenciones compactas y descargas separadas de las métricas. */
+.crm-convenciones > .rsh-table-note {display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;}
+.crm-descargas {display:flex;justify-content:flex-end;gap:8px;margin:0 0 16px;}
+.rf-field[data-rf-kind="logical"] .material-switch {display:flex;align-items:center;gap:12px;min-height:28px;}
+.rf-field[data-rf-kind="logical"] .material-switch > label.switch {flex:0 0 36px;width:36px;height:18px;margin:0;background:transparent!important;}
+.rf-field[data-rf-kind="logical"] .material-switch > label.switch::before {
+  width:36px;height:18px;top:0;margin-top:0;border-radius:10px;background:#ADB5BD;opacity:1;box-shadow:none;
+}
+.rf-field[data-rf-kind="logical"] .material-switch > label.switch::after {
+  width:14px;height:14px;left:2px;top:2px;margin-top:0;background:#fff;box-shadow:none;
+}
+.rf-field[data-rf-kind="logical"] .material-switch > input:checked + label.switch::before {
+  background:#DA291C;opacity:1;
+}
+.rf-field[data-rf-kind="logical"] .material-switch > input:checked + label.switch::after {
+  background:#fff;left:20px;
+}
+.rf-field[data-rf-kind="logical"] .material-switch > label:not(.switch) {margin:0;padding-left:0!important;}
+.rf-field[data-rf-kind="logical"] .material-switch > input:focus-visible + label.switch::before {
+  outline:2px solid #495057;outline-offset:3px;
+}
+.rf-field[data-rf-kind="logical"] .material-switch > input[type="checkbox"] {
+  display:block;position:absolute;width:1px;height:1px;clip-path:inset(50%);overflow:hidden;
+}
