@@ -47,3 +47,15 @@
 .calc-header-col--left {text-align:left;}.calc-segmento-wrap {margin-bottom:14px;}
 @media (max-width:1100px) {.crm-tareas-tablero {grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media (max-width:600px) {.crm-tareas-tablero {grid-template-columns:minmax(0,1fr);}}
+
+
+/* Encabezado y tarjetas compactas del tablero de tareas. */
+.crm-tareas-form .rf-form > .rf-action-bar {margin-bottom:10px;}
+.crm-tareas-switches {display:flex;flex-wrap:wrap;justify-content:flex-start;gap:8px 20px;margin:10px 0;}
+.crm-tareas-switches > .rf-field {width:auto!important;min-width:0;margin-bottom:0;}
+.crm-tarea-detalle > summary {cursor:pointer;text-align:left;}
+.crm-tarea-detalle > summary > strong {overflow-wrap:anywhere;}
+.crm-tarea-badges {display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+.crm-tarea-expandido {margin-top:10px;}
+.crm-tarea-expandido > p {margin-top:8px;}
+.calc-segmento-wrap {max-width:300px;text-align:left;}

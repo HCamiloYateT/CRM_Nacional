@@ -87,7 +87,7 @@ CalculadoraCoproductosUI <- function(id) {
     fluidRow(
       column(12,
              div(class = "calc-segmento-wrap",
-                 racafeForms::racafeInputRadio("Segmento", label = NULL,
+                 racafeForms::racafeInputSelect("Segmento", label = "Segmento",
                    choices = c("MEDIANO", "DETAL"), selected = "MEDIANO", ns = ns)
              )
       )
@@ -198,7 +198,7 @@ CalculadoraCoproductos <- function(id, dat_ind, usr, clientes = NULL) {
         fuente_clientes %>%
           filter(LinNegCod == 10000, Segmento == input$Segmento) %>%
           group_by(LinNegCod, CliNitPpal) %>%
-          filter(FecProceso == max(FecProceso)) %>%
+          filter(if (any(!is.na(FecProceso))) FecProceso == max(FecProceso, na.rm = TRUE) else FALSE) %>%
           group_by(Segmento) %>%
           summarise(
             MargenKilo = sum(MNFCCPpto, na.rm = TRUE) / (sum(SSPpto, na.rm = TRUE) * 70),
@@ -588,3 +588,4 @@ Calculadora <- function(id, dat_ind, usr, clientes = NULL) {
     CalculadoraCoproductos("coproductos", dat_ind, usr, clientes = clientes)
   })
 }
+

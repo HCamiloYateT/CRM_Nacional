@@ -62,3 +62,15 @@ testServer(servidor_admin, {
     !grepl("Tarea 3", output$`tablero-tablero`$html, fixed = TRUE))
 })
 cat("OK: administrador ve todas; cambiar el rol restaura el filtro de pertenencia.\n")
+
+# Tarjetas compactas: título/responsables en summary; metadatos dentro del detalle.
+testServer(TableroTareas, args = list(usuario = reactive("ANA"), datos = reactive(.notas_prueba),
+  abrir = function(id) NULL, refrescar = function() NULL), {
+  session$flushReact()
+  html <- output$tablero$html
+  stopifnot(grepl('<details class="crm-tarea-detalle">', html, fixed = TRUE),
+    grepl('Actividades: 1/2', html, fixed = TRUE),
+    grepl('title="Responsable: ANA"', html, fixed = TRUE),
+    grepl('title="Responsable: LUIS"', html, fixed = TRUE),
+    !grepl('ANA|LUIS', html, fixed = TRUE), !grepl('<details open', html, fixed = TRUE))
+})
