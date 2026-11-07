@@ -3,38 +3,25 @@ ComparacionIndicadoresUI <- function(id) {
   ns <- shiny::NS(id)
   
   shiny::tagList(
-    shiny::fluidRow(
-      style = "display:flex; gap:8px; flex-wrap:wrap; align-items:flex-start;",
-      shiny::div(
-        style = "width:220px;",
-        racafeForms::racafeInputDate(id = ns("fecha_anterior"), label = shiny::h6("Fecha Inicial"),
-                                value = Sys.Date() - 1, width = "100%")
-      ),
-      shiny::div(
-        style = "width:220px;",
-        racafeForms::racafeInputDate(id = ns("fecha_actual"), label = shiny::h6("Fecha Final"), value = Sys.Date(),
-                                width = "100%")
-      ),
-      shiny::div(
-        style = "width:100px; height:38px; margin-top:35px; display:flex; align-items:center;",
-        racafeForms::racafeButton(id = ns("actualizar"), label = NULL, size = "xs", variant = "primary",
-                                icon = "code-compare", title = "Comparar")
-      )
-    ),
-    shiny::br(),
-    bs4Dash::bs4Card(
-      title = "Tabla Comparativa de Indicadores", width = 12,
-      status = "white", solidHeader = TRUE, collapsible = TRUE,
-      shiny::uiOutput(ns("tabla_comparacion"))
-    )
-  )
+    shiny::tags$style(shiny::HTML(".mercado-filtros .form-group {margin-bottom:0;}")),
+    shiny::tags$div(class = "mercado-filtros",
+      style = "display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;",
+      shiny::div(style = "width:220px;",
+        racafeForms::racafeInputDate("fecha_anterior", label = "Fecha inicial",
+          value = Sys.Date() - 1, width = "100%", ns = ns)),
+      shiny::div(style = "width:220px;",
+        racafeForms::racafeInputDate("fecha_actual", label = "Fecha final",
+          value = Sys.Date(), width = "100%", ns = ns)),
+      shiny::div(style = "height:38px;display:flex;align-items:center;",
+        racafeForms::racafeButton("actualizar", label = NULL, size = "xs", variant = "primary",
+          icon = "arrows-rotate", title = "Actualizar indicadores", ns = ns))),
+    shiny::uiOutput(ns("tabla_comparacion")))
 }
 
 ComparacionIndicadores <- function(id) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-    formato <- racafeShiny::DefinirFormato("dolares")
     
     datos_comparacion_r <- shiny::eventReactive(input$actualizar, ignoreNULL = FALSE, {
 
@@ -122,127 +109,29 @@ ComparacionIndicadores <- function(id) {
         )
       }
       
-      filas <- lapply(seq_len(nrow(datos)), function(i) {
-        local({
-          fila <- i
-          variacion <- datos$Variacion_Porcentual[[fila]]
-          diferencia <- datos$Diferencia_Absoluta[[fila]]
-          
-          color <- dplyr::case_when(
-            is.na(variacion) ~ "#374151",
-            variacion > 0 ~ "#1F7A55",
-            variacion < 0 ~ "#9F0712",
-            TRUE ~ "#374151"
-          )
-          
-          flecha <- dplyr::case_when(
-            is.na(variacion) ~ "▶",
-            variacion > 0 ~ "▲",
-            variacion < 0 ~ "▼",
-            TRUE ~ "▶"
-          )
-          
-          variacion_txt <- if (is.na(variacion)) {
-            "—"
-          } else {
-            paste0(flecha, " ", formatC(variacion * 100, format = "f", digits = 2), "%")
-          }
-          
-          shiny::tags$tr(
-            shiny::tags$td(
-              style = paste0("padding:5px 8px; font-size:11px; font-weight:600;",
-                             "color:#374151; border-bottom:1px solid #E5E7EB;"),
-              datos$Nombre_Indicador[[fila]]
-            ),
-            shiny::tags$td(
-              style = paste0("padding:5px 8px; font-size:11px; text-align:right;",
-                             "border-bottom:1px solid #E5E7EB;"),
-              formato(datos$Valor_Anterior[[fila]])
-            ),
-            shiny::tags$td(
-              style = paste0("padding:5px 8px; font-size:11px; text-align:right;",
-                             "border-bottom:1px solid #E5E7EB;"),
-              formato(datos$Valor_Actual[[fila]])
-            ),
-            shiny::tags$td(
-              style = paste0("padding:5px 8px; font-size:11px; text-align:right;",
-                             "border-bottom:1px solid #E5E7EB; color:", color, ";"),
-              formato(diferencia)
-            ),
-            shiny::tags$td(
-              style = paste0("padding:5px 8px; font-size:11px; text-align:right;",
-                             "font-weight:600; border-bottom:1px solid #E5E7EB;",
-                             "color:", color, ";"),
-              variacion_txt
-            )
-          )
-        })
-      })
-      
-      shiny::tagList(
-        shiny::tags$div(
-          style = "padding:2px 8px 8px 8px;",
-          FormatearTexto(
-            paste0(
-              "Comparación entre ",
-              format(input$fecha_anterior, "%d/%m/%Y"),
-              " y ",
-              format(input$fecha_actual, "%d/%m/%Y")
-            ),
-            negrita = FALSE, color = "#64748B", tamano_pct = 0.75
-          )
-        ),
-        shiny::tags$div(
-          style = "width:100%; overflow-x:auto;",
-          shiny::tags$table(
-            style = "width:100%; border-collapse:collapse;",
-            shiny::tags$thead(
-              shiny::tags$tr(
-                shiny::tags$th(
-                  style = paste0("text-align:left; padding:5px 8px; font-size:10px;",
-                                 "font-weight:700; color:#64748B;",
-                                 "border-bottom:1px solid #CBD5E1;"),
-                  "Indicador"
-                ),
-                shiny::tags$th(
-                  style = paste0("text-align:right; padding:5px 8px; font-size:10px;",
-                                 "font-weight:700; color:#64748B;",
-                                 "border-bottom:1px solid #CBD5E1;"),
-                  "Valor Anterior"
-                ),
-                shiny::tags$th(
-                  style = paste0("text-align:right; padding:5px 8px; font-size:10px;",
-                                 "font-weight:700; color:#64748B;",
-                                 "border-bottom:1px solid #CBD5E1;"),
-                  "Valor Vigente"
-                ),
-                shiny::tags$th(
-                  style = paste0("text-align:right; padding:5px 8px; font-size:10px;",
-                                 "font-weight:700; color:#64748B;",
-                                 "border-bottom:1px solid #CBD5E1;"),
-                  "Diferencia"
-                ),
-                shiny::tags$th(
-                  style = paste0("text-align:right; padding:5px 8px; font-size:10px;",
-                                 "font-weight:700; color:#64748B;",
-                                 "border-bottom:1px solid #CBD5E1;"),
-                  "Variación"
-                )
-              )
-            ),
-            shiny::tags$tbody(filas)
-          )
-        ),
-        shiny::tags$p(
-          style = "padding:6px 8px 2px 8px; margin:0;",
-          FormatearTexto(
-            paste0("Fuente de datos en fecha final: ", resultado$fuente_actual, "."),
-            negrita = FALSE, color = "#64748B", tamano_pct = 0.7
-          )
-        )
-      )
+      tabla <- .crm_tabla_vancouver(datos %>%
+        dplyr::select(Nombre_Indicador, Valor_Anterior, Valor_Actual, Diferencia_Absoluta, Variacion_Porcentual),
+        labels = c(Nombre_Indicador = "Indicador", Valor_Anterior = "Valor anterior",
+          Valor_Actual = "Valor vigente", Diferencia_Absoluta = "Diferencia", Variacion_Porcentual = "Variación"),
+        font_size = 11, row_padding = 3) %>%
+        gt::fmt_currency(columns = c(Valor_Anterior, Valor_Actual, Diferencia_Absoluta),
+          currency = "USD", decimals = 2, sep_mark = ",", dec_mark = ".") %>%
+        gt::fmt_percent(columns = Variacion_Porcentual, decimals = 2) %>%
+        gt::sub_missing(missing_text = "—")
+      for (columna in c("Diferencia_Absoluta", "Variacion_Porcentual")) {
+        for (signo in c(-1, 1)) {
+          filas <- which(!is.na(datos[[columna]]) & sign(datos[[columna]]) == signo)
+          if (length(filas)) tabla <- gt::tab_style(tabla,
+            style = gt::cell_text(color = if (signo > 0) "#1F7A55" else "#9F0712"),
+            locations = gt::cells_body(columns = dplyr::all_of(columna), rows = filas))
+        }
+      }
+      shiny::tagList(tabla, .crm_nota(c(
+        paste("Comparación entre", format(input$fecha_anterior, "%d/%m/%Y"),
+          "y", format(input$fecha_actual, "%d/%m/%Y")),
+        paste0("Fuente de datos en fecha final: ", resultado$fuente_actual, "."))))
     })
-    
+
     invisible(NULL)
   })
 }
@@ -269,3 +158,4 @@ DemoGeneralidadesComparacionIndicadores <- function() {
 
   shinyApp(ui, server)
 }
+

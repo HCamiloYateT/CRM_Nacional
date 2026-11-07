@@ -2210,6 +2210,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     # Retorno ----
     invisible(
       list(
+        cuadre_sacos = cuadre_valor_r,
         extraccion_pyg = extraccion_pyg,
         auditoria_integridad = auditoria_integridad,
         conciliacion_mensual = conciliacion_mensual,
@@ -2223,5 +2224,6 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     )
   })
 }
+
 
 

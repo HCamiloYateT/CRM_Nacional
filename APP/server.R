@@ -157,18 +157,23 @@ server <- function(input, output, session) {
   )
   
   ## Body ----
+  # Fuentes del resumen disponibles antes de abrir sus pestañas ----
+  presupuesto_mod <- Presupuesto("GC_Presupuesto_mod", dat = data_c,
+    clientes_raw = clientes_raw_cache, filtros = filtros)
+  validacion_mod <- isolate(ValidacionFinanciera(id = "ValidacionFinanciera", filtros = filtros,
+    dat = data_c, fact = fact, margenes_pyg = margenes_pyg, nit_ppal = nit_ppal,
+    clientes_snap = clientes_snap, n_cliente = n_cliente))
+  indicadores_resumen <- reactive({
+    presupuesto <- presupuesto_mod$resumen_ejecutivo()
+    list(gc_presupuesto_sacos = presupuesto$sacos, gc_presupuesto_margen = presupuesto$margen,
+      ge_validacion = validacion_mod$cuadre_sacos())
+  })
+
   ### Generalidades ----
   CargarTabUnaVez("GE_Resumen", "ui_GE_Resumen", function() ResumenEjecutivoUI("ResumenEjecutivo"),
-                  function() ResumenEjecutivo("ResumenEjecutivo"))
-  
-  CargarTabUnaVez("GE_Validacion", "ui_GE_Validacion", function() ValidacionFinancieraUI("ValidacionFinanciera"),
-                  function() {
-                    ValidacionFinanciera(id = "ValidacionFinanciera", filtros = filtros,
-                                         dat = data_c, fact = fact, margenes_pyg = margenes_pyg,
-                                         nit_ppal = nit_ppal, clientes_snap = clientes_snap, 
-                                         n_cliente = n_cliente)
-                  })
-  
+    function() ResumenEjecutivo("ResumenEjecutivo", valores = indicadores_resumen))
+  CargarTabUnaVez("GE_Validacion", "ui_GE_Validacion", function() ValidacionFinancieraUI("ValidacionFinanciera"))
+
   CargarTabUnaVez("GE_Evolucion", "ui_GE_Evolucion", function() h4("Evolución del Negocio"))
   
   CargarTabUnaVez("GE_Participacion", "ui_GE_Participacion", function() h4("Participación y Composición"))
@@ -181,7 +186,6 @@ server <- function(input, output, session) {
   ### Gestión Comercial ----
   CargarTabUnaVez("GC_Resumen", "ui_GC_Resumen", function() h4("Resumen"))
   #### Presupuesto ----
-  Presupuesto("GC_Presupuesto_mod", dat = data_c, clientes_raw = clientes_raw_cache, filtros = filtros)
   
   CargarTabUnaVez("GC_Presupuesto", "ui_GC_Presupuesto", function() {
     PresupuestoUI("GC_Presupuesto_mod")
@@ -260,3 +264,4 @@ server <- function(input, output, session) {
   CargarTabUnaVez("IN_Consulta", "ui_IN_Consulta", function() h4("Consulta Individual"))
   
 }
+

@@ -2,7 +2,8 @@
 .RESUMEN_EJECUTIVO_SECCIONES <- list(
   list(seccion = "Generalidades", icono = "clipboard-list", cajas = list(
     list(id = "ge_validacion", texto = "Validación Financiera", icono = "file-circle-check",
-         formato = "porcentaje", valor = 0.85, tab = "GE_Validacion"),
+         formato = "porcentaje", valor = NA_real_, footer = "Cuadre total de sacos en meses cerrados.",
+         tab = "GE_Validacion"),
     list(id = "ge_evolucion", texto = "Evolución del Negocio", icono = "chart-line",
          formato = "porcentaje", valor = 0.92, tab = "GE_Evolucion"),
     list(id = "ge_participacion", texto = "Participación y Composición", icono = "chart-pie",
@@ -15,8 +16,12 @@
   list(seccion = "Gestión Comercial", icono = "briefcase", cajas = list(
     list(id = "gc_resumen", texto = "Resumen", icono = "gauge-high",
          formato = "entero", valor = 82L, tab = "GC_Resumen"),
-    list(id = "gc_presupuesto", texto = "Presupuesto", icono = "money-bill-trend-up",
-         formato = "porcentaje", valor = 0.87, tab = "GC_Presupuesto"),
+    list(id = "gc_presupuesto_sacos", texto = "Cumplimiento total de sacos", icono = "weight-hanging",
+         formato = "porcentaje", valor = NA_real_, footer = "Sacos facturados / presupuesto anual de sacos.",
+         tab = "GC_Presupuesto"),
+    list(id = "gc_presupuesto_margen", texto = "Cumplimiento total de margen", icono = "money-bill-trend-up",
+         formato = "porcentaje", valor = NA_real_, footer = "Margen facturado / presupuesto anual de margen.",
+         tab = "GC_Presupuesto"),
     list(id = "gc_variables", texto = "Variables (Bono)", icono = "medal",
          formato = "porcentaje", valor = 0.76, tab = "GC_Variables"),
     list(id = "gc_oportunidades", texto = "Oportunidades", icono = "bullseye",
@@ -97,7 +102,7 @@
 
 .resumen_ejecutivo_caja_ui <- function(ns, caja) {
   .crm_caja_ui(ns(caja$id), icono = caja$icono, texto = caja$texto,
-                mostrar_boton = TRUE, tooltip = paste("Abrir", caja$texto))
+                mostrar_boton = TRUE, tooltip = paste("Abrir", caja$texto), footer = caja$footer)
 }
 
 # Modulo Principal ----
@@ -131,14 +136,14 @@ ResumenEjecutivo <- function(id, valores = NULL) {
             if (!is.null(indicadores) && actual$id %in% names(indicadores)) {
               valor <- indicadores[[actual$id]]
               if (is.function(valor)) valor <- valor()
-              if (length(valor) == 1L && is.numeric(valor) && !is.na(valor)) {
+              if (length(valor) == 1L && is.numeric(valor) && is.finite(valor)) {
                 return(valor)
               }
             }
             actual$valor
           })
           modulo <- racafeModulos::cajaValor_server(actual$id, valor_r = valor_r,
-                                        formato = actual$formato)
+                                        formato = actual$formato, empty = "—")
           shiny::observeEvent(modulo$click_detalle(), {
             bs4Dash::updateTabItems(session = session$rootScope(),
                                     inputId = "menu_principal", selected = actual$tab)
@@ -148,3 +153,4 @@ ResumenEjecutivo <- function(id, valores = NULL) {
     }
   })
 }
+
