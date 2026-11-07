@@ -3,8 +3,9 @@
 - El calendario usa `ultimo_periodo_pyg` exportado por DataPrep. La fecha se limita
   al último mes calendario terminado. Los movimientos provisionales del mes en
   curso no definen el cierre. Sin cierre válido se muestran 12 meses pendientes.
-- La ejecución de presupuesto se corta en ese cierre, tanto en tablas como en
-  indicadores y proyecciones. En noviembre de 2026, con cierre a octubre, quedan
+- La tabla anual y las series muestran toda la facturación disponible dentro de los filtros,
+  incluidos meses abiertos y futuros. El cierre financiero limita los indicadores cerrados
+  y determina los meses pendientes; no elimina filas de la fuente de facturación. En noviembre de 2026, con cierre a octubre, quedan
   noviembre y diciembre: dos meses. Un cierre más antiguo conserva ese rezago.
 - El presupuesto oculta las cuatro columnas de comparación con el período anterior;
   conserva el año anterior y las columnas de ejecución, presupuesto y cumplimiento.
@@ -43,3 +44,7 @@ versión. Se simuló el registro de assets y el formateador numérico de caja.
 Chromium verificó convenciones en una fila, cambio de estado y colores del switch,
 y alineación y separación de las descargas con el widget real de shinyWidgets 0.9.0.
 No se ejecutó la aplicación completa con servicios y datos de negocio.
+
+
+La prueba `tests/test_budget_open_billing.R` verifica la fuente real del módulo con
+facturas en septiembre, octubre, noviembre y diciembre, incluido un mes futuro.

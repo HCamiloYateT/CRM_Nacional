@@ -1035,8 +1035,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
                                       lubridate::year(FecMes) == lubridate::year(inicio_mes) - 1L)
         }
       }
-      corte <- calendario_r()$fecha_cierre
-      datos %>% filter(!is.na(FecMes), !is.na(corte), FecMes <= corte)
+      # La facturación puede pertenecer a meses abiertos o futuros; el cierre solo rige los indicadores cerrados.
+      datos %>% filter(!is.na(FecMes))
     })
     
     periodo_r <- reactive({
@@ -1754,7 +1754,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           title    = md(paste0("**Seguimiento de Presupuesto ", periodo, "**")),
           subtitle = md(paste0(
             "Comparativo mensual y acumulado de sacos y margen FCC frente al presupuesto",
-            " — ejecución disponible hasta: ",
+            " — cierre financiero de indicadores: ",
             if (calendario_r()$mes_actual > 0L) .MESES[calendario_r()$mes_actual] else "SIN CIERRE",
             " — período anterior: ", periodo_ant
           ))
@@ -1839,7 +1839,9 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           c(paste0("Año anterior: ", periodo_r() - 1L), paste0("Mensual: ", periodo_r()),
             paste0("Acumulado: ", periodo_r())), title = "Convenciones",
           swatches = c("#F0FDF4", "#F8FAFC", "#EFF6FF"))),
-        .crm_nota("Cumplimiento = ejecutado / presupuesto."))
+        .crm_nota(c("Cumplimiento = ejecutado / presupuesto.",
+          "La tabla y las series incluyen la facturación disponible, también en meses abiertos o futuros.",
+          "Los indicadores de meses cerrados y los meses pendientes usan el cierre financiero.")))
     })
 
     ## Titulo dinamico sub-card proyeccion ----
@@ -2006,7 +2008,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           "Verosimilitud: proyección / presupuesto anual.",
           "Meta mensual: max(presupuesto anual / 12, (presupuesto anual − ejecutado) / meses restantes, 0).",
           "TOTAL suma las dimensiones; los indicadores se calculan sobre esa fila, sin promediar porcentajes.",
-          "Ejecución: PyG de meses cerrados. Presupuesto: Industria Nacional."), title = "Metodología de las tablas",
+          "Indicadores por dimensión: meses cerrados. Presupuesto: Industria Nacional."), title = "Metodología de las tablas",
           font_size = 11, text_color = "#495057", accent_color = "#DA291C")
     })
 
@@ -2217,5 +2219,6 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     
   })
 }
+
 
 
