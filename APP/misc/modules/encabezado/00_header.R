@@ -71,6 +71,7 @@
 }
 
 .header_tabla <- function(datos, min_width = NULL, nota = NULL) {
+  datos <- .crm_nits_tabla(datos)
   cifras <- grepl("^Sacos|^Lotes$|^Producidos$|^Despachados$|^Facturados$|^Meses para recuperar$", names(datos))
   align <- stats::setNames(ifelse(cifras | vapply(datos, is.numeric, logical(1)), "right", "left"), names(datos))
   if ("Año" %in% names(datos)) align[["Año"]] <- "left"

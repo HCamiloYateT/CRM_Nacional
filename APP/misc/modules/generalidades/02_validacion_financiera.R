@@ -30,90 +30,12 @@ ValidacionFinancieraUI <- function(id) {
     c("kpi_calidad", "Calidad PyG", "triangle-exclamation")
   )
 
-  ids_carga <- c(
-    ns("tabla_extraccion_pyg"),
-    vapply(.tarjetas, function(x) ns(paste0(x[[1]], "-valor_display")), "")
-  )
-  ids_js <- jsonlite::toJSON(unname(ids_carga), auto_unbox = FALSE)
-  contenedor_js <- jsonlite::toJSON(ns("vf_contenido"), auto_unbox = TRUE)
-  preloader_js <- jsonlite::toJSON(ns("vf_preloader"), auto_unbox = TRUE)
-
-  shiny::tagList(
-    shiny::tags$style(shiny::HTML(sprintf("
-      #%s { position:relative; min-height:260px; }
-      #%s .racafe-caja-valor:not(.rmcv-card) { min-height:102px; padding:10px 12px;
-        border:1px solid #E5E7EB; box-shadow:0 1px 3px rgba(0,0,0,.06); }
-      #%s .racafe-caja-valor:not(.rmcv-card) .fa, #%s .racafe-caja-valor:not(.rmcv-card) svg { color:#DA291C!important; }
-      #%s .racafe-caja-valor:not(.rmcv-card) .shiny-html-output { font-size:1.12rem; }
-      #%s .vf-kpi-accion { cursor:default; margin-bottom:8px; }
-      #%s .vf-kpi-accion:focus-visible { outline:2px solid #DA291C; outline-offset:2px; }
-      #%s { position:absolute; inset:0; z-index:25; display:flex;
-        align-items:center; justify-content:center; background:rgba(255,255,255,.92); }
-      #%s .vf-spinner { width:35px; height:35px; border:3px solid #E5E7EB;
-        border-top-color:#DA291C; border-radius:50%%; animation:vf-spin .8s linear infinite; }
-      @keyframes vf-spin { to { transform:rotate(360deg); } }
-    ", ns("vf_contenido"), ns("vf_contenido"), ns("vf_contenido"),
-                                          ns("vf_contenido"), ns("vf_contenido"), ns("vf_contenido"),
-                                          ns("vf_preloader"), ns("vf_preloader"), ns("vf_preloader")))),
-    shiny::tags$div(
-      id = ns("vf_contenido"),
-      shiny::fluidRow(
-        shiny::column(
-          7,
-          shiny::uiOutput(ns("tabla_extraccion_pyg")),
-          shiny::uiOutput(ns("auditoria_base"))
-        ),
-        shiny::column(
-          5,
-          shiny::fluidRow(lapply(.tarjetas, function(item) {
-            shiny::column(6, .kpi_ui(item[[1]], item[[2]], item[[3]]))
-          }))
-        )
-      ),
-      shiny::tags$div(
-        id = ns("vf_preloader"), role = "status", `aria-live` = "polite",
-        shiny::tags$div(style = "text-align:center;",
-                        shiny::tags$div(class = "vf-spinner", style = "margin:auto;"),
-                        shiny::tags$div(style = "margin-top:12px;color:#374151;font-size:12px;",
-                                        "Cargando validación financiera..."))
-      )
-    ),
-    shiny::tags$script(shiny::HTML(sprintf("
-      (function() {
-        var rootId = %s, loaderId = %s, ids = %s;
-        function inspect() {
-          var root = document.getElementById(rootId);
-          if (!root) return false;
-          return ids.every(function(id) {
-            var el = document.getElementById(id);
-            if (!el) return false;
-            if (el.classList.contains('shiny-output-error')) return true;
-            if (id.indexOf('tabla_extraccion_pyg') >= 0) {
-              return !!el.querySelector('.gt_table, table');
-            }
-            return el.children.length > 0 || el.textContent.trim().length > 0;
-          });
-        }
-        function ready() {
-          if (!inspect()) return false;
-          var loader = document.getElementById(loaderId);
-          if (loader) loader.style.display = 'none';
-          return true;
-        }
-        function init() {
-          var root = document.getElementById(rootId);
-          if (!root) return;
-          if (ready()) return;
-          var observer = new MutationObserver(function() {
-            if (ready()) observer.disconnect();
-          });
-          observer.observe(root, {childList:true,subtree:true,characterData:true});
-        }
-        if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', init, {once:true});
-        } else { init(); }
-      })();
-    ", contenedor_js, preloader_js, ids_js)))
+  shiny::tags$div(id = ns("vf_contenido"),
+    shiny::fluidRow(
+      shiny::column(7, shiny::uiOutput(ns("tabla_extraccion_pyg")), shiny::uiOutput(ns("auditoria_base"))),
+      shiny::column(5, shiny::fluidRow(lapply(.tarjetas, function(item) {
+        shiny::column(6, .kpi_ui(item[[1]], item[[2]], item[[3]]))
+      }))))
   )
 }
 
@@ -1872,7 +1794,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
       contenido_modal = function() shiny::uiOutput(ns("ui_segmentos_modal")),
       titulo_modal = "Validación de segmentos",
       icono_modal = "circle",
-      footer = "Compara el segmento PyG con CRMNALCLIENTE para clientes presentes en meses cerrados."
+      footer = "Compara el segmento PyG con clientes del CRM para clientes presentes en meses cerrados."
     )
     
     # Calidad ----
@@ -2222,7 +2144,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     .crm_caja("seg_res_clientes_dif", valor = shiny::reactive(
       dplyr::n_distinct(segmentos_error()$CliNitPpal, na.rm = TRUE)), formato = "entero",
       texto = "Clientes por revisar", icono = "users-viewfinder", mostrar_boton = FALSE,
-      footer = "PyG y CRMNALCLIENTE tienen segmentos diferentes o falta segmentación en una fuente.")
+      footer = "PyG y clientes del CRM tienen segmentos diferentes o falta segmentación en una fuente.")
 
     segmentos_comercial <- shiny::reactive({
       detalle <- segmentos_validacion() %>%
@@ -2236,7 +2158,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     })
     .crm_tabla_servidor("segmentos_comercial", data = segmentos_comercial, modo_seleccion = "ninguno",
       col_labels = c(CliNitPpal = "NIT principal", Cliente = "Cliente", Linea = "Línea", Asesor = "Asesor",
-        SegmentoPYG = "Segmento en PyG", SegmentoCRM = "Segmento en CRMNALCLIENTE", Estado = "Revisión",
+        SegmentoPYG = "Segmento en PyG", SegmentoCRM = "Segmento en clientes del CRM", Estado = "Revisión",
         SacosBase = "Sacos 70 kg"),
       footer = c("Una fila por cliente principal y línea de negocio.",
         "Revise las dos columnas de segmento para identificar el registro que requiere validación comercial.",
@@ -2248,7 +2170,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         shiny::fluidRow(
           shiny::column(6, .crm_caja_output(ns("seg_res_clientes"))),
           shiny::column(6, .crm_caja_output(ns("seg_res_clientes_dif")))),
-        .crm_nota("Compare el segmento del PyG financiero con el registrado en CRMNALCLIENTE."),
+        .crm_nota("Compare el segmento del PyG financiero con el registrado en clientes del CRM."),
         racafeForms::racafeInputSelect("VF_SegEstado", "Mostrar",
           choices = c("Clientes por revisar" = "pendientes", "Todos los clientes" = "todos"),
           selected = "pendientes", empty = FALSE, ns = ns),

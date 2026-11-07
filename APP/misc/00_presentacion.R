@@ -11,6 +11,35 @@
 
 .crm_titulo_modal <- function(titulo, icono = NULL) shiny::tagList(titulo)
 
+# Calendario del presupuesto: el mes vigente también está pendiente ----
+.crm_calendario_presupuesto <- function(cierre, periodo, hoy = Sys.Date()) {
+  calendario <- .crm_calendario_cierre(cierre, periodo, hoy)
+  anho <- as.integer(format(as.Date(hoy), "%Y"))
+  mes <- if (periodo < anho) 13L else if (periodo > anho) 1L else as.integer(format(as.Date(hoy), "%m"))
+  calendario$mes_vigente <- mes
+  calendario$meses_rest <- max(0L, 13L - mes)
+  calendario
+}
+
+# Identificadores tributarios sin formato numérico ----
+.crm_nits_tabla <- function(datos, etiquetas = NULL) {
+  nombres <- names(datos)
+  son_nit <- grepl("nit", nombres, ignore.case = TRUE)
+  if (!is.null(etiquetas)) {
+    comunes <- intersect(names(etiquetas), nombres)
+    son_nit[match(comunes, nombres)] <- son_nit[match(comunes, nombres)] |
+      grepl("nit", as.character(etiquetas[comunes]), ignore.case = TRUE)
+  }
+  for (nombre in nombres[son_nit]) {
+    if (!is.numeric(datos[[nombre]])) next
+    valores <- datos[[nombre]]
+    texto <- format(valores, scientific = FALSE, trim = TRUE, digits = 22, big.mark = "")
+    texto[is.na(valores)] <- NA_character_
+    datos[[nombre]] <- texto
+  }
+  datos
+}
+
 # Cierre financiero independiente de los movimientos provisionales ----
 .crm_calendario_cierre <- function(cierre, periodo, hoy = Sys.Date()) {
   cierre <- as.Date(cierre)
@@ -83,6 +112,8 @@
 }
 
 .crm_tabla_vancouver <- function(datos, ...) {
+  argumentos <- list(...)
+  datos <- .crm_nits_tabla(datos, argumentos[["labels"]])
   racafeShiny::racafeTableVancouver(datos, header_color = "#495057", header_width = 1.5, decimals = NULL, ...)
 }
 
@@ -102,6 +133,11 @@
 
 .crm_tabla_datos <- function(datos, columnas = NULL, col_specs = NULL, col_labels = NULL,
                              on_row = NULL, on_sort = NULL, indices = seq_len(nrow(datos))) {
+  etiquetas_nit <- col_labels
+  for (nombre in names(col_specs)) {
+    if (!is.null(col_specs[[nombre]]$name)) etiquetas_nit[[nombre]] <- col_specs[[nombre]]$name
+  }
+  datos <- .crm_nits_tabla(datos, etiquetas_nit)
   visibles <- if (is.null(columnas)) names(datos) else intersect(columnas, names(datos))
   visibles <- visibles[!vapply(visibles, function(n) identical(col_specs[[n]]$show, FALSE), logical(1))]
   tabla <- .crm_tabla_vancouver(datos[visibles], font_size = 11, row_padding = 2)
@@ -122,7 +158,7 @@
           pattern = paste0(if (!is.null(formato$prefix)) formato$prefix, "{x}", formato$suffix))
       }
     }
-    if (is.function(spec$cell)) {
+    if (is.function(spec$cell) && !grepl("nit", paste(nombre, etiquetas[[nombre]]), ignore.case = TRUE)) {
       valores <- vapply(seq_len(nrow(datos)), function(i) as.character(spec$cell(datos[[nombre]][i])), character(1))
       tabla <- gt::text_transform(tabla, locations = gt::cells_body(columns = tidyselect::all_of(nombre)),
         fn = local({ texto <- valores; function(x) htmltools::htmlEscape(texto) }))

@@ -58,8 +58,6 @@ server <- function(input, output, session) {
     f <- filtros()
     req(data_t(), f$fecha)
     
-    waiter_show(html = preloader_actualizar$html, color = preloader_actualizar$color)
-    on.exit(waiter_hide(), add = TRUE)
     
     fecha_ini <- as.Date(f$fecha[[1]])
     fecha_fin <- as.Date(f$fecha[[2]])

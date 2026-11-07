@@ -629,11 +629,7 @@ DetalleConversionCliente <- function(id, datos_conversion, usuario, tipo) {
       modal_construido <- racafeForms::racafeModal(size = clase_modal,
         title = titulo_modal_actual(),
         tagList(
-          shinyjs::hidden(
-            tags$div(id = ns("PreloaderModalDetalle"),
-                     style = paste0("background:", preloader_actualizar$color, ";text-align:center;padding:30px;"),
-                     preloader_actualizar$html)
-          ),
+          
           uiOutput(ns("ModalContenidoDetalle"))
         ),
         easy_close = TRUE,
@@ -647,14 +643,8 @@ DetalleConversionCliente <- function(id, datos_conversion, usuario, tipo) {
       modulo$ui()
     })
     outputOptions(output, "ModalContenidoDetalle", suspendWhenHidden = FALSE)
-    observeEvent(input$AccionSeleccionada, {
-      if (!identical(input$AccionSeleccionada$accion, "Reactivar"))
-        shinyjs::show(id = "PreloaderModalDetalle", anim = FALSE)
-    }, priority = 10)
-    observe({
-      req(accion_seleccionada())
-      shinyjs::hide(id = "PreloaderModalDetalle", anim = FALSE)
-    })
+    
+    
     Editar("EditarDetalle", usuario = usuario, codigo_contacto = reactive(codigo_seleccionado()))
     Relacionamiento("RelacionamientoDetalle", usuario = usuario, codigo_contacto = reactive(codigo_seleccionado()))
     Promover("PromoverDetalle", usuario = usuario, codigo_contacto = reactive(codigo_seleccionado()))
@@ -805,8 +795,7 @@ DetalleClientes <- function(id, usuario) {
         unique()
     })
     universo_contactos_r <- reactive({
-      waiter_show(html = preloader_actualizar$html, color = preloader_actualizar$color)
-      on.exit(waiter_hide(), add = TRUE)
+
       refresh_trigger()
       lead_data <- .obtener_conversion_lead()
       cliente_data <- .obtener_conversion_cliente()
