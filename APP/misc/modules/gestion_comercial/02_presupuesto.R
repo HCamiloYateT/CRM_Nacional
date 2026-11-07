@@ -115,7 +115,7 @@ PresupuestoUI <- function(id) {
              div(
                style = "margin-left: 5px;",
                racafeForms::racafeInputSwitch("vista_acumulada", label = "Vista acumulada",
-                 value = TRUE, variant = "neutral", ns = ns)
+                 value = TRUE, variant = "primary", ns = ns)
              )
       )
     ),
@@ -829,16 +829,14 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     })
     
     cierre_pyg_r <- reactive({
-      fuente <- pyg_referencia_r()
-      if (!is.null(fuente) && nrow(fuente) > 0L) {
-        return(max(fuente$FecMes, na.rm = TRUE))
-      }
       if (exists("ultimo_periodo_pyg", envir = .GlobalEnv, inherits = FALSE)) {
         return(as.Date(get("ultimo_periodo_pyg", envir = .GlobalEnv)))
       }
+      fuente <- pyg_referencia_r()
+      if (!is.null(fuente) && nrow(fuente) > 0L) return(max(fuente$FecMes, na.rm = TRUE))
       as.Date(NA)
     })
-    
+
     # Reactivos ----
     
     # Filtros aplicados ----
@@ -1037,7 +1035,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
                                       lubridate::year(FecMes) == lubridate::year(inicio_mes) - 1L)
         }
       }
-      datos %>% filter(!is.na(FecMes))
+      corte <- calendario_r()$fecha_cierre
+      datos %>% filter(!is.na(FecMes), !is.na(corte), FecMes <= corte)
     })
     
     periodo_r <- reactive({
@@ -1048,13 +1047,9 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       lubridate::year(Sys.Date())
     })
     calendario_r <- reactive({
-      datos <- datos_centrales_r() %>%
-        filter(lubridate::year(FecMes) == periodo_r(),
-               !is.na(SacosFact) | !is.na(Margen))
-      mes <- if (nrow(datos) > 0L) max(lubridate::month(datos$FecMes)) else 0L
-      list(mes_actual = mes, meses_rest = max(0L, 12L - mes))
+      .crm_calendario_cierre(cierre_pyg_r(), periodo_r())
     })
-    
+
     # Reactivos de datos base
     datos_base_r    <- reactive({ procesar_datos_base(datos_centrales_r(), periodo_r() - 1L) })
     datos_act_r     <- reactive({ procesar_datos_base(datos_centrales_r(), periodo_r()) })
@@ -1759,7 +1754,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           title    = md(paste0("**Seguimiento de Presupuesto ", periodo, "**")),
           subtitle = md(paste0(
             "Comparativo mensual y acumulado de sacos y margen FCC frente al presupuesto",
-            " — ejecución disponible hasta: ", .MESES[calendario_r()$mes_actual],
+            " — ejecución disponible hasta: ",
+            if (calendario_r()$mes_actual > 0L) .MESES[calendario_r()$mes_actual] else "SIN CIERRE",
             " — período anterior: ", periodo_ant
           ))
         ) %>%
@@ -1830,7 +1826,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         gt_pct_style_semaforo(!!sym(cn$cumpl_margen))   %>%
         gt_var_style_local("VarMgn") %>%
         gt_pct_style_semaforo(!!sym(cn$cumpl_mgn_acum)) %>%
-        gt_var_style_local(cn$varmgn_acum)
+        gt_var_style_local(cn$varmgn_acum) %>%
+        gt::cols_hide(columns = dplyr::all_of(c("VarSS", "VarMgn", cn$varss_acum, cn$varmgn_acum)))
       
       waiter_hide()
       return(gt1)
@@ -1838,12 +1835,11 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     
     output$nota_presupuesto <- renderUI({
       shiny::tagList(
-        racafeShiny::racafeTableNote(
+        shiny::tags$div(class = "crm-convenciones", racafeShiny::racafeTableNote(
           c(paste0("Año anterior: ", periodo_r() - 1L), paste0("Mensual: ", periodo_r()),
             paste0("Acumulado: ", periodo_r())), title = "Convenciones",
-          swatches = c("#F0FDF4", "#F8FAFC", "#EFF6FF")),
-        .crm_nota(c("Cumplimiento = ejecutado / presupuesto.",
-          "Comparación con año anterior = (actual − anterior) / |anterior|.")))
+          swatches = c("#F0FDF4", "#F8FAFC", "#EFF6FF"))),
+        .crm_nota("Cumplimiento = ejecutado / presupuesto."))
     })
 
     ## Titulo dinamico sub-card proyeccion ----
@@ -1901,6 +1897,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       req(!is.null(dim), nzchar(dim))
       mid        <- paste0("tabla_ss_", ver)
       cols_todas <- c(.col_dim_def(dim), .cols_sacos())
+      cols_todas$Nota_Sacos <- NULL
       
       .crm_tabla_servidor(
         id             = mid,
@@ -1926,6 +1923,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       req(!is.null(dim), nzchar(dim))
       mid        <- paste0("tabla_ma_", ver)
       cols_todas <- c(.col_dim_def(dim), .cols_margen())
+      cols_todas$Nota_Margen <- NULL
       
       .crm_tabla_servidor(
         id             = mid,
@@ -2219,4 +2217,5 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     
   })
 }
+
 

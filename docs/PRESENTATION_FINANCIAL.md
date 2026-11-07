@@ -27,7 +27,7 @@ remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeShiny")
 - Validación financiera usa columnas 7/5. El título redundante se sustituye por
   una nota sobre meses cerrados financieramente.
 - Descargas con racafeForms::racafeButtonDownload, variante secondary.
-- Títulos de modales con iconos Font Awesome. Hovers grises activados al pasar
+- Títulos de modales sin iconos. Hovers grises activados al pasar
   el cursor; se ocultan al hacer clic, desplazarse o cerrar un modal.
 
 ## Validación
@@ -39,8 +39,8 @@ Rscript tests/test_presentation.R
 Rscript tests/test_tables_presentation.R
 ```
 
-Se verificaron 57 expresiones reactivas de negocio idénticas a main, el parseo R
-y 54 llamadas a las APIs públicas de las librerías.
+La verificación inicial conservó las expresiones de negocio de esa revisión. Los ajustes posteriores
+de calendario financiero, segmentos y cuadre mensual se documentan en [CIERRE_Y_SEGMENTOS.md](CIERRE_Y_SEGMENTOS.md).
 
 En este entorno se ejecutaron las 19 comprobaciones de cajas y acciones,
 pruebas de búsqueda, ordenamiento, formatos, selección estable y reapertura de

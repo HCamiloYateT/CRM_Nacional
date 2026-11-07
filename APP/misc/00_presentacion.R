@@ -9,8 +9,30 @@
   racafeShiny::racafeTableNote(texto, font_size = 11, color = "#495057", ...)
 }
 
-.crm_titulo_modal <- function(titulo, icono = NULL) {
-  shiny::tagList(shiny::icon(if (is.null(icono)) "circle-info" else icono), " ", titulo)
+.crm_titulo_modal <- function(titulo, icono = NULL) shiny::tagList(titulo)
+
+# Cierre financiero independiente de los movimientos provisionales ----
+.crm_calendario_cierre <- function(cierre, periodo, hoy = Sys.Date()) {
+  cierre <- as.Date(cierre)
+  if (length(cierre) != 1L || is.na(cierre) || !is.finite(as.numeric(cierre))) {
+    return(list(mes_actual = 0L, meses_rest = 12L, fecha_cierre = as.Date(NA)))
+  }
+  limite <- as.Date(format(as.Date(hoy), "%Y-%m-01")) - 1L
+  corte <- min(cierre, limite)
+  anho <- as.integer(format(corte, "%Y"))
+  mes <- if (anho < periodo) 0L else if (anho > periodo) 12L else as.integer(format(corte, "%m"))
+  list(mes_actual = mes, meses_rest = 12L - mes, fecha_cierre = as.Date(format(corte, "%Y-%m-01")))
+}
+
+.crm_estado_segmento <- function(pyg, crm) {
+  ifelse(is.na(crm), "Sin segmento en CRM", ifelse(is.na(pyg), "Sin segmento en PyG",
+    ifelse(pyg == crm, "Coincide", "Segmento diferente")))
+}
+
+.crm_descarga_ui <- function(id, ns, label = "Descargar detalle") {
+  shiny::tags$div(class = "crm-descargas",
+    racafeForms::racafeButtonDownload(id, label = label, icon = "download", ns = ns,
+      size = "xs", variant = "secondary"))
 }
 
 # Componentes corporativos de presentación ----
@@ -108,6 +130,7 @@
     if (is.function(spec$style)) {
       for (i in seq_len(nrow(datos))) {
         estilo <- spec$style(datos[[nombre]][i])
+        if (identical(estilo$color, "inherit")) estilo$color <- NULL
         estilos <- list()
         if (!is.null(estilo$background)) estilos <- c(estilos, list(gt::cell_fill(color = estilo$background)))
         if (!is.null(estilo$color) || !is.null(estilo$fontWeight)) {
@@ -244,4 +267,5 @@
   }
   tabla
 }
+
 

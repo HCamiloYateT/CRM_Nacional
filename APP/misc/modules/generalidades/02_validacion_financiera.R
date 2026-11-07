@@ -512,7 +512,10 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     }
     
     # Fuentes ----
-    fecha_cierre_pyg <- max(as.Date(.resolver(margenes_pyg)$FecMes), na.rm = TRUE)
+    cierre_exportado <- if (exists("ultimo_periodo_pyg", envir = .GlobalEnv, inherits = FALSE)) {
+      as.Date(get("ultimo_periodo_pyg", envir = .GlobalEnv))
+    } else max(as.Date(.resolver(margenes_pyg)$FecMes), na.rm = TRUE)
+    fecha_cierre_pyg <- .crm_calendario_cierre(cierre_exportado, .VF_ANHO)$fecha_cierre
     
     data_raw <- .resolver(dat) %>%
       dplyr::filter(as.Date(FecMes) <= fecha_cierre_pyg)
@@ -593,7 +596,8 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     
     clientes_snap_base <- .resolver(clientes_snap) %>%
       dplyr::transmute(
-        LinNegCod = suppressWarnings(as.numeric(LinNegCod)),
+        LinNegCod = dplyr::if_else(suppressWarnings(as.numeric(LinNegCod)) == 20000,
+          21000, suppressWarnings(as.numeric(LinNegCod))),
         CliNitPpal = suppressWarnings(as.numeric(CliNitPpal)),
         SegmentoCRM = .normalizar_segmento(Segmento),
         AsesorCRM = as.character(Asesor)
@@ -1328,9 +1332,8 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
             SegmentoCreacionCliente, "SIN SEGMENTO"
           ),
           Alerta = dplyr::if_else(
-            SegPYGComp == SegCRMComp & SegPYGComp == SegCreacionComp,
-            "OK",
-            "DIFERENCIA"
+            .crm_estado_segmento(SegmentoPYG, SegmentoCRM) == "Coincide",
+            "OK", "DIFERENCIA"
           )
         )
       
@@ -1494,14 +1497,14 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
             6,
             .crm_tabla_ui(
               ns("tabla_cuadre_conv"),
-              estilo = "minimal"
+              estilo = "minimal", searchable = FALSE
             )
           ),
           shiny::column(
             6,
             .crm_tabla_ui(
               ns("tabla_cuadre_medida"),
-              estilo = "minimal"
+              estilo = "minimal", searchable = FALSE
             )
           )
         ),
@@ -1554,7 +1557,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
             return(list(color = "#A32D2D", fontWeight = "500"))
           }
           
-          list(color = "inherit")
+          list(color = "#495057")
         }
       )
     }
@@ -1869,7 +1872,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
       contenido_modal = function() shiny::uiOutput(ns("ui_segmentos_modal")),
       titulo_modal = "Validación de segmentos",
       icono_modal = "circle",
-      footer = "Compara segmentos únicamente para unidades comerciales presentes en meses cerrados."
+      footer = "Compara el segmento PyG con CRMNALCLIENTE para clientes presentes en meses cerrados."
     )
     
     # Calidad ----
@@ -2062,11 +2065,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
           shiny::fluidRow(
             shiny::column(
               12,
-              shiny::tagAppendAttributes(racafeForms::racafeButtonDownload(id = paste0("dl_", prefijo),
-                label = "Descargar detalle",
-                                      icon = "download", ns = ns, size = "xs", variant = "secondary"),
-                                        title = "Descargar"),
-              racafeCore::Saltos()
+              .crm_descarga_ui(paste0("dl_", prefijo), ns)
             )
           ),
           if (isTRUE(mostrar_cajas)) {
@@ -2215,311 +2214,47 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     .registrar_tablero("linea", lineas_diferentes)
     .registrar_tablero("calidad", calidad_pyg)
     
-    # Matrices de segmentos ----
-    segmento_seleccion_rv <- shiny::reactiveVal(NULL)
-    
-    segmentos_matriz <- shiny::reactive({
-      segmentos_validacion()
+    # Comparación comercial directa de segmentos ----
+    .crm_caja("seg_res_clientes", valor = shiny::reactive(
+      dplyr::n_distinct(segmentos_validacion()$CliNitPpal, na.rm = TRUE)), formato = "entero",
+      texto = "Clientes revisados", icono = "users", mostrar_boton = FALSE,
+      footer = "Clientes con movimientos PyG en meses cerrados financieramente.")
+    .crm_caja("seg_res_clientes_dif", valor = shiny::reactive(
+      dplyr::n_distinct(segmentos_error()$CliNitPpal, na.rm = TRUE)), formato = "entero",
+      texto = "Clientes por revisar", icono = "users-viewfinder", mostrar_boton = FALSE,
+      footer = "PyG y CRMNALCLIENTE tienen segmentos diferentes o falta segmentación en una fuente.")
+
+    segmentos_comercial <- shiny::reactive({
+      detalle <- segmentos_validacion() %>%
+        dplyr::mutate(Estado = .crm_estado_segmento(SegmentoPYG, SegmentoCRM))
+      if (is.null(input$VF_SegEstado) || input$VF_SegEstado == "pendientes") {
+        detalle <- detalle %>% dplyr::filter(Alerta != "OK")
+      }
+      detalle %>%
+        dplyr::select(CliNitPpal, Cliente, Linea, Asesor, SegmentoPYG, SegmentoCRM, Estado, SacosBase) %>%
+        dplyr::arrange(Cliente, Linea)
     })
-    
-    shiny::observeEvent(
-      input$VF_SegMetrica,
-      {
-        segmento_seleccion_rv(NULL)
-      },
-      ignoreInit = TRUE
-    )
-    
-    .registrar_clicks_matriz <- function(prefijo, fila, columna, titulo) {
-      niveles <- c("PEQUEÑO", "MEDIANO", "GRANDE", "SIN SEGMENTO")
-      
-      for (i in seq_along(niveles)) {
-        for (j in seq_along(niveles)) {
-          local({
-            ii <- i
-            jj <- j
-            origen <- niveles[[ii]]
-            destino <- niveles[[jj]]
-            input_id <- paste0("seg_", prefijo, "_", ii, "_", jj)
-            
-            shiny::observeEvent(input[[input_id]], {
-              segmento_seleccion_rv(
-                list(
-                  fila = fila,
-                  columna = columna,
-                  origen = origen,
-                  destino = destino,
-                  titulo = titulo
-                )
-              )
-            }, ignoreInit = TRUE)
-          })
-        }
-      }
-    }
-    
-    .registrar_clicks_matriz(
-      "pyg_crm",
-      "SegmentoPYG",
-      "SegmentoCRM",
-      "PyG financiero vs CRM comercial"
-    )
-    .registrar_clicks_matriz(
-      "pyg_ncliente",
-      "SegmentoPYG",
-      "SegmentoCreacionCliente",
-      "PyG financiero vs Creación de cliente"
-    )
-    .registrar_clicks_matriz(
-      "crm_ncliente",
-      "SegmentoCRM",
-      "SegmentoCreacionCliente",
-      "CRM comercial vs Creación de cliente"
-    )
-    
-    .crm_caja(
-      id = "seg_res_clientes",
-      valor = shiny::reactive(
-        dplyr::n_distinct(
-          segmentos_validacion()$CliNitPpal,
-          na.rm = TRUE
-        )
-      ),
-      formato = "entero",
-      texto = "Clientes principales",
-      icono = "users",
-      mostrar_boton = FALSE,
-      footer = paste0(
-        "Clientes principales presentes exclusivamente en el PyG ",
-        "correspondiente a meses cerrados."
-      )
-    )
-    
-    .crm_caja(
-      id = "seg_res_clientes_dif",
-      valor = shiny::reactive(
-        segmentos_validacion() %>%
-          dplyr::filter(Alerta != "OK") %>%
-          dplyr::pull(CliNitPpal) %>%
-          dplyr::n_distinct(na.rm = TRUE)
-      ),
-      formato = "entero",
-      texto = "Clientes con diferencias",
-      icono = "users-viewfinder",
-      mostrar_boton = FALSE,
-      footer = paste0(
-        "Clientes principales con al menos una unidad comercial donde ",
-        "PyG, CRM y Creación de cliente no tienen el mismo segmento."
-      )
-    )
-    
+    .crm_tabla_servidor("segmentos_comercial", data = segmentos_comercial, modo_seleccion = "ninguno",
+      col_labels = c(CliNitPpal = "NIT principal", Cliente = "Cliente", Linea = "Línea", Asesor = "Asesor",
+        SegmentoPYG = "Segmento en PyG", SegmentoCRM = "Segmento en CRMNALCLIENTE", Estado = "Revisión",
+        SacosBase = "Sacos 70 kg"),
+      footer = c("Una fila por cliente principal y línea de negocio.",
+        "Revise las dos columnas de segmento para identificar el registro que requiere validación comercial.",
+        "La segmentación de creación del cliente no interviene en esta comparación."))
+
     output$ui_segmentos_modal <- shiny::renderUI({
-      detalle <- segmentos_validacion()
-      
-      if (nrow(detalle) == 0L) {
-        return(.sin_registros_ui())
-      }
-      
       shiny::tagList(
-        shiny::fluidRow(
-          shiny::column(
-            12,
-            shiny::tagAppendAttributes(racafeForms::racafeButtonDownload(id = "dl_segmentos",
-              label = "Descargar detalle", icon = "download",
-                                    ns = ns, size = "xs", variant = "secondary"), title = "Descargar"),
-            racafeCore::Saltos()
-          )
-        ),
+        .crm_descarga_ui("dl_segmentos", ns),
         shiny::fluidRow(
           shiny::column(6, .crm_caja_output(ns("seg_res_clientes"))),
-          shiny::column(6, .crm_caja_output(ns("seg_res_clientes_dif")))
-        ),
-        shiny::fluidRow(
-          shiny::column(
-            12,
-            racafeForms::racafeInputSelect(id = "VF_SegMetrica", label = "Métrica de las matrices",
-                                    choices = c(
-                "UNIDADES COMERCIALES",
-                "SACOS 70 KG",
-                "MARGEN"
-              ),
-                                    selected = "UNIDADES COMERCIALES", multiple = FALSE, ns = ns, size = 3,
-                                    empty = FALSE)
-          )
-        ),
-        shiny::tags$hr(),
-        shiny::fluidRow(
-          shiny::column(4, shiny::uiOutput(ns("ui_matriz_pyg_crm"))),
-          shiny::column(4, shiny::uiOutput(ns("ui_matriz_pyg_ncliente"))),
-          shiny::column(4, shiny::uiOutput(ns("ui_matriz_crm_ncliente")))
-        ),
-        shiny::tags$hr(),
-        shiny::uiOutput(ns("ui_segmento_detalle"))
-      )
+          shiny::column(6, .crm_caja_output(ns("seg_res_clientes_dif")))),
+        .crm_nota("Compare el segmento del PyG financiero con el registrado en CRMNALCLIENTE."),
+        racafeForms::racafeInputSelect("VF_SegEstado", "Mostrar",
+          choices = c("Clientes por revisar" = "pendientes", "Todos los clientes" = "todos"),
+          selected = "pendientes", empty = FALSE, ns = ns),
+        .crm_tabla_ui(ns("segmentos_comercial")))
     })
-    
-    output$ui_matriz_pyg_crm <- shiny::renderUI({
-      metrica <- if (is.null(input$VF_SegMetrica)) {
-        "UNIDADES COMERCIALES"
-      } else {
-        input$VF_SegMetrica
-      }
-      
-      .segmento_matriz_ui(
-        segmentos_matriz(),
-        "SegmentoPYG",
-        "SegmentoCRM",
-        "PyG financiero",
-        "CRM comercial",
-        "PyG financiero vs CRM comercial",
-        "pyg_crm",
-        metrica
-      )
-    })
-    
-    output$ui_matriz_pyg_ncliente <- shiny::renderUI({
-      metrica <- if (is.null(input$VF_SegMetrica)) {
-        "UNIDADES COMERCIALES"
-      } else {
-        input$VF_SegMetrica
-      }
-      
-      .segmento_matriz_ui(
-        segmentos_matriz(),
-        "SegmentoPYG",
-        "SegmentoCreacionCliente",
-        "PyG financiero",
-        "Creación de cliente",
-        "PyG financiero vs Creación de cliente",
-        "pyg_ncliente",
-        metrica
-      )
-    })
-    
-    output$ui_matriz_crm_ncliente <- shiny::renderUI({
-      metrica <- if (is.null(input$VF_SegMetrica)) {
-        "UNIDADES COMERCIALES"
-      } else {
-        input$VF_SegMetrica
-      }
-      
-      .segmento_matriz_ui(
-        segmentos_matriz(),
-        "SegmentoCRM",
-        "SegmentoCreacionCliente",
-        "CRM comercial",
-        "Creación de cliente",
-        "CRM comercial vs Creación de cliente",
-        "crm_ncliente",
-        metrica
-      )
-    })
-    
-    segmento_detalle <- shiny::reactive({
-      sel <- segmento_seleccion_rv()
-      
-      if (is.null(sel)) {
-        return(NULL)
-      }
-      
-      segmentos_matriz() %>%
-        dplyr::mutate(
-          .seg_fila = as.character(.data[[sel$fila]]),
-          .seg_columna = as.character(.data[[sel$columna]]),
-          .seg_fila = dplyr::if_else(
-            is.na(.seg_fila) |
-              .seg_fila == "" |
-              !.seg_fila %in% c("PEQUEÑO", "MEDIANO", "GRANDE"),
-            "SIN SEGMENTO",
-            .seg_fila
-          ),
-          .seg_columna = dplyr::if_else(
-            is.na(.seg_columna) |
-              .seg_columna == "" |
-              !.seg_columna %in% c("PEQUEÑO", "MEDIANO", "GRANDE"),
-            "SIN SEGMENTO",
-            .seg_columna
-          )
-        ) %>%
-        dplyr::filter(
-          .seg_fila == sel$origen,
-          .seg_columna == sel$destino
-        ) %>%
-        dplyr::select(
-          CliNitPpal,
-          LinNegCod,
-          Cliente,
-          Asesor,
-          Linea,
-          SegmentoPYG,
-          SegmentoCRM,
-          SegmentoCreacionCliente,
-          SacosBase,
-          MargenBase,
-          Alerta
-        ) %>%
-        dplyr::arrange(
-          Cliente,
-          Linea
-        )
-    })
-    
-    output$ui_segmento_detalle <- shiny::renderUI({
-      sel <- segmento_seleccion_rv()
-      
-      if (is.null(sel)) {
-        return(
-          shiny::div(
-            "Seleccione una celda de cualquiera de las matrices para consultar los clientes."
-          )
-        )
-      }
-      
-      detalle <- segmento_detalle()
-      
-      shiny::tagList(
-        shiny::div(
-          paste0(
-            sel$titulo,
-            ": ",
-            sel$origen,
-            " -> ",
-            sel$destino
-          )
-        ),
-        if (is.null(detalle) || nrow(detalle) == 0L) {
-          .sin_registros_ui()
-        } else {
-          shiny::uiOutput(ns("gt_segmento_detalle"))
-        }
-      )
-    })
-    
-    output$gt_segmento_detalle <- shiny::renderUI({
-      detalle <- segmento_detalle()
-      shiny::req(!is.null(detalle), nrow(detalle) > 0L)
-      
-      .gt_formatear(
-        detalle,
-        titulo = "Clientes principales de la transición seleccionada",
-        subtitulo = "Detalle de segmentación",
-        footer = paste0(
-          "Comparación entre ",
-          segmento_seleccion_rv()$titulo,
-          "."
-        )
-      ) %>%
-        gt::cols_label(
-          CliNitPpal = "NIT cliente principal",
-          LinNegCod = "Código línea",
-          SegmentoPYG = "PyG financiero",
-          SegmentoCRM = "CRM comercial",
-          SegmentoCreacionCliente = "Creación de cliente",
-          SacosBase = "Sacos 70 kg",
-          MargenBase = "$MNFCC"
-        )
-    })
-    
+
     # Descargas ----
     output$dl_conciliacion <- .detalle_excel(
       detalle_conciliacion,
@@ -2566,4 +2301,5 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     )
   })
 }
+
 
