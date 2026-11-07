@@ -110,7 +110,7 @@ server <- function(input, output, session) {
     notas_creadas$actualizaciones()
     racafeBD::CargarDatos("CRMNALNOTAS")
   })
-  menu_tareas <- HeaderTareasServer(session = session, usuario = usuario, notas = notas_datos,
+  menu_tareas <- HeaderTareasServer(session = session, usuario = usuario, notas = notas_datos, es_admin = es_admin,
     actualizaciones = notas_creadas$actualizaciones,
     on_success = function() notas_revision(isolate(notas_revision()) + 1L))
   ### Clientes ----
@@ -201,7 +201,7 @@ server <- function(input, output, session) {
   CargarTabUnaVez("GC_Oportunidades", "ui_GC_Oportunidades", function() h4("Oportunidades"))
   CargarTabUnaVez("GC_Pendientes", "ui_GC_Pendientes", function() h4("Pendientes de Gestión"))
   CargarTabUnaVez("GC_Tareas", "ui_GC_Tareas", function() TableroTareasUI("Tareas"), function() {
-    TableroTareas("Tareas", usuario = usuario, datos = menu_tareas$tareas$datos,
+    TableroTareas("Tareas", usuario = usuario, datos = menu_tareas$tareas$datos, es_admin = es_admin,
       abrir = menu_tareas$tareas$abrir, refrescar = menu_tareas$tareas$refrescar)
   })
   CargarTabUnaVez("GC_Alertas", "ui_GC_Alertas", function() h4("Alertas y Notificaciones"))
@@ -275,5 +275,6 @@ server <- function(input, output, session) {
   CargarTabUnaVez("IN_Consulta", "ui_IN_Consulta", function() h4("Consulta Individual"))
   
 }
+
 
 

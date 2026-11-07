@@ -119,7 +119,7 @@ racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", 
                       "waiter", "glue", "lubridate", "stringr", "purrr", "gt", "plotly"))
 
 # Versiones de componentes y recursos compartidos ----
-stopifnot(utils::packageVersion("racafeForms") >= "0.7.1",
+stopifnot(utils::packageVersion("racafeForms") >= "0.7.3",
           utils::packageVersion("racafeShiny") >= "1.4.3",
           utils::packageVersion("racafeModulos") >= "0.5.1")
 # Resolver APP desde la raíz del repositorio o desde el directorio de la aplicación.
@@ -158,5 +158,6 @@ uid <- Sys.getenv("SYS_UID")
 pwd <- Sys.getenv("SYS_PWD")
 # Sources ----
 racafeCore::load_modules(path = file.path(.ruta_app, "misc"), verbose = verbose)
+
 
 

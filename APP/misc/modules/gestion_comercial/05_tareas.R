@@ -1,7 +1,7 @@
 # Tablero de tareas y notas del CRM ----
 .tareas_filtrar_tablero <- function(datos, usuario, buscar = "", etiquetas = character(), prioridades = character(),
-                                    archivadas = FALSE, cumplidas = FALSE) {
-  datos <- .tareas_visibles_usuario(datos, usuario)
+                                    archivadas = FALSE, cumplidas = FALSE, es_admin = FALSE) {
+  datos <- .tareas_visibles_usuario(datos, usuario, es_admin)
   if (!is.data.frame(datos) || !nrow(datos)) return(datos)
   datos$Prioridad <- toupper(trimws(as.character(datos$Prioridad)))
   datos$Prioridad[is.na(datos$Prioridad) | !datos$Prioridad %in% .TSK_PRIORIDADES] <- "MEDIA"
@@ -24,26 +24,26 @@
 
 TableroTareasUI <- function(id) {
   ns <- shiny::NS(id)
-  shiny::tagList(
-    racafeForms::racafeActionBar(
+  racafeForms::racafeForm(variant = "plain",
+    racafeForms::racafeActionBar(left = shiny::tagList(
       shiny::tagAppendAttributes(racafeForms::racafeButton("crear", "Nueva tarea o nota", icon = "plus", ns = ns),
         `data-crm-crear-tarea` = "true"),
-      racafeForms::racafeButton("actualizar", "Actualizar", icon = "arrows-rotate", variant = "secondary", ns = ns)),
-    racafeForms::racafeFormRow(columns = 3,
+      racafeForms::racafeButton("actualizar", "Actualizar", icon = "arrows-rotate", variant = "secondary", ns = ns))),
+    racafeForms::racafeFormRow(columns = 3, responsive = "fixed",
       racafeForms::racafeInputText("buscar", "Buscar", placeholder = "Título, descripción o actividad", ns = ns),
       racafeForms::racafeInputSelect("etiquetas", "Etiquetas", choices = c("Todas" = "__todas__"),
         selected = "__todas__", multiple = TRUE, ns = ns),
       racafeForms::racafeInputSelect("prioridades", "Prioridad", choices = .TSK_PRIORIDADES,
         selected = .TSK_PRIORIDADES, multiple = TRUE, ns = ns)),
-    racafeForms::racafeFormRow(columns = 2,
+    racafeForms::racafeFormRow(columns = 2, responsive = "fixed",
       racafeForms::racafeInputSwitch("archivadas", "Incluir archivadas", value = FALSE, ns = ns),
       racafeForms::racafeInputSwitch("cumplidas", "Incluir cumplidas", value = FALSE, ns = ns)),
-    .crm_nota(c("Se muestran los registros creados por usted o asignados a su usuario.",
+    .crm_nota(c("Se muestran sus registros propios o asignados; los administradores ven todos.",
       "Abra una tarjeta para revisar actividades, comentar, archivar o marcar cumplida.")),
     shiny::uiOutput(ns("tablero")))
 }
 
-TableroTareas <- function(id, usuario, datos, abrir, refrescar) {
+TableroTareas <- function(id, usuario, datos, abrir, refrescar, es_admin = function() FALSE) {
   shiny::moduleServer(id, function(input, output, session) {
     shiny::observeEvent(input$actualizar, refrescar())
     shiny::observeEvent(datos(), {
@@ -63,7 +63,7 @@ TableroTareas <- function(id, usuario, datos, abrir, refrescar) {
       fuente <- datos()
       if (!is.data.frame(fuente)) return(NULL)
       .tareas_filtrar_tablero(fuente, usuario(), input$buscar, input$etiquetas, input$prioridades,
-        isTRUE(input$archivadas), isTRUE(input$cumplidas))
+        isTRUE(input$archivadas), isTRUE(input$cumplidas), es_admin = es_admin())
     })
     output$tablero <- shiny::renderUI({
       fuente <- seleccion()
@@ -106,3 +106,4 @@ TableroTareas <- function(id, usuario, datos, abrir, refrescar) {
     list(datos = seleccion)
   })
 }
+

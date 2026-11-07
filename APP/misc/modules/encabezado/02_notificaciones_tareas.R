@@ -1,6 +1,6 @@
 # Población común del tablero y el dropdown ----
-.tareas_visibles_usuario <- function(datos, usuario = NULL) {
-  if (is.null(usuario)) return(datos)
+.tareas_visibles_usuario <- function(datos, usuario = NULL, es_admin = FALSE) {
+  if (isTRUE(es_admin) || is.null(usuario)) return(datos)
   if (length(usuario) != 1L || is.na(usuario) || !nzchar(trimws(usuario))) return(datos[0, , drop = FALSE])
   responsable <- vapply(as.character(datos$Responsable), function(x) {
     if (is.na(x)) return(FALSE)
@@ -93,7 +93,8 @@
     dplyr::arrange(prioridad_orden, is.na(fecha_orden), fecha_orden, cons)
 }
 
-.tareas_modificar_bd <- function(original, accion, cumplidas = NULL, respuesta = NULL, usuario = NULL) {
+.tareas_modificar_bd <- function(original, accion, cumplidas = NULL, respuesta = NULL, usuario = NULL,
+                                  es_admin = FALSE) {
   con <- racafeBD::ConectarBD()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   DBI::dbWithTransaction(con, {
@@ -116,7 +117,7 @@
       stop("El registro fue modificado por otra sesión. Actualice y vuelva a abrirlo.",
            call. = FALSE)
     }
-    if (!is.null(usuario) && nrow(.tareas_visibles_usuario(actual, usuario)) != 1L) {
+    if (!is.null(usuario) && nrow(.tareas_visibles_usuario(actual, usuario, es_admin)) != 1L) {
       stop("El registro ya no está asignado a este usuario.", call. = FALSE)
     }
     if (accion == "eliminar" && !identical(as.character(actual$Usuario[[1]]), as.character(usuario))) {
@@ -172,7 +173,7 @@ NotificacionesTareasUI <- function(id) {
 }
 
 NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
-                                 actualizaciones = NULL) {
+                                 actualizaciones = NULL, es_admin = function() FALSE) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
@@ -190,7 +191,7 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
         datos <- if (is.null(notas)) racafeBD::CargarDatos("CRMNALNOTAS") else {
           if (shiny::is.reactive(notas)) notas() else notas
         }
-        todos <- .tareas_visibles_usuario(datos, usuario())
+        todos <- .tareas_visibles_usuario(datos, usuario(), es_admin())
         list(datos = .tareas_pendientes(todos), todos = todos, error = NULL)
       }, error = function(e) {
         list(datos = NULL, todos = NULL, error = conditionMessage(e))
@@ -266,7 +267,8 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
       guardando_rv(TRUE)
       on.exit(guardando_rv(FALSE), add = TRUE)
       tryCatch({
-        .tareas_modificar_bd(original, accion, estados, respuesta = respuesta, usuario = usuario())
+        .tareas_modificar_bd(original, accion, estados, respuesta = respuesta, usuario = usuario(),
+          es_admin = es_admin())
         seleccionado_rv(NULL)
         registro_pendiente_rv(NULL)
         shiny::removeModal()
@@ -411,4 +413,5 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
          actualizaciones = shiny::reactive(revision_rv()))
   })
 }
+
 
