@@ -59,16 +59,12 @@ ValidacionFinancieraUI <- function(id) {
       id = ns("vf_contenido"),
       shiny::fluidRow(
         shiny::column(
-          8,
-          racafeShiny::FormatearTexto(
-            "Validación financiera - meses cerrados",
-            negrita = TRUE, tamano_pct = 1
-          ),
-          gt::gt_output(ns("tabla_extraccion_pyg")),
+          7,
+          shiny::uiOutput(ns("tabla_extraccion_pyg")),
           shiny::uiOutput(ns("auditoria_base"))
         ),
         shiny::column(
-          4,
+          5,
           shiny::fluidRow(lapply(.tarjetas, function(item) {
             shiny::column(6, .kpi_ui(item[[1]], item[[2]], item[[3]]))
           }))
@@ -180,7 +176,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     }
     
     .gt_base <- function(datos, rowname_col = NULL) {
-      .crm_tabla_vancouver(datos, row_padding = 4) %>%
+      .crm_tabla_vancouver(datos, font_size = 11, row_padding = 2) %>%
         gt::tab_options(
           table.width = gt::pct(100),
           table_body.hlines.style = "none",
@@ -298,8 +294,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
       }
       
       if (!is.null(footer)) {
-        tabla <- tabla %>%
-          gt::tab_source_note(source_note = footer)
+        attr(tabla, "rsh_vancouver_note") <- footer
       }
       
       .gt_escala_valor(
@@ -504,14 +499,15 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         }, character(1))
       }
       alineacion <- stats::setNames(c("left", rep("right", length(niveles))), names(datos_tabla))
-      tabla <- racafeShiny::racafeCompactTable(datos_tabla, backend = "html", html_columns = niveles,
-                                               align = alineacion, font_size = 12, row_padding = 4)
-      tabla <- htmltools::tagQuery(tabla)$find("thead th")$
-        addAttrs(style = "border-bottom:1.5px solid #495057!important;")$allTags()
+      tabla <- .crm_tabla_vancouver(datos_tabla, align = alineacion, font_size = 11, row_padding = 2)
+      for (nivel in niveles) {
+        tabla <- gt::text_transform(tabla, locations = gt::cells_body(columns = dplyr::all_of(nivel)),
+          fn = local({ enlaces <- datos_tabla[[nivel]]; function(x) enlaces }))
+      }
       shiny::tagList(
         racafeForms::racafeDetailSection(titulo, tabla),
-        racafeForms::racafeFormMessage(paste0("Filas: ", fila_label, " | Columnas: ", columna_label,
-                                              " | Métrica: ", metrica), type = "info", size = "compact")
+        .crm_nota(c(paste0("Filas: ", fila_label), paste0("Columnas: ", columna_label),
+                    paste0("Métrica: ", metrica)))
       )
     }
     
@@ -736,9 +732,11 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         dplyr::arrange(FecMes, LinNegCod)
     })
     
-    output$tabla_extraccion_pyg <- gt::render_gt({
+    output$tabla_extraccion_pyg <- shiny::renderUI({
       tabla <- extraccion_pyg %>%
-        .crm_tabla_vancouver(row_padding = 4) %>%
+        .crm_tabla_vancouver(row_padding = 2, font_size = 11,
+          source_note = c("Solo se muestra información de meses cerrados financieramente.",
+            "Extracción independiente del PyG; los meses sin movimientos se muestran en cero.")) %>%
         gt::tab_header(
           title = "Extracción PyG financiero",
           subtitle = paste0("Año ", .VF_ANHO)
@@ -780,11 +778,6 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
           style = gt::cell_text(weight = "bold"),
           locations = gt::cells_body(rows = Mes == "TOTAL")
         ) %>%
-        gt::tab_source_note(
-          source_note = paste0(
-            "Extracción independiente del PyG; meses sin movimientos se muestran en cero."
-          )
-        ) %>%
         gt::tab_options(
           table.width = gt::pct(100),
           table_body.hlines.style = "none",
@@ -817,11 +810,11 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         shiny::tags$p(
           "Diferencias entre data y PyG: revisar duplicaciones y registros ausentes."
         ),
-        gt::gt_output(ns("gt_auditoria_integridad"))
+        shiny::uiOutput(ns("gt_auditoria_integridad"))
       )
     })
     
-    output$gt_auditoria_integridad <- gt::render_gt({
+    output$gt_auditoria_integridad <- shiny::renderUI({
       auditoria_integridad() %>%
         dplyr::filter(
           abs(DiferenciaSacos) > .VF_TOLERANCIA_SACOS |
@@ -1718,10 +1711,10 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         return(.sin_registros_ui())
       }
       
-      gt::gt_output(ns("gt_cuadre_detalle"))
+      shiny::uiOutput(ns("gt_cuadre_detalle"))
     })
     
-    output$gt_cuadre_detalle <- gt::render_gt({
+    output$gt_cuadre_detalle <- shiny::renderUI({
       detalle <- cuadre_detalle()
       shiny::req(!is.null(detalle), nrow(detalle) > 0L)
       
@@ -2071,7 +2064,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
               12,
               shiny::tagAppendAttributes(racafeForms::racafeButtonDownload(id = paste0("dl_", prefijo),
                 label = "Descargar detalle",
-                                      icon = "download", ns = ns, size = "xs", variant = "success"),
+                                      icon = "download", ns = ns, size = "xs", variant = "secondary"),
                                         title = "Descargar"),
               racafeCore::Saltos()
             )
@@ -2132,17 +2125,17 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
             shiny::tagList(
               shiny::tags$hr(),
               shiny::fluidRow(
-                shiny::column(3, gt::gt_output(ns(paste0("gt_", prefijo, "_cliente")))),
-                shiny::column(3, gt::gt_output(ns(paste0("gt_", prefijo, "_segmento")))),
-                shiny::column(3, gt::gt_output(ns(paste0("gt_", prefijo, "_asesor")))),
-                shiny::column(3, gt::gt_output(ns(paste0("gt_", prefijo, "_linea"))))
+                shiny::column(3, shiny::uiOutput(ns(paste0("gt_", prefijo, "_cliente")))),
+                shiny::column(3, shiny::uiOutput(ns(paste0("gt_", prefijo, "_segmento")))),
+                shiny::column(3, shiny::uiOutput(ns(paste0("gt_", prefijo, "_asesor")))),
+                shiny::column(3, shiny::uiOutput(ns(paste0("gt_", prefijo, "_linea"))))
               )
             )
           }
         )
       })
       
-      output[[paste0("gt_", prefijo, "_cliente")]] <- gt::render_gt({
+      output[[paste0("gt_", prefijo, "_cliente")]] <- shiny::renderUI({
         detalle <- datos()
         
         if (nrow(detalle) == 0L) {
@@ -2157,7 +2150,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
           )
       })
       
-      output[[paste0("gt_", prefijo, "_segmento")]] <- gt::render_gt({
+      output[[paste0("gt_", prefijo, "_segmento")]] <- shiny::renderUI({
         detalle <- datos()
         
         if (nrow(detalle) == 0L) {
@@ -2171,7 +2164,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
           )
       })
       
-      output[[paste0("gt_", prefijo, "_asesor")]] <- gt::render_gt({
+      output[[paste0("gt_", prefijo, "_asesor")]] <- shiny::renderUI({
         detalle <- datos()
         
         if (nrow(detalle) == 0L) {
@@ -2185,7 +2178,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
           )
       })
       
-      output[[paste0("gt_", prefijo, "_linea")]] <- gt::render_gt({
+      output[[paste0("gt_", prefijo, "_linea")]] <- shiny::renderUI({
         detalle <- datos()
         
         if (nrow(detalle) == 0L) {
@@ -2333,7 +2326,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
             12,
             shiny::tagAppendAttributes(racafeForms::racafeButtonDownload(id = "dl_segmentos",
               label = "Descargar detalle", icon = "download",
-                                    ns = ns, size = "xs", variant = "success"), title = "Descargar"),
+                                    ns = ns, size = "xs", variant = "secondary"), title = "Descargar"),
             racafeCore::Saltos()
           )
         ),
@@ -2497,12 +2490,12 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         if (is.null(detalle) || nrow(detalle) == 0L) {
           .sin_registros_ui()
         } else {
-          gt::gt_output(ns("gt_segmento_detalle"))
+          shiny::uiOutput(ns("gt_segmento_detalle"))
         }
       )
     })
     
-    output$gt_segmento_detalle <- gt::render_gt({
+    output$gt_segmento_detalle <- shiny::renderUI({
       detalle <- segmento_detalle()
       shiny::req(!is.null(detalle), nrow(detalle) > 0L)
       
@@ -2573,3 +2566,4 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     )
   })
 }
+

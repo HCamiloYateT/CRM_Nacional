@@ -73,3 +73,4 @@ testServer(servidor_header, {
   .verificar(identical(selecciones, c("pedidos", "lotes", "facturacion")))
 })
 message("OK: ", .checks_presentacion, " comprobaciones de cajas, footer y acciones.")
+
