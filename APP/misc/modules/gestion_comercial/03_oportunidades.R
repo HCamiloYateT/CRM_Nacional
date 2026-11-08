@@ -147,14 +147,41 @@ OportunidadesGestion <- function(id, usuario, es_admin, hechos, cargar = racafeB
       columnas = c("Oportunidad", "NIT", "Cliente", "Autor", "Categoria", "Producto", "Creacion", "Cumplimiento",
         "Estado", "Objetivo70", "MargenObjetivo", "SacosEjecutados", "MargenEjecutado", "CumplSacos", "CumplMargen"),
       col_labels = c(Objetivo70 = "Objetivo sacos 70 kg", CumplSacos = "Cumpl. sacos", CumplMargen = "Cumpl. margen"))
-    shiny::observeEvent(input$crear, {
+    abrir_creacion <- function(codigo) {
       permitidos <- .op_contactos_visibles(contactos(), usuario(), es_admin())
-      shiny::req(input$contacto %in% as.character(permitidos$CodContacto))
-      contacto_seleccionado(input$contacto)
+      if (length(codigo) != 1L || is.na(codigo) || !codigo %in% as.character(permitidos$CodContacto)) {
+        shiny::showNotification("Seleccione un contacto habilitado para crear la oportunidad.", type = "warning")
+        return(invisible(FALSE))
+      }
+      contacto_seleccionado(as.character(codigo))
+      racafeForms::racafeUpdateSelect(session, "contacto", selected = as.character(codigo))
       shiny::showModal(racafeForms::racafeModalDetail(title = "Crear oportunidad", size = "subventana2",
         CrearOportunidadUI(session$ns("crear_op")),
         footer = racafeForms::racafeModalFooter(right = shiny::modalButton("Cerrar"))))
+      invisible(TRUE)
+    }
+    shiny::observeEvent(input$crear, {
+      permitidos <- .op_contactos_visibles(contactos(), usuario(), es_admin())
+      if (!nrow(permitidos)) {
+        shiny::showNotification("No hay contactos habilitados. Cree o asigne primero un contacto en Prospección.",
+          type = "warning", duration = 7)
+        return()
+      }
+      codigo <- input$contacto
+      if (length(codigo) == 1L && !is.na(codigo) && codigo %in% as.character(permitidos$CodContacto)) {
+        abrir_creacion(codigo)
+      } else {
+        etiquetas <- paste(permitidos$PerCod, permitidos$PerRazSoc, sep = " — ")
+        shiny::showModal(racafeForms::racafeModalDetail(title = "Seleccionar contacto", size = "subventana1",
+          racafeForms::racafeForm(variant = "plain",
+            racafeForms::racafeInputSelect("contacto_creacion", "Contacto de la oportunidad",
+              choices = stats::setNames(as.character(permitidos$CodContacto), etiquetas), empty = FALSE,
+              ns = session$ns),
+            racafeForms::racafeButton("continuar_creacion", "Continuar", icon = "arrow-right", ns = session$ns)),
+          footer = racafeForms::racafeModalFooter(right = shiny::modalButton("Cerrar"))))
+      }
     })
+    shiny::observeEvent(input$continuar_creacion, abrir_creacion(input$contacto_creacion))
     shiny::observeEvent(tabla$seleccion(), {
       seleccion <- tabla$seleccion()
       fila <- datos()[datos()$Oportunidad == seleccion$id, , drop = FALSE]

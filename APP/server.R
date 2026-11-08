@@ -185,10 +185,15 @@ server <- function(input, output, session) {
   validacion_mod <- isolate(ValidacionFinanciera(id = "ValidacionFinanciera", filtros = filtros,
     dat = data_c, fact = fact, margenes_pyg = margenes_pyg, nit_ppal = nit_ppal,
     clientes_snap = clientes_snap, n_cliente = n_cliente))
+  reglas_productos_rv <- reactiveVal(NA_real_)
+  observeEvent(filtros(), { reglas_productos_rv(NA_real_) }, ignoreInit = TRUE)
   indicadores_resumen <- reactive({
     presupuesto <- presupuesto_mod$resumen_ejecutivo()
     list(gc_presupuesto_sacos = presupuesto$sacos, gc_presupuesto_margen = presupuesto$margen,
-      ge_validacion = validacion_mod$cuadre_sacos(), gc_tareas = menu_tareas$tareas$n())
+      ge_validacion = validacion_mod$cuadre_sacos(), gc_tareas = menu_tareas$tareas$n(),
+      pd_ejecucion = if (length(filtros()$fecha) == 2L) {
+        .prod_indicadores(.prod_preparar(maestro_comercial(), as.Date(filtros()$fecha)))$productos
+      } else NA_real_, pd_marketbasket = reglas_productos_rv())
   })
 
   ### Generalidades ----
@@ -288,11 +293,13 @@ server <- function(input, output, session) {
   CargarTabUnaVez("HE_Informes", "ui_HE_Informes", function() h4("Informes"))
   
   ### Productos ----
-  CargarTabUnaVez("PD_Ejecucion", "ui_PD_Ejecucion", function() h4("Ejecución"))
+  CargarTabUnaVez("PD_Ejecucion", "ui_PD_Ejecucion", function() ProductosEjecucionUI("ProductosEjecucion"),
+    function() ProductosEjecucion("ProductosEjecucion", maestro_comercial))
   
-  CargarTabUnaVez("PD_MarketBasket", "ui_PD_MarketBasket", function() h4("Market Basket"))
+  CargarTabUnaVez("PD_MarketBasket", "ui_PD_MarketBasket", function() MarketBasketUI("MarketBasket"),
+    function() MarketBasket("MarketBasket", maestro_base_comercial, filtros,
+      on_result = function(n) reglas_productos_rv(n)))
   
-  CargarTabUnaVez("PD_Administracion", "ui_PD_Administracion", function() h4("Administración"))
   
   ### Administración ----
   CargarTabUnaVez("AD_Catalogos", "ui_AD_Administrar", function() {
