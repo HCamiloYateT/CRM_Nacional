@@ -1,56 +1,30 @@
-# Crear Oportunidad.
-# Modulo Principal ----- 
+# Crear oportunidades desde el contacto o desde el tablero comercial ----
 CrearOportunidadUI <- function(id) {
-  ns <- NS(id)
-  tagList(
-    uiOutput(ns("Titulo")),
-    uiOutput(ns("EstadoActual")),
-    # Informacion del Producto ----
-    box(title = "Información del Producto", width = 12, collapsible = FALSE,
-        fluidRow(
-          column(6,
-                 racafeForms::racafeInputSelect(id = ns("OP_LinNeg"), label = Obligatorio("Línea de Negocio"),
-                                         choices = c("", Choices()$linneg), selected = "", multiple = FALSE, size = 8,
-                                         empty = FALSE)
-          )
-        ),
-        fluidRow(
-          column(6,
-                 racafeForms::racafeInputSelect(id = ns("OP_Categoria"), label = Obligatorio("Categoría"), choices = "",
-                                         selected = NULL, multiple = FALSE, size = 8, empty = FALSE)
-          ),
-          column(6,
-                 racafeForms::racafeInputSelect(id = ns("OP_Producto"), label = Obligatorio("Producto"), choices = "",
-                                         selected = NULL, multiple = FALSE, size = 8, empty = FALSE)
-          )
-        )
-    ),
-    # Detalles de la Oportunidad ----
-    box(title = "Detalles de la Oportunidad", width = 12, collapsible = FALSE,
-        fluidRow(
-          column(6,
-                 racafeForms::racafeInputDate(id = ns("OP_Fecha"), label = Obligatorio("Fecha de Cumplimiento"),
-                                         value = Sys.Date() + 7, min = Sys.Date(), width = "100%"),
-                 uiOutput(ns("OP_Sacos_UI")),
-                 racafeForms::racafeInputNumeric(id = ns("OP_Frecuencia"), label = Obligatorio("Frecuencia (días)"),
-                                         value = NA, decimals = 0, format = "number"),
-                 racafeForms::racafeInputNumeric(id = ns("OP_Margen"), label = Obligatorio("Margen por Kilo"),
-                                         value = NA, decimals = 0, format = "currency")
-          ),
-          column(6,
-                 uiOutput(ns("OP_Resumen"))
-                 )
-        ),
-        racafeForms::racafeButton(id = ns("OP_Crear"), label = "Crear Oportunidad", size = "xs", variant = "primary",
-                                icon = "save")
-    )
-  )
+  ns <- shiny::NS(id)
+  racafeForms::racafeForm(variant = "plain",
+    shiny::uiOutput(ns("Titulo")), shiny::uiOutput(ns("EstadoActual")),
+    racafeForms::racafeCard(title = "Producto",
+      racafeForms::racafeInputSelect("OP_LinNeg", "Línea de negocio", choices = c("", Choices()$linneg), ns = ns),
+      racafeForms::racafeFormRow(columns = 2,
+        racafeForms::racafeInputSelect("OP_Categoria", "Categoría", choices = "", ns = ns),
+        racafeForms::racafeInputSelect("OP_Producto", "Producto", choices = "", ns = ns))),
+    racafeForms::racafeCard(title = "Objetivo de la oportunidad",
+      racafeForms::racafeFormRow(columns = 2,
+        racafeForms::racafeInputDate("OP_Fecha", "Fecha de cumplimiento", value = Sys.Date() + 7,
+          min = Sys.Date(), ns = ns), shiny::uiOutput(ns("OP_Sacos_UI"))),
+      racafeForms::racafeFormRow(columns = 2,
+        racafeForms::racafeInputNumeric("OP_Frecuencia", "Frecuencia (días)", value = NA, format = "number", ns = ns),
+        racafeForms::racafeInputNumeric("OP_Margen", "Margen por kilo", value = NA, format = "currency", ns = ns)),
+      shiny::uiOutput(ns("OP_Resumen"))),
+    racafeForms::racafeFormFooter(racafeForms::racafeButton("OP_Crear", "Crear oportunidad",
+      icon = "plus", ns = ns)))
 }
 CrearOportunidad <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns
     creacion_trigger <- reactiveVal(0)
+    creacion_pendiente <- reactiveVal(NULL)
     
     # Datos ----
     
@@ -199,7 +173,10 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
         "El campo Producto es obligatorio"         = EsVacio(input$OP_Producto),
         "El campo Sacos es obligatorio"            = EsVacio(input$OP_Sacos),
         "El campo Frecuencia es obligatorio"       = EsVacio(input$OP_Frecuencia),
-        "El campo Margen por kilo es obligatorio"  = EsVacio(input$OP_Margen)
+        "El campo Margen por kilo es obligatorio"  = EsVacio(input$OP_Margen),
+        "Los sacos deben ser positivos" = !isTRUE(is.finite(input$OP_Sacos) && input$OP_Sacos > 0),
+        "La frecuencia debe ser positiva" = !isTRUE(is.finite(input$OP_Frecuencia) && input$OP_Frecuencia > 0),
+        "La fecha debe ser vigente" = !isTRUE(as.Date(input$OP_Fecha) >= Sys.Date())
       )
       
       if (any(cond)) {
@@ -225,6 +202,9 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
         return(invisible(NULL))
       }
       
+      creacion_pendiente(list(contacto = codigo_contacto(), linea = linnegcod,
+        categoria = input$OP_Categoria, producto = input$OP_Producto, fecha = input$OP_Fecha,
+        sacos = input$OP_Sacos, margen = input$OP_Margen, frecuencia = input$OP_Frecuencia))
       racafeShiny::MostrarModalConfirmacion(
         ns = ns, titulo = "Confirmar creación",
         texto = paste0("¿Desea registrar esta oportunidad de '", input$OP_Producto, "'?"),
@@ -233,24 +213,25 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
       )
     })
     
-    observeEvent(input$OP_CancelarCreacion, { removeModal() })
+    observeEvent(input$OP_CancelarCreacion, { creacion_pendiente(NULL); removeModal() })
     observeEvent(input$OP_ConfirmarCreacion, {
-      linea     <- determinar_linea_negocio(input$OP_LinNeg)
-      linnegcod <- as.numeric(linea$cod)
-      
+      pendiente <- creacion_pendiente()
+      req(pendiente, identical(pendiente$contacto, codigo_contacto()))
+      creacion_pendiente(NULL)
       # Etapa capturada al confirmar — fotografia historica; no debe
       # recalcularse despues aunque el contacto avance de etapa mas adelante
       etapa_al_crear <- etapa_contacto()
       
       tryCatch({
         registrar_oportunidad(
-          cod_contacto        = codigo_contacto(),
-          linnegcod            = linnegcod,
-          categoria            = input$OP_Categoria,
-          producto             = input$OP_Producto,
-          fecha_cumplimiento   = input$OP_Fecha,
-          sacos                = input$OP_Sacos,
-          margen               = input$OP_Margen,
+          cod_contacto        = pendiente$contacto,
+          linnegcod            = pendiente$linea,
+          categoria            = pendiente$categoria,
+          producto             = pendiente$producto,
+          fecha_cumplimiento   = pendiente$fecha,
+          sacos                = pendiente$sacos,
+          margen               = pendiente$margen,
+          frecuencia          = pendiente$frecuencia,
           etapa                = etapa_al_crear,
           usr                  = usuario()
         )
