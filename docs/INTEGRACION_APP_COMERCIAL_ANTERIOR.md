@@ -41,8 +41,16 @@ Un archivo no configurado muestra una indicación de importación en la sección
 
 ## Presupuesto y ejecución
 
-- El presupuesto anual se toma una sola vez por NIT principal/línea y último snapshot del año hasta el corte.
-  Snapshots contradictorios se rechazan. No se usa el presupuesto de 2026 para comparar un año antiguo sin snapshot.
+- El presupuesto anual se toma una sola vez por NIT de facturación/línea en su último snapshot hasta el corte.
+  Después se agrega por NIT principal/línea para no multiplicar las uniones de ejecución.
+  Las sucursales pueden tener cortes distintos: se conserva el último de cada una, sin perder metas antiguas vigentes.
+  Las diferencias de nombre o ubicación no son presupuestos duplicados. Sus dimensiones ambiguas quedan sin clasificar.
+  Una contradicción real de importe en el mismo corte deja solo esa meta como desconocida y marca
+  `PresupuestoEnRevision`, sin escoger el máximo ni detener todas las vistas. Una meta de sacos coherente se conserva
+  aunque la de margen esté en revisión, y viceversa.
+  Los filtros se aplican tras resolver los empates, para no elegir una versión contradictoria por el asesor filtrado.
+  El desglose conserva las metas de sucursales por asesor/segmento/ubicación; el bono agrega esos planes por segmento
+  antes de unirlos con la ejecución, sin repetir ventas. No se usa presupuesto de 2026 en años sin snapshot.
 - Los filtros de asesor/segmento/línea se aplican también al catálogo de objetivos, incluidos clientes sin ejecución.
 - Las cantidades facturadas son sacos de 70 kg. Margen/kg = margen agregado / kilos agregados.
 - El margen US¢/lb = margen/kg × 0,453592 × 100 / tasa COP/USD anual de referencia. Sin tasa válida no se calcula.

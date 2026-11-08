@@ -73,16 +73,19 @@
   reglas
 }
 .bon_panel_crm <- function(hechos, clientes, corte, asesor) {
+  detalle_presupuesto <- attr(clientes, "presupuesto_detalle", exact = TRUE)
+  if (!is.null(detalle_presupuesto)) clientes <- detalle_presupuesto
   x <- .com_hechos(hechos, corte, cerrados = TRUE)
   x <- x[format(x$Fecha, "%Y") == format(corte, "%Y"), ]
   if (!is.null(asesor)) x <- x[x$Asesor == asesor, ]
-  ejec <- x %>% dplyr::group_by(CliNitPpal, LinNegCod, Fecha) %>%
+  ejec <- x %>% dplyr::group_by(CliNitPpal, LinNegCod, Segmento, Fecha) %>%
     dplyr::summarise(Margen = .com_suma(Margen), ConEjecucion = TRUE, .groups = "drop")
   cli <- if (is.null(asesor)) clientes else clientes[clientes$Asesor == asesor, ]
   meses <- seq(as.Date(format(corte, "%Y-01-01")), .gc_mes(corte), by = "month")
-  cli <- cli %>% dplyr::select(CliNitPpal, LinNegCod, Segmento, MNFCCPpto)
+  cli <- cli %>% dplyr::group_by(CliNitPpal, LinNegCod, Segmento) %>%
+    dplyr::summarise(MNFCCPpto = .com_suma(MNFCCPpto), .groups = "drop")
   plan <- tidyr::crossing(cli, Fecha = meses) %>% dplyr::mutate(PptoMargen = MNFCCPpto / 12)
-  dplyr::full_join(plan, ejec, by = c("CliNitPpal", "LinNegCod", "Fecha")) %>%
+  dplyr::full_join(plan, ejec, by = c("CliNitPpal", "LinNegCod", "Segmento", "Fecha")) %>%
     dplyr::mutate(Margen = ifelse(is.na(ConEjecucion), 0, Margen),
       Negocio = dplyr::case_when(LinNegCod == 10000 ~ "COPRODUCTO", LinNegCod == 21000 ~ "MEDIDA", TRUE ~ "OTRO"))
 }

@@ -94,3 +94,52 @@ revisiones$FecProceso <- as.POSIXct(c("2026-01-01 08:00:00", "2026-01-01 10:00:0
 revisiones$MNFCCPpto <- c(500, 400)
 revisiones$RegistroAuditoria <- 1:2
 stopifnot(.com_clientes(revisiones, as.Date("2026-01-31"), anual = TRUE)$MNFCCPpto == 400)
+
+
+# Cada sucursal conserva su último corte antes de agregar por NIT principal.
+sucursales <- data.frame(CLCliNit = c(11, 11, 12), CliNitPpal = 1, LinNegCod = 21000,
+  FecProceso = as.POSIXct(c("2026-01-01", "2026-02-01", "2026-01-01"), tz = "UTC"),
+  Asesor = "ANA", Segmento = "DETAL", SSPpto = c(100, 120, 240), MNFCCPpto = c(1000, 1200, 2400),
+  PerRazSoc = c("Principal", "Principal", "Principal"), Mpio = c("A", "A", "B"))
+consolidado <- .com_clientes(sucursales, as.Date("2026-02-28"), anual = TRUE)
+stopifnot(nrow(consolidado) == 1L, consolidado$SSPpto == 360, consolidado$MNFCCPpto == 3600,
+  is.na(consolidado$Mpio), !consolidado$PresupuestoEnRevision,
+  nrow(attr(consolidado, "presupuesto_detalle")) == 2L)
+# Distintas descripciones no duplican la meta; una dimensión ambigua permanece desconocida.
+descripciones <- sucursales[rep(2, 2), ]
+descripciones$PerRazSoc <- c("Nombre anterior", "Nombre actualizado")
+unico <- .com_clientes(descripciones, as.Date("2026-02-28"), anual = TRUE)
+stopifnot(nrow(unico) == 1L, unico$MNFCCPpto == 1200, is.na(unico$PerRazSoc))
+# Una contradicción real no tumba todas las vistas ni escoge el importe mayor.
+contradiccion <- descripciones
+contradiccion$MNFCCPpto <- c(1200, 1500)
+revision <- .com_clientes(contradiccion, as.Date("2026-02-28"), anual = TRUE)
+stopifnot(nrow(revision) == 1L, revision$PresupuestoEnRevision, is.na(revision$MNFCCPpto), revision$SSPpto == 120)
+# Un filtro de asesor no puede resolver artificialmente un empate de versiones contradictorias.
+contradiccion$Asesor <- c("ANA", "LUIS")
+filtrado <- .com_clientes(contradiccion, as.Date("2026-02-28"),
+  filtros = list(asesor = "ANA", segmento = "DETAL", linneg = "A LA MEDIDA"), anual = TRUE)
+stopifnot(nrow(filtrado) == 0L)
+cat("OK: sucursales, empates de descripción, conflictos reales y filtros sin selección arbitraria.\n")
+# No multiplicar ventas al conservar varios planes del mismo principal/segmento.
+ventas <- hechos[1, ]
+ventas$CliNitPpal <- 1
+ventas$SacosFact <- 10
+ventas$Margen <- 100
+plan <- .bon_panel_crm(ventas, consolidado, as.Date("2026-02-28"), "ANA")
+stopifnot(sum(plan$Margen) == 100, sum(plan$PptoMargen) == 600, nrow(plan) == 2L)
+# El desglose municipal usa las metas de cada sucursal; no pierde la dimensión por agregar al principal.
+municipios <- .com_resumen(.com_hechos(ventas, as.Date("2026-02-28")), consolidado,
+  as.Date("2026-02-28"), "Mpio")
+stopifnot(municipios$PptoMargen[municipios$Dimension == "A"] == 200,
+  municipios$PptoMargen[municipios$Dimension == "B"] == 400)
+# Asesores distintos conservan sus propios objetivos sin repetir el principal ni su ejecución.
+por_asesor <- sucursales
+por_asesor$Asesor[por_asesor$CLCliNit == 12] <- "LUIS"
+planes <- .com_clientes(por_asesor, as.Date("2026-02-28"), anual = TRUE)
+desglose <- .com_resumen(.com_hechos(ventas, as.Date("2026-02-28")), planes,
+  as.Date("2026-02-28"), "Asesor")
+stopifnot(desglose$PptoMargen[desglose$Dimension == "ANA"] == 200,
+  desglose$PptoMargen[desglose$Dimension == "LUIS"] == 400)
+plan_ana <- .bon_panel_crm(ventas, planes, as.Date("2026-02-28"), "ANA")
+stopifnot(sum(plan_ana$PptoMargen) == 200, sum(plan_ana$Margen) == 100)
