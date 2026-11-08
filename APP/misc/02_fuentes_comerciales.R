@@ -55,12 +55,15 @@
   x <- datos
   requeridas <- c("CliNitPpal", "LinNegCod", "Asesor", "Segmento", "SSPpto", "MNFCCPpto")
   if (!all(requeridas %in% names(x))) stop("Faltan columnas del catálogo de clientes/presupuesto.")
+  # La fuente guarda metas por NIT de facturación; un principal puede tener varias sucursales.
+  if (!"CLCliNit" %in% names(x)) x$CLCliNit <- x$CliNitPpal
+  x <- x[!is.na(x$CLCliNit) & !is.na(x$CliNitPpal) & !is.na(x$LinNegCod), , drop = FALSE]
   if ("FecProceso" %in% names(x)) {
     x$.OrdenProceso <- as.numeric(as.POSIXct(x$FecProceso, tz = "UTC"))
     x$FecProceso <- as.Date(x$FecProceso)
     x <- x[!is.na(x$FecProceso) & x$FecProceso <= corte, , drop = FALSE]
     if (anual) x <- x[format(x$FecProceso, "%Y") == format(corte, "%Y"), , drop = FALSE]
-    x <- x %>% dplyr::group_by(CliNitPpal, LinNegCod) %>%
+    x <- x %>% dplyr::group_by(CLCliNit, LinNegCod) %>%
       dplyr::filter(.OrdenProceso ==
         if (any(!is.na(.OrdenProceso))) max(.OrdenProceso, na.rm = TRUE) else NA_real_) %>% dplyr::ungroup()
   } else if (anual) return(x[0, , drop = FALSE])
@@ -72,15 +75,42 @@
   x$Depto <- as.character(.gc_columna(x, c("Depto", "Departamento")))
   x$Mpio <- as.character(.gc_columna(x, c("Mpio", "Municipio")))
   x$Region <- as.character(.gc_columna(x, c("Region", "Región")))
-  conservar <- unique(c(requeridas, "FecProceso", "CLLinNegNo", "PerRazSoc", "Depto", "Mpio", "Region"))
+  conservar <- unique(c(requeridas, "CLCliNit", "FecProceso", "CLLinNegNo", "PerRazSoc", "Depto", "Mpio", "Region"))
   x <- x %>% dplyr::select(dplyr::any_of(conservar)) %>% dplyr::distinct()
-  if (anyDuplicated(x[c("CliNitPpal", "LinNegCod")])) stop("El presupuesto tiene snapshots contradictorios.")
+  if (!"FecProceso" %in% names(x)) x$FecProceso <- as.Date(NA)
+  .texto_unico <- function(valor) {
+    valores <- unique(as.character(valor[!is.na(valor) & nzchar(trimws(as.character(valor)))]))
+    if (length(valores) == 1L) valores[[1]] else NA_character_
+  }
+  .meta_unica <- function(valor) {
+    valores <- unique(.gc_num(valor))
+    valores <- valores[is.finite(valores)]
+    if (length(valores) == 1L) valores[[1]] else NA_real_
+  }
+  # Resolver empates del mismo corte antes de aplicar filtros; no escoger una de las versiones por asesor.
+  detalle <- x %>% dplyr::group_by(CLCliNit, LinNegCod) %>%
+    dplyr::summarise(CliNitPpal = .gc_unico(CliNitPpal),
+      FecProceso = .gc_fecha_max(FecProceso),
+      ConflictoSacos = dplyr::n_distinct(.gc_num(SSPpto), na.rm = TRUE) > 1L,
+      ConflictoMargen = dplyr::n_distinct(.gc_num(MNFCCPpto), na.rm = TRUE) > 1L,
+      SSPpto = .meta_unica(SSPpto), MNFCCPpto = .meta_unica(MNFCCPpto),
+      dplyr::across(dplyr::all_of(c("Asesor", "Segmento", "CLLinNegNo", "PerRazSoc", "Depto", "Mpio", "Region")),
+        .texto_unico), .groups = "drop")
+  detalle$PresupuestoEnRevision <- detalle$ConflictoSacos | detalle$ConflictoMargen | is.na(detalle$CliNitPpal)
   if (!is.null(filtros)) {
     for (par in list(c("Asesor", "asesor"), c("Segmento", "segmento"), c("CLLinNegNo", "linneg"))) {
-      x <- x[x[[par[[1]]]] %in% filtros[[par[[2]]]], , drop = FALSE]
+      detalle <- detalle[detalle[[par[[1]]]] %in% filtros[[par[[2]]]], , drop = FALSE]
     }
   }
-  x
+  # Las uniones geográficas y comerciales mantienen una fila por principal/línea, sin multiplicar hechos.
+  resultado <- detalle %>% dplyr::filter(!is.na(CliNitPpal)) %>% dplyr::group_by(CliNitPpal, LinNegCod) %>%
+    dplyr::summarise(SSPpto = .com_suma(SSPpto), MNFCCPpto = .com_suma(MNFCCPpto),
+      FecProceso = .gc_fecha_max(FecProceso), PresupuestoEnRevision = any(PresupuestoEnRevision),
+      dplyr::across(dplyr::all_of(c("Asesor", "Segmento", "CLLinNegNo", "PerRazSoc", "Depto", "Mpio", "Region")),
+        .texto_unico), .groups = "drop")
+  # Conservar el grano de las metas para desglosarlas por asesor, segmento o ubicación sin prorratear.
+  attr(resultado, "presupuesto_detalle") <- detalle
+  resultado
 }
 .com_hechos <- function(datos, corte, cerrados = TRUE) {
   x <- datos %>% dplyr::filter(!is.na(FecFact), FecFact <= corte,
@@ -102,14 +132,18 @@
   ejecucion <- x %>% dplyr::group_by(Dimension) %>%
     dplyr::summarise(Sacos = sum(SacosFact, na.rm = TRUE), Margen = .com_suma(Margen),
       Clientes = dplyr::n_distinct(CliNitPpal), ConEjecucion = TRUE, .groups = "drop")
+  detalle_presupuesto <- attr(clientes, "presupuesto_detalle", exact = TRUE)
+  if (!is.null(detalle_presupuesto)) clientes <- detalle_presupuesto
   asignable <- dimension %in% c("CLLinNegNo", "Segmento", "Asesor", "PerRazSoc", "Depto", "Mpio", "Region")
   meses <- if (acumulado) as.integer(format(corte, "%m")) else 1L
   if (asignable) {
     clientes$Dimension <- as.character(clientes[[dimension]])
     clientes$Dimension[is.na(clientes$Dimension) | !nzchar(clientes$Dimension)] <- "Sin clasificar"
+    if (!"PresupuestoEnRevision" %in% names(clientes)) clientes$PresupuestoEnRevision <- FALSE
     ppto <- clientes %>% dplyr::group_by(Dimension) %>%
-      dplyr::summarise(PptoSacos = .gc_suma(SSPpto) * meses / 12,
-        PptoMargen = .gc_suma(MNFCCPpto) * meses / 12, .groups = "drop")
+      dplyr::summarise(PptoSacos = .com_suma(SSPpto) * meses / 12,
+        PptoMargen = .com_suma(MNFCCPpto) * meses / 12,
+        PresupuestoEnRevision = any(PresupuestoEnRevision), .groups = "drop")
     salida <- dplyr::full_join(ejecucion, ppto, by = "Dimension")
     salida$Sacos <- dplyr::coalesce(salida$Sacos, 0)
     salida$Margen[is.na(salida$ConEjecucion)] <- 0
