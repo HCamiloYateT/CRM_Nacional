@@ -2561,6 +2561,13 @@ homologaciones <- list(
   lotes = lotes_raw
 )
 
+# Fuente comercial histórica opcional: importar datos, nunca ejecutar los scripts antiguos.
+sys.source("APP/misc/02_fuentes_comerciales.R", envir = environment())
+ruta_comercial_historica <- Sys.getenv("CRM_DATOS_COMERCIALES", unset = "APP/data/comercial_historico.rds")
+if (file.exists(ruta_comercial_historica)) {
+  homologaciones$comercial_historico <- .com_leer_historico(ruta_comercial_historica)
+}
+
 # TRAZABILIDAD FACTURAS ----
 .facturas_referencia <- function() {
   sql_nal <- paste(
