@@ -168,6 +168,16 @@ server <- function(input, output, session) {
     es_admin = es_admin
   )
   
+  # Archivo histórico opcional: datos locales, nunca scripts de la app anterior.
+  comercial_historico_r <- reactive({
+    incorporado <- homologaciones$comercial_historico
+    if (!is.null(incorporado)) return(incorporado)
+    ruta <- Sys.getenv("CRM_DATOS_COMERCIALES", unset = file.path(.ruta_app, "data", "comercial_historico.rds"))
+    if (file.exists(ruta)) .com_leer_historico(ruta) else NULL
+  })
+  hechos_analisis_comercial <- reactive(.com_enriquecer_geografia(maestro_comercial(),
+    .com_clientes(clientes_raw_cache(), Sys.Date(), filtros())))
+
   ## Body ----
   # Fuentes del resumen disponibles antes de abrir sus pestañas ----
   presupuesto_mod <- Presupuesto("GC_Presupuesto_mod", dat = data_c,
@@ -186,9 +196,15 @@ server <- function(input, output, session) {
     function() ResumenEjecutivo("ResumenEjecutivo", valores = indicadores_resumen))
   CargarTabUnaVez("GE_Validacion", "ui_GE_Validacion", function() ValidacionFinancieraUI("ValidacionFinanciera"))
 
-  CargarTabUnaVez("GE_Evolucion", "ui_GE_Evolucion", function() h4("Evolución del Negocio"))
+  CargarTabUnaVez("GE_Evolucion", "ui_GE_Evolucion",
+    function() AnalisisComercialUI("AnalisisEvolucion", "evolucion", ultimo_periodo_pyg),
+    function() AnalisisComercial("AnalisisEvolucion", hechos_analisis_comercial, clientes_raw_cache, filtros, "evolucion",
+      historico = comercial_historico_r))
   
-  CargarTabUnaVez("GE_Participacion", "ui_GE_Participacion", function() h4("Participación y Composición"))
+  CargarTabUnaVez("GE_Participacion", "ui_GE_Participacion",
+    function() AnalisisComercialUI("AnalisisParticipacion", "participacion", ultimo_periodo_pyg),
+    function() AnalisisComercial("AnalisisParticipacion", hechos_analisis_comercial, clientes_raw_cache, filtros, "participacion",
+      historico = comercial_historico_r))
   
   CargarTabUnaVez("GE_Comparacion", "ui_GE_Comparacion", function() ComparacionIndicadoresUI("CompIndicadores"),
                   function() ComparacionIndicadores("CompIndicadores"))
@@ -202,7 +218,9 @@ server <- function(input, output, session) {
     PresupuestoUI("GC_Presupuesto_mod")
   })
   
-  CargarTabUnaVez("GC_Variables", "ui_GC_Variables", function() h4("Variables para Bonificación"))
+  CargarTabUnaVez("GC_Variables", "ui_GC_Variables", function() VariablesBonoUI("VariablesBono", ultimo_periodo_pyg),
+    function() VariablesBono("VariablesBono", hechos_analisis_comercial, clientes_raw_cache, filtros,
+      comercial_historico_r, ultimo_periodo_pyg))
   CargarTabUnaVez("GC_Oportunidades", "ui_GC_Oportunidades", function() OportunidadesGestionUI("Oportunidades"),
     function() OportunidadesGestion("Oportunidades", usuario, es_admin, maestro_base_comercial))
   CargarTabUnaVez("GC_Pendientes", "ui_GC_Pendientes", function() PendientesGestionUI("Pendientes"),
@@ -212,8 +230,11 @@ server <- function(input, output, session) {
       abrir = menu_tareas$tareas$abrir, refrescar = menu_tareas$tareas$refrescar)
   })
   CargarTabUnaVez("GC_Alertas", "ui_GC_Alertas", function() h4("Alertas y Notificaciones"))
-  CargarTabUnaVez("GC_Fidelidad", "ui_GC_Fidelidad", function() h4("Fidelidad y Riesgo"))
-  CargarTabUnaVez("GC_Cartera", "ui_GC_Cartera", function() h4("Cartera"))
+  CargarTabUnaVez("GC_Fidelidad", "ui_GC_Fidelidad", function() FidelidadRiesgoUI("FidelidadRiesgo"),
+    function() FidelidadRiesgo("FidelidadRiesgo", hechos_analisis_comercial, clientes_raw_cache, filtros))
+  CargarTabUnaVez("GC_Cartera", "ui_GC_Cartera", function() CarteraComercialUI("CarteraComercial"),
+    function() CarteraComercial("CarteraComercial", comercial_historico_r, clientes_raw_cache, nit_ppal,
+      filtros, es_admin))
   
   ### Prospección ----
   CargarTabUnaVez("PR_Kanban", "ui_PR_Kanban", function() KanbanEmbudoUI("Kanban"),

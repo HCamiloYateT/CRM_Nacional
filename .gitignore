@@ -1,0 +1,4 @@
+# Datos comerciales privados importados localmente; no publicar saldos ni pagos.
+APP/data/comercial_historico.rds
+APP/data/comercial_historico.RData
+APP/data/data.RData
