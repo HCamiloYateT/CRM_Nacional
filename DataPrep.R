@@ -89,7 +89,7 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
 }
 
 ## Facturación ----
-.cargar_fact <- function() {
+.cargar_fact <- function(fecha_desde = fecha_inicio_analisis) {
   fact_sys_nal <- racafeBD::ConsultaSistema(
     "syscafe",
     query = "SELECT F1.FcnLot AS CLLotCod,
@@ -145,7 +145,7 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
                   FecFact = as.Date(FecFact),
                   FecMesFact = lubridate::floor_date(FecFact, "month"),
                   SacosFact = suppressWarnings(as.numeric(SacosFact))) %>%
-    dplyr::filter(!is.na(CLLotCod), !is.na(FecFact), FecFact >= fecha_inicio_analisis) %>%
+    dplyr::filter(!is.na(CLLotCod), !is.na(FecFact), FecFact >= fecha_desde) %>%
     dplyr::group_by(CLLotCod, FecMesFact) %>%
     dplyr::summarise(FecPrimerFact = min(FecFact, na.rm = TRUE),
                      FecFact = max(FecFact, na.rm = TRUE),
@@ -1103,7 +1103,13 @@ lotes_raw <- .cargar_lotes_incremental(
   )
 
 # Facturacion: query completa garantiza un registro por lote (no particionar)
-fact <- .cargar_fact() %>%
+# La misma consulta completa abastece saldos de vida del lote y el periodo financiero.
+fact_operativa_mensual <- .cargar_fact(fecha_desde = as.Date("1900-01-01"))
+fact_operativa_lote <- fact_operativa_mensual %>%
+  group_by(CLLotCod) %>%
+  summarise(FacturadosOperativos70 = sum(SacosFact, na.rm = TRUE), .groups = "drop")
+fact <- fact_operativa_mensual %>%
+  dplyr::filter(FecMesFact >= fecha_inicio_analisis) %>%
   dplyr::mutate(
     CLLotCod = as.numeric(CLLotCod),
     FecPrimerFact = as.Date(FecPrimerFact),
@@ -1136,7 +1142,8 @@ pedidos_con_facturacion_historica <- lotes_raw %>%
 pedidos_excluidos_historicos <- ped %>%
   dplyr::filter(
     !dplyr::coalesce(PdcFecCre >= fecha_inicio_analisis, FALSE) &
-      !dplyr::coalesce(PdcFecEst >= fecha_inicio_analisis, FALSE)
+      !dplyr::coalesce(PdcFecEst >= fecha_inicio_analisis, FALSE) &
+      !dplyr::coalesce(PdcEst == "A", FALSE)
   ) %>%
   dplyr::anti_join(pedidos_con_facturacion_historica,
                    by = c("PdcCod" = "CLPdcCod", "PdcLin" = "CLPdcLin"))
@@ -1144,7 +1151,8 @@ pedidos_excluidos_historicos <- ped %>%
 ped <- ped %>%
   dplyr::filter(
     dplyr::coalesce(PdcFecCre >= fecha_inicio_analisis, FALSE) |
-      dplyr::coalesce(PdcFecEst >= fecha_inicio_analisis, FALSE)
+      dplyr::coalesce(PdcFecEst >= fecha_inicio_analisis, FALSE) |
+      dplyr::coalesce(PdcEst == "A", FALSE)
   ) %>%
   dplyr::bind_rows(
     ped %>%
@@ -1289,6 +1297,7 @@ pedido_mapa <- ped %>%
 .verificar_clave_unica(pedido_mapa, c("CLPdcCod", "CLPdcLin"), "ped")
 .verificar_clave_unica(lotes_raw, "CLLotCod", "lotes_raw")
 .verificar_clave_unica(fact, c("CLLotCod", "FecMesFact"), "fact")
+.verificar_clave_unica(fact_operativa_lote, "CLLotCod", "fact_operativa_lote")
 
 # INTEGRIDAD PEDIDO LOTE ----
 lotes_sin_pedido <- lotes_raw %>%
@@ -1478,10 +1487,11 @@ relacion_lote_linea <- lotes_raw %>%
 resumen_lotes_linea <- relacion_lote_linea %>%
   left_join(pyg_fact_lote, by = "CLLotCod") %>%
   left_join(fact_abierta_lote, by = "CLLotCod") %>%
+  left_join(fact_operativa_lote, by = "CLLotCod") %>%
   mutate(
     SacosCerrados = coalesce(SacosCerrados, 0),
     SacosAbiertos = coalesce(SacosAbiertos, 0),
-    SacosFacturados = SacosCerrados + SacosAbiertos
+    SacosFacturados = coalesce(FacturadosOperativos70, SacosCerrados + SacosAbiertos)
   ) %>%
   group_by(PdcCod, PdcLin) %>%
   summarise(
@@ -2660,6 +2670,7 @@ crm_maestro <- data_crm %>%
     CLLotCod = as.numeric(CLLotCod)
   ) %>%
   left_join(mapa_lotes, by = "CLLotCod", relationship = "many-to-one") %>%
+  left_join(fact_operativa_lote, by = "CLLotCod", relationship = "many-to-one") %>%
   mutate(
     CLPdcCod = coalesce(CLPdcCod, PedidoLote),
     CLPdcLin = coalesce(CLPdcLin, LineaLote)
@@ -2675,6 +2686,7 @@ crm_maestro <- data_crm %>%
     PdcFecEst = .normalizar_fecha_crm(PdcFecEst),
     FechaVencida = !is.na(PdcFecEst) & PdcFecEst < Sys.Date() &
       coalesce(SacosPendientes70Linea > 0, FALSE),
+    FacturadosOperativos70 = coalesce(FacturadosOperativos70, 0),
     FactorSacos70 = if_else(is.finite(UnidadKgPedido) &
                               UnidadKgPedido > 0, UnidadKgPedido / 70, NA_real_),
     SacosLote70 = SacosLoteOrigen * FactorSacos70,

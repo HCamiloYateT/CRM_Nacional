@@ -1,19 +1,11 @@
-# Descartar Oportunidad.
-# Modulo Principal ----
+# Descarte confirmado desde contacto o tablero ----
 DescartarOportunidadUI <- function(id) {
-  ns <- NS(id)
-  tagList(
-    uiOutput(ns("ResumenOportunidad")),
-    box(title = "Descartar Oportunidad", width = 12, collapsible = FALSE,
-        racafeForms::racafeInputSelect(id = ns("DES_Razon"), label = Obligatorio("Razón de Descarte"),
-                                choices = .RAZONES_DESCARTE_OPORTUNIDAD, selected = NULL, multiple = FALSE,
-                                empty = FALSE),
-        racafeForms::racafeInputTextArea(id = ns("DES_Comentario"), label = h6("Comentario adicional"), value = "",
-                                placeholder = "Detalle opcional del descarte", width = "100%", rows = 3),
-        racafeForms::racafeButton(id = ns("DES_Solicitar"), label = "Descartar Oportunidad", size = "xs",
-                                variant = "primary", icon = "ban")
-    )
-  )
+  ns <- shiny::NS(id)
+  racafeForms::racafeForm(variant = "plain", shiny::uiOutput(ns("ResumenOportunidad")),
+    racafeForms::racafeInputSelect("DES_Razon", "Razón de descarte", choices = .RAZONES_DESCARTE_OPORTUNIDAD,
+      selected = NULL, ns = ns),
+    racafeForms::racafeInputTextArea("DES_Comentario", "Comentario adicional", rows = 3, ns = ns),
+    racafeForms::racafeButton("DES_Solicitar", "Descartar oportunidad", icon = "ban", ns = ns))
 }
 DescartarOportunidad <- function(id, usuario, id_oportunidad) {
   moduleServer(id, function(input, output, session) {

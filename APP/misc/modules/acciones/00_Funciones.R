@@ -738,7 +738,7 @@ peso_saco_linneg <- function(linneg) {
 # Registra una nueva oportunidad comercial para un contacto
 registrar_oportunidad <- function(cod_contacto, linnegcod, categoria, producto,
                                   fecha_cumplimiento, sacos, margen, comentarios = NA_character_,
-                                  etapa, usr) {
+                                  etapa, usr, frecuencia = NULL) {
   fila <- data.frame(
     IdOportunidad = .generar_id_oportunidad(),
     CodContacto   = cod_contacto,
@@ -756,7 +756,17 @@ registrar_oportunidad <- function(cod_contacto, linnegcod, categoria, producto,
     FechaHoraCrea = Sys.time(),
     stringsAsFactors = FALSE
   )
-  AgregarDatos(fila, "CRMNALCLOPT")
+  if (!is.null(frecuencia)) {
+    if (length(frecuencia) != 1L || !is.finite(frecuencia) || frecuencia <= 0) {
+      stop("La frecuencia debe ser un número positivo de días.")
+    }
+    esquema <- racafeBD::CargarDatos("CRMNALCLOPT", condicion = "1=0")
+    if (!"FrecuenciaDias" %in% names(esquema)) {
+      stop("Falta FrecuenciaDias en oportunidades. Aplique la migración documentada antes de crear.")
+    }
+    fila$FrecuenciaDias <- as.numeric(frecuencia)
+  }
+  racafeBD::AgregarDatos(fila, "CRMNALCLOPT")
   invisible(fila)
 }
 # Lista las oportunidades de un contacto (sin uso detectado hoy; revisar)

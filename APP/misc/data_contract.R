@@ -164,7 +164,7 @@
 .crm_columnas_maestro <- c(.crm_columnas_data, "IdRegistroCRM", "EstadoFinanciero", "FechaCortePyG",
                            "SacosLote70", "SacosProducidos70", "SacosDespachados70", "SacosPedido70Linea",
                            "FechaCreacionPedido", "FechaProduccion", "FechaDespachoReal",
-                           "CodigoMarcaLote", "CodigoNombreComercialLote")
+                           "CodigoMarcaLote", "CodigoNombreComercialLote", "FacturadosOperativos70")
 
 .crm_validar_tabla <- function(dat, columnas, nombre) {
   if (!is.data.frame(dat) || !all(columnas %in% names(dat))) {

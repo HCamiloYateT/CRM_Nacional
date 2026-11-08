@@ -69,6 +69,11 @@ server <- function(input, output, session) {
     }
   })
   
+  # Maestro completo: no aplicar el filtro de fechas de facturación a saldos pendientes.
+  maestro_base_comercial <- reactive(.crm_preparar_datos(crm_maestro, productos_snap,
+    segmentaciones_actual, ord_cmp))
+  maestro_comercial <- reactive(.gc_filtrar_dimensiones(maestro_base_comercial(), filtros()))
+
   # Carga diferida ----
   modulos_cargados <- reactiveValues()
   CargarTabUnaVez <- function(tab_name, ui_id, ui_fun, server_fun = NULL) {
@@ -198,8 +203,10 @@ server <- function(input, output, session) {
   })
   
   CargarTabUnaVez("GC_Variables", "ui_GC_Variables", function() h4("Variables para Bonificación"))
-  CargarTabUnaVez("GC_Oportunidades", "ui_GC_Oportunidades", function() h4("Oportunidades"))
-  CargarTabUnaVez("GC_Pendientes", "ui_GC_Pendientes", function() h4("Pendientes de Gestión"))
+  CargarTabUnaVez("GC_Oportunidades", "ui_GC_Oportunidades", function() OportunidadesGestionUI("Oportunidades"),
+    function() OportunidadesGestion("Oportunidades", usuario, es_admin, maestro_base_comercial))
+  CargarTabUnaVez("GC_Pendientes", "ui_GC_Pendientes", function() PendientesGestionUI("Pendientes"),
+    function() PendientesGestion("Pendientes", maestro_comercial, usuario))
   CargarTabUnaVez("GC_Tareas", "ui_GC_Tareas", function() TableroTareasUI("Tareas"), function() {
     TableroTareas("Tareas", usuario = usuario, datos = menu_tareas$tareas$datos, es_admin = es_admin,
       abrir = menu_tareas$tareas$abrir, refrescar = menu_tareas$tareas$refrescar)
@@ -238,13 +245,17 @@ server <- function(input, output, session) {
   CargarTabUnaVez("DC_Perdidos", "ui_DC_Perdidos", function() h4("Clientes Perdidos"))
   
   ### Cohortes de Clientes ----
-  CargarTabUnaVez("CO_Retencion", "ui_CO_Retencion", function() h4("Retención"))
+  CargarTabUnaVez("CO_Retencion", "ui_CO_Retencion", function() CohorteClientesUI("CohorteRetencion", "retencion"),
+    function() CohorteClientes("CohorteRetencion", maestro_comercial, "retencion"))
   
-  CargarTabUnaVez("CO_Ventas", "ui_CO_Ventas", function() h4("Ventas"))
+  CargarTabUnaVez("CO_Ventas", "ui_CO_Ventas", function() CohorteClientesUI("CohorteVentas", "ventas"),
+    function() CohorteClientes("CohorteVentas", maestro_comercial, "ventas"))
   
-  CargarTabUnaVez("CO_Margen", "ui_CO_Margen", function() h4("Margen"))
+  CargarTabUnaVez("CO_Margen", "ui_CO_Margen", function() CohorteClientesUI("CohorteMargen", "margen"),
+    function() CohorteClientes("CohorteMargen", maestro_comercial, "margen"))
   
-  CargarTabUnaVez("CO_Frecuencia", "ui_CO_Frecuencia", function() h4("Frecuencia"))
+  CargarTabUnaVez("CO_Frecuencia", "ui_CO_Frecuencia", function() CohorteClientesUI("CohorteFrecuencia", "frecuencia"),
+    function() CohorteClientes("CohorteFrecuencia", maestro_comercial, "frecuencia"))
   
   ### Herramientas ----
   CargarTabUnaVez("HE_Calculadoras", "ui_HE_Calculadoras", function() CalculadoraUI("Calculadora"), function() {
