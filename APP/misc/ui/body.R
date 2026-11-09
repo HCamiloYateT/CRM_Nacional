@@ -4,7 +4,7 @@ body <- bs4DashBody(
   racafeShiny::racafeLoaderUI(startup = FALSE, busy = TRUE,
     triggers = c(actualizar = "FT_Actualizar", actualizar = "ind_kpis-actualizar", consultar = "Tareas-actualizar",
       calculando = "Calculadora-pesos-Calcular", calculando = "Calculadora-dolares-Calcular",
-      calculando = "Calculadora-coproductos-Calcular")),
+      calculando = "Calculadora-coproductos-Calcular", calculando = "MarketBasket-analizar")),
   bs4TabItems(
     # Generalidades ----
     bs4TabItem(tabName = "GE_Resumen", uiOutput("ui_GE_Resumen")),
@@ -52,7 +52,6 @@ body <- bs4DashBody(
     # Productos ----
     bs4TabItem(tabName = "PD_Ejecucion", uiOutput("ui_PD_Ejecucion")),
     bs4TabItem(tabName = "PD_MarketBasket", uiOutput("ui_PD_MarketBasket")),
-    bs4TabItem(tabName = "PD_Administracion", uiOutput("ui_PD_Administracion")),
     
     # Administración ----
     bs4TabItem(tabName = "AD_Catalogos", uiOutput("ui_AD_Administrar")),

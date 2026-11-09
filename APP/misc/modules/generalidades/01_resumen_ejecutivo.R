@@ -78,12 +78,12 @@
          formato = "entero", valor = 12L, tab = "HE_Informes")
   )),
   list(seccion = "Productos", icono = "boxes-stacked", cajas = list(
-    list(id = "pd_ejecucion", texto = "Ejecución", icono = "chart-column",
-         formato = "porcentaje", valor = 0.94, tab = "PD_Ejecucion"),
+    list(id = "pd_ejecucion", texto = "Productos facturados", icono = "chart-column",
+         formato = "entero", valor = NA_real_, footer = "Productos con compra en el periodo del controlbar.",
+         tab = "PD_Ejecucion"),
     list(id = "pd_marketbasket", texto = "Market Basket", icono = "basket-shopping",
-         formato = "entero", valor = 24L, tab = "PD_MarketBasket"),
-    list(id = "pd_administracion", texto = "Administración", icono = "gears",
-         formato = "entero", valor = 18L, tab = "PD_Administracion")
+         formato = "entero", valor = NA_real_, footer = "Reglas retenidas en el último análisis de compras conjuntas.",
+         tab = "PD_MarketBasket")
   ))
 )
 
