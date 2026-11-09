@@ -8,7 +8,7 @@ FormularioAscenderProspectoUI <- function(id) {
     box(title = "Ascender a Prospecto", width = 12, collapsible = FALSE,
         FormatearTexto("Vincula este contacto como alianza de uno o varios clientes existentes.",
                        tamano_pct = 0.8, color = "#64748B"),
-        racafeForms::racafeInputSelect("PRO_Alianzas", label = Obligatorio("Cliente(s) Aliado(s)"),
+        .crm_select("PRO_Alianzas", label = Obligatorio("Cliente(s) Aliado(s)"),
                                        choices = .choices_cliente_ppal(), multiple = TRUE, ns = ns,
                                        empty_label = "Seleccione uno o varios clientes"),
         racafeForms::racafeInputTextArea(id = ns("PRO_Observacion"), label = h6("Observación"), value = "",
@@ -63,11 +63,11 @@ FormularioAscenderLeadUI <- function(id) {
   ns <- NS(id)
   tagList(
     box(title = "Ascender a Lead", width = 12, collapsible = FALSE,
-        racafeForms::racafeInputSelect(id = ns("ASC_LinNeg"), label = Obligatorio("Línea de Negocio"),
+        .crm_select(id = ns("ASC_LinNeg"), label = Obligatorio("Línea de Negocio"),
                                 choices = Choices()$linneg, selected = NULL, multiple = FALSE, empty = FALSE),
-        racafeForms::racafeInputSelect(id = ns("ASC_Segmento"), label = Obligatorio("Segmento"),
+        .crm_select(id = ns("ASC_Segmento"), label = Obligatorio("Segmento"),
                                 choices = Choices()$segmento, selected = NULL, multiple = FALSE, empty = FALSE),
-        racafeForms::racafeInputSelect(id = ns("ASC_Asesor"), label = Obligatorio("Asesor"),
+        .crm_select(id = ns("ASC_Asesor"), label = Obligatorio("Asesor"),
                                 choices = Choices()$personas, selected = NULL, multiple = FALSE, empty = FALSE),
         racafeForms::racafeButton(id = ns("ASC_Solicitar"), label = "Ascender", size = "xs", variant = "primary",
                                 icon = "arrow-up")
@@ -139,11 +139,11 @@ FormularioReclasificarLeadUI <- function(id) {
     box(title = "Reclasificar a Lead", width = 12, collapsible = FALSE,
         FormatearTexto("El volumen de este Prospecto ahora sí interesa para venta directa. Las alianzas ya registradas quedan como historial.",
                        tamano_pct = 0.8, color = "#64748B"),
-        racafeForms::racafeInputSelect(id = ns("RLE_Asesor"), label = Obligatorio("Asesor"),
+        .crm_select(id = ns("RLE_Asesor"), label = Obligatorio("Asesor"),
                                 choices = Choices()$personas, selected = NULL, multiple = FALSE, empty = FALSE),
-        racafeForms::racafeInputSelect(id = ns("RLE_Segmento"), label = Obligatorio("Segmento"),
+        .crm_select(id = ns("RLE_Segmento"), label = Obligatorio("Segmento"),
                                 choices = Choices()$segmento, selected = NULL, multiple = FALSE, empty = FALSE),
-        racafeForms::racafeInputSelect(id = ns("RLE_LinNeg"), label = Obligatorio("Línea de Negocio"),
+        .crm_select(id = ns("RLE_LinNeg"), label = Obligatorio("Línea de Negocio"),
                                 choices = Choices()$linneg, selected = NULL, multiple = FALSE, empty = FALSE),
         racafeForms::racafeButton(id = ns("RLE_Solicitar"), label = "Reclasificar a Lead", size = "xs",
                                 variant = "primary", icon = "arrow-up")
@@ -345,7 +345,7 @@ Promover <- function(id, usuario, codigo_contacto) {
       etapa <- etapa_contacto()
       req(!is.na(etapa), etapa == "CONTACTO")
       
-      racafeForms::racafeInputSelect(id = ns("CampoDestino"), label = Obligatorio("Promover a"),
+      .crm_select(id = ns("CampoDestino"), label = Obligatorio("Promover a"),
                               choices = c("Seleccione una opción" = "", "Lead" = "LEAD", "Prospecto" = "PROSPECTO"),
                               selected = destino_contacto() %||% "", multiple = FALSE, empty = FALSE)
     })

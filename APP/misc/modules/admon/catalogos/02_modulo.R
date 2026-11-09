@@ -352,7 +352,7 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
         if (clave %in% names(etiquetas)) etiquetas[[clave]] else
           tools::toTitleCase(gsub("_", " ", clave))
       }, character(1))
-      racafeForms::racafeInputSelect(
+      .crm_select(
         "ADM_Catalogo", "Catálogo", choices = stats::setNames(claves, rotulos),
         selected = claves[[1]], multiple = FALSE, empty = FALSE, ns = ns
       )

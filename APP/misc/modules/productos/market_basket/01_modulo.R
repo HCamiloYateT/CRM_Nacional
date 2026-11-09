@@ -35,23 +35,29 @@
 MarketBasketUI <- function(id) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
-    .crm_disclosure("Qué es Market Basket y cómo usar este tablero",
-      .crm_nota(c("Market Basket identifica productos o categorías que aparecen juntos en las compras observadas.",
-        "1. El periodo y los clientes se eligen en el controlbar. Aquí elija si agrupa compras por pedido o cliente.",
-        "2. Soporte: de cada 100 compras, en cuántas aparecen los dos productos juntos.",
-        "Confianza: entre quienes compran A, cuántos también compran B. Lift: cuánto más habitual es esa combinación.",
-        "Lift mayor que 1: se compran juntos más de lo habitual. Menor que 1: menos de lo habitual.",
-        "Por ejemplo, A → B sugiere revisar si conviene ofrecer B a quien compra A.",
-        "El inicio permite combinaciones vistas una sola vez. Revise cuántas compras las respaldan antes de decidir.",
-        "3. Pulse Analizar y revise cuántas cestas respaldan cada regla antes de proponer venta cruzada.",
-        "4. Use validación temporal para comprobar si la asociación se mantiene en compras posteriores.",
-        "Un lift alto con pocas compras puede ser casualidad. Ver productos juntos no asegura ventas futuras.",
-        "Venta cruzada prioriza clientes que compran el antecedente y aún no tienen el consecuente observado."))),
+    shiny::tags$div(class = "crm-basket-guia",
+      racafeForms::racafeDisclosure("Qué es Market Basket y cómo usar este tablero",
+        racafeForms::racafeNoticeList(list(
+          shiny::tagList(shiny::tags$strong("Qué muestra. "),
+            "Productos que un mismo cliente suele comprar. Sirve para explorar qué más ofrecerle."),
+          shiny::tagList(shiny::tags$strong("Cómo empezar. "),
+            "Elija clientes y fechas en el controlbar. Después pulse Analizar."),
+          shiny::tagList(shiny::tags$strong("Cómo leer A → B. "),
+            "Quien compra A también aparece comprando B. Revise cuántas compras respaldan la relación."),
+          shiny::tagList(shiny::tags$strong("Soporte. "),
+            "De cada 100 compras del tablero, cuántas incluyen ambos productos."),
+          shiny::tagList(shiny::tags$strong("Confianza. "),
+            "De cada 100 compras que incluyen A, cuántas también incluyen B."),
+          shiny::tagList(shiny::tags$strong("Afinidad (lift). "),
+            "Mayor que 1 indica que se compran juntos más de lo habitual; menor que 1, menos."),
+          shiny::tagList(shiny::tags$strong("Antes de ofrecer. "),
+            "El inicio permite relaciones vistas una sola vez. Confirme si tienen sentido para el cliente.")),
+          font_size = 13, text_color = "#495057", accent_color = "#7A2028"), open = FALSE)),
     racafeForms::racafeFormRow(columns = 3,
-      racafeForms::racafeInputSelect("cesta", "Unidad de cesta", choices = c("Pedido facturado" = "pedido",
+      .crm_select("cesta", "Unidad de cesta", choices = c("Pedido facturado" = "pedido",
         "Cliente principal y mes" = "cliente_mes", "Cliente principal en el periodo" = "cliente"),
         selected = "cliente", ns = ns),
-      racafeForms::racafeInputSelect("nivel", "Ítem",
+      .crm_select("nivel", "Ítem",
         choices = c("Producto" = "producto", "Categoría" = "categoria"), ns = ns)),
     racafeForms::racafeFormRow(columns = 3,
       racafeForms::racafeInputNumeric("soporte", "Soporte mínimo (%)", value = 0, min = 0, max = 100, ns = ns),
@@ -62,7 +68,7 @@ MarketBasketUI <- function(id) {
         decimals = 0, ns = ns),
       racafeForms::racafeInputNumeric("longitud", "Máximo de ítems por conjunto", value = 2, min = 2, max = 5,
         decimals = 0, ns = ns),
-      racafeForms::racafeInputSelect("vista", "Tabla", choices = c("Reglas", "Métricas detalladas", "Ítems frecuentes",
+      .crm_select("vista", "Tabla", choices = c("Reglas", "Métricas detalladas", "Ítems frecuentes",
         "Conjuntos frecuentes",
         "Venta cruzada", "Tamaño de cestas", "Calidad y alcance"), ns = ns)),
     racafeForms::racafeFormRow(columns = 3,
@@ -118,6 +124,7 @@ MarketBasket <- function(id, hechos, filtros, on_result = NULL) {
           SoloCerrados = isTRUE(input$cerrados), ValidacionTemporal = isTRUE(input$validacion),
           PruebasEstadisticas = isTRUE(input$estadistica), FechaCalculo = Sys.time())
         resultado$alcance_filtros <- f
+        resultado$fuente_firma <- hechos()
         resultado$filtros <- data.frame(Filtro = names(f),
           Valor = vapply(f, function(x) paste(x, collapse = " | "), character(1)))
         list(resultado = resultado, error = NULL)
@@ -130,16 +137,17 @@ MarketBasket <- function(id, hechos, filtros, on_result = NULL) {
     resultado <- shiny::reactive({
       x <- calculo()
       shiny::validate(shiny::need(is.null(x$error), x$error))
-      shiny::validate(shiny::need(identical(filtros(), x$resultado$alcance_filtros),
-        "Los filtros cambiaron. Vuelva a Analizar para actualizar el alcance."))
+      vigente <- identical(filtros(), x$resultado$alcance_filtros) && identical(hechos(), x$resultado$fuente_firma)
+      shiny::validate(shiny::need(vigente,
+        "Los filtros o la clasificación cambiaron. Pulse Analizar para actualizar los resultados."))
       x$resultado
     })
     output$estado <- .crm_render_ui({
       if (is.null(input$analizar) || input$analizar == 0) return(.crm_nota("Configure la cesta y pulse Analizar."))
       x <- calculo()
       if (!is.null(x$error)) return(racafeForms::racafeFormMessage(x$error, type = "error"))
-      if (!identical(filtros(), x$resultado$alcance_filtros)) {
-        return(.crm_nota("Los filtros cambiaron. Vuelva a Analizar para actualizar el alcance."))
+      if (!(identical(filtros(), x$resultado$alcance_filtros) && identical(hechos(), x$resultado$fuente_firma))) {
+        return(.crm_nota("Los filtros o la clasificación cambiaron. Pulse Analizar para actualizar los resultados."))
       }
       if (!nrow(x$resultado$reglas)) return(.crm_nota(c("No hay reglas que superen estos umbrales.",
         "Revise la cobertura; puede reducir soporte/mínimo o cambiar la definición de cesta.")))

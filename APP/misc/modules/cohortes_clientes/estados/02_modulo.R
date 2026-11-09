@@ -330,7 +330,7 @@ CohortesEstadosUI <- function(id) {
     racafeForms::racafeForm(variant = "plain",
       racafeForms::racafeFormRow(columns = 2,
         shiny::uiOutput(ns("ui_fechas")),
-        racafeForms::racafeInputSelect("fil_ppto", "Presupuesto",
+        .crm_select("fil_ppto", "Presupuesto",
           choices = c("Con Ppto" = "con", "Sin Ppto" = "sin", "Sin dato" = "nd"),
           selected = c("con", "sin", "nd"), multiple = TRUE, ns = ns))),
     shiny::uiOutput(ns("sin_datos")),
@@ -373,7 +373,7 @@ CohortesEstadosUI <- function(id) {
         # Columna izquierda — matrices de transición
         column(4,
                .crm_tabla_ui(ns("tbl_matriz_trans_abs"), searchable = FALSE),
-               racafeForms::racafeInputSelect("sel_tipo_matriz", NULL,
+               .crm_select("sel_tipo_matriz", NULL,
                  choices = c("% fila (inicio)" = "pct_fila", "% columna (vigente)" = "pct_col",
                    "% total general" = "pct_total"), selected = "pct_fila", empty = FALSE, ns = ns),
                .crm_tabla_ui(ns("tbl_matriz_trans"), searchable = FALSE)

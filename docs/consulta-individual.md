@@ -1,13 +1,13 @@
 # Consulta individual
 
-La selección incluye entidades comerciales registradas y cuentas principales con catálogo o ejecución visible.
+La selección incluye entidades registradas y cada NIT de facturación con catálogo o ejecución visible.
 La ficha no requiere facturación. Las coincidencias se resuelven por código de entidad, NIT de facturación
-vinculado o NIT principal; nunca por razón social.
+vinculado o NIT principal; nunca por razón social. Una cuenta hija se consulta por su NIT propio.
 
 - **Entidad:** directorio, personas, teléfonos, redes, ubicaciones, sucursales, gestiones, recordatorios y recorrido.
 - **Prospecto, lead o cliente:** también potencial registrado y oportunidades.
 - **Cliente o entidad con movimientos:** ejecución, productos, metas mensuales, flujo de pendientes y cartera.
-- **Cuenta principal:** consolida sucursales dentro del alcance autorizado y permite consultar RFM y estimar
+- **Cuenta principal:** ofrece una vista consolidada si hay varias cuentas hijas y permite consultar RFM y estimar
   compras futuras y CLV usando la población visible, sin ajustar el modelo a un cliente aislado.
 
 Las tareas se muestran únicamente cuando tienen vínculo explícito `CodContacto`, además de respetar su privacidad

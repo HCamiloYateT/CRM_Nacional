@@ -5,7 +5,7 @@ FormularioDescartarUI <- function(id, etapa) {
   etiqueta <- .ETIQUETA_DESCARTE_ETAPA[[etapa]] %||% "Registro"
   tagList(
     box(title = paste("Descartar", etiqueta), width = 12, collapsible = FALSE,
-        racafeForms::racafeInputSelect(id = ns("DES_Razon"), label = Obligatorio("Razón de Descarte"),
+        .crm_select(id = ns("DES_Razon"), label = Obligatorio("Razón de Descarte"),
                                 choices = .RAZONES_DESCARTE[[etapa]], selected = NULL, multiple = FALSE, empty = FALSE),
         uiOutput(ns("DetalleRazon")),
         uiOutput(ns("DetalleOtro")),
@@ -70,7 +70,7 @@ FormularioDescartar <- function(id, usuario, cod_contacto, etapa, data_contacto 
         racafeForms::racafeInputNumeric(id = "DES_Detalle", label = Obligatorio(cfg$label), value = NA, min = 0,
                                 ns = ns, decimals = 0, format = "number")
       } else if (identical(cfg$tipo, "lista")) {
-        racafeForms::racafeInputSelect(id = ns("DES_Detalle"), label = Obligatorio(cfg$label),
+        .crm_select(id = ns("DES_Detalle"), label = Obligatorio(cfg$label),
                                 choices = choices_lista(), selected = NULL, multiple = isTRUE(cfg$multiple),
                                 empty = FALSE)
       } else {

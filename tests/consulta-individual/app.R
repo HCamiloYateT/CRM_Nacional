@@ -1,6 +1,7 @@
 # Recorrido de la consulta con fuentes ficticias y las mismas dependencias UI ----
 library(shiny)
 library(dplyr)
+library(shinyjs)
 root <- normalizePath("../..")
 contexto <- getOption("crm.test.context", new.env(parent = globalenv()))
 for (ruta in c("compartido/00_presentacion.R", "compartido/01_analitica_comercial.R", "compartido/04_interaccion.R",
@@ -9,13 +10,16 @@ for (ruta in c("compartido/00_presentacion.R", "compartido/01_analitica_comercia
   "modules/gestion_comercial/fidelidad_riesgo/00_modelos.R", "modules/gestion_comercial/cartera/00_datos.R",
   "modules/encabezado/02_notificaciones_tareas.R", "modules/consulta_individual/00_datos.R",
   "modules/consulta_individual/01_modulo.R", "modules/productos/compartido/00_funciones.R",
-  "modules/productos/market_basket/01_modulo.R", "modules/prospeccion/compartido/00_estilo.R")) {
+  "modules/productos/market_basket/01_modulo.R", "modules/prospeccion/compartido/00_estilo.R",
+  "modules/prospeccion/compartido/00_constantes.R", "modules/prospeccion/compartido/00_funciones.R",
+  "datos/01_contrato.R", "modules/productos/sin_clasificar/00_datos.R",
+  "modules/productos/sin_clasificar/01_modulo.R")) {
   sys.source(file.path(root, "APP/misc", ruta), contexto)
 }
 sys.source(file.path(root, "tests/fixtures/consulta_individual.R"), contexto)
 sys.source(file.path(root, "tests/fixtures/cartera.R"), contexto)
 shiny::addResourcePath("individual-assets", file.path(root, "APP/www"))
-ui <- with(contexto, shiny::tagList(racafeForms::racafeFormsDependencies(),
+ui <- with(contexto, shiny::tagList(racafeForms::racafeFormsDependencies(), shinyjs::useShinyjs(),
   tags$head(tags$link(rel = "stylesheet", href = "individual-assets/crm-presentacion.css"),
     tags$script(src = "individual-assets/crm-presentacion.js")), .crm_loader_ui(show_logo = FALSE),
   racafeForms::racafeFormRow(columns = 3,
@@ -23,9 +27,16 @@ ui <- with(contexto, shiny::tagList(racafeForms::racafeFormsDependencies(),
     racafeForms::racafeInputSelect("asesor", "Asesores", choices = c("ANA", "LUIS"),
       selected = "ANA", multiple = TRUE),
     racafeForms::racafeInputSwitch("fallar", "Simular fuente opcional caída", value = FALSE)),
+  .crm_select("obligatorio", "Ejemplo de campo obligatorio", c("Sí" = "SI", "No" = "NO"), required = TRUE),
+  .crm_select("opcional", "Ejemplo de selección pendiente", c("NINGUNO", "A", "B"), selected = ""),
   .crm_tabs(tabPanel("Consulta", ConsultaIndividualUI("consulta")),
     tabPanel("Basket", MarketBasketUI("basket")),
+    tabPanel("Clasificación", ProductosSinClasificarUI("clasificacion")),
     tabPanel("Cajas de prospección", .crm_caja_output("pr_numero"), .crm_caja_output("pr_html"))),
+  .crm_disclosure("Prueba del menú de detalle",
+    tags$div(style = "transform:translateZ(0);position:relative;z-index:1;",
+      HTML(.celda_dropdown_acciones("C1", c(Editar = "Editar entidad"), NS("detalle")))),
+    tags$p(style = "position:relative;z-index:2;", "Texto que antes cubría los botones del detalle")),
   tags$pre(textOutput("alcance"))))
 ui <- bs4Dash::dashboardPage(header = bs4Dash::dashboardHeader(title = "Consulta · Prueba"),
   sidebar = bs4Dash::dashboardSidebar(disable = TRUE), body = bs4Dash::dashboardBody(ui))
@@ -60,6 +71,16 @@ server <- function(input, output, session) {
       x <- consulta$ejecucion()
       paste(nrow(x), sum(x$SacosFact), sep = " | ")
     })
+    productos <- reactiveVal(data.frame(LinNegCod = 21000, LinProCod = 1:2, MCCod = 4, MrcCod = 5,
+      Categoria = c(NA, "REGIONAL"), Producto = c(NA, "HUILA"), Marca = "RACAFÉ",
+      MCNom = c("CAFÉ NUEVO", "CAFÉ CLASIFICADO"), LinProNom = "SACO", Excluir = "NO"))
+    ProductosSinClasificar("clasificacion", reactive("ANA"), function(x) productos(x),
+      cargar = function(...) productos(), guardar = function(fila, tabla, llaves, original) {
+        x <- productos()
+        i <- .clas_llave(x) %in% .clas_llave(fila)
+        x[i, ] <- fila
+        productos(x)
+      })
     MarketBasket("basket", reactive(hechos_individual), f)
     .pr_caja("pr_numero", reactive(0.75), formato = "porcentaje", texto = "Conversión", mostrar_boton = FALSE)
     .pr_caja("pr_html", reactive(tagList(tags$span("12"), tags$small(" (50%)"))),

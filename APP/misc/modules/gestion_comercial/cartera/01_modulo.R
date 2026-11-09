@@ -36,21 +36,21 @@ CarteraComercialUI <- function(id) {
     racafeForms::racafeActionBar(left = racafeForms::racafeButton("actualizar", "Actualizar",
       variant = "secondary", icon = "arrows-rotate", ns = ns)),
     racafeForms::racafeFormRow(columns = 3, responsive = "auto",
-      racafeForms::racafeInputSelect("corte", "Corte disponible de cartera", choices = character(), ns = ns),
-      racafeForms::racafeInputSelect("negocio", "Negocio del saldo al corte", choices = character(),
+      .crm_select("corte", "Corte disponible de cartera", choices = character(), ns = ns),
+      .crm_select("negocio", "Negocio del saldo al corte", choices = character(),
         multiple = TRUE, ns = ns),
-      racafeForms::racafeInputSelect("vista", "Consultar", choices = .CAR_VISTAS, empty = FALSE, ns = ns)),
+      .crm_select("vista", "Consultar", choices = .CAR_VISTAS, empty = FALSE, ns = ns)),
     shiny::conditionalPanel(historico,
       racafeForms::racafeFormRow(columns = 3, responsive = "auto",
         racafeForms::racafeInputDateRange("facturas", "Fecha de factura (históricos)",
           start = Sys.Date() - 365, end = Sys.Date(), ns = ns),
-        racafeForms::racafeInputSelect("cliente", "Clientes (históricos)", choices = character(),
+        .crm_select("cliente", "Clientes (históricos)", choices = character(),
           multiple = TRUE, ns = ns),
         shiny::conditionalPanel(sprintf("input['%s'] == 'Comportamiento de pago'", ns("vista")),
-          racafeForms::racafeInputSelect("concepto", "Distribución por", choices = c("Valor", "Facturas", "Sacos"),
+          .crm_select("concepto", "Distribución por", choices = c("Valor", "Facturas", "Sacos"),
             empty = FALSE, ns = ns)))),
     shiny::conditionalPanel(sprintf("input['%s'] == 'Proyección de pagos'", ns("vista")),
-      racafeForms::racafeInputSelect("agrupacion", "Vencimientos por",
+      .crm_select("agrupacion", "Vencimientos por",
         choices = c("Semana" = "semana", "Mes" = "mes"), empty = FALSE, ns = ns)),
     shiny::uiOutput(ns("fuente")),
     shiny::conditionalPanel(sprintf("output['%s']", ns("saldo_disponible")),
@@ -95,10 +95,10 @@ CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admi
       x <- fuente()$cartera
       cortes <- cortes_disponibles()
       actual <- shiny::isolate(input$corte)
-      racafeForms::racafeUpdateSelect(session, "corte", choices = as.character(cortes),
+      .crm_update_select(session, "corte", choices = as.character(cortes),
         selected = if (length(actual) && actual %in% as.character(cortes)) actual else as.character(head(cortes, 1)))
       negocios <- sort(unique(as.character(x$Negocio[!is.na(x$Negocio)])))
-      racafeForms::racafeUpdateSelect(session, "negocio", choices = negocios,
+      .crm_update_select(session, "negocio", choices = negocios,
         selected = .crm_seleccion_opciones(input, session, "negocio", negocios))
     })
     shiny::observe({
@@ -106,7 +106,7 @@ CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admi
       directorio <- x %>% dplyr::group_by(NIT) %>%
         dplyr::summarise(Cliente = dplyr::first(PerRazSoc), .groups = "drop")
       opciones <- stats::setNames(directorio$NIT, paste(directorio$Cliente, directorio$NIT, sep = " | "))
-      racafeForms::racafeUpdateSelect(session, "cliente", choices = opciones,
+      .crm_update_select(session, "cliente", choices = opciones,
         selected = .crm_seleccion_opciones(input, session, "cliente", opciones))
       if (!shiny::isolate(fechas_iniciadas()) && any(!is.na(x$FcnFec))) {
         fin <- .gc_fecha_max(as.Date(x$FcnFec))

@@ -1,17 +1,26 @@
+# Alcance del controlbar; los filtros locales solo pueden reducirlo ----
+.kb_alcance <- function(datos, filtros, usuario, admin = FALSE) {
+  x <- datos
+  x$Asesor <- as.character(.gc_columna(x, c("Asesor", "Asesor.y", "Asesor.x")))
+  x$Linea <- as.character(.gc_columna(x, c("LinNegocio", "CLLinNegNo", "Linea")))
+  x$Segmento <- as.character(.gc_columna(x, "Segmento"))
+  x <- .op_contactos_visibles(x, usuario, admin)
+  for (par in list(c("Asesor", "asesor"), c("Linea", "linneg"), c("Segmento", "segmento"))) {
+    valor <- x[[par[[1]]]]
+    permitido <- filtros[[par[[2]]]]
+    x <- x[length(permitido) > 0L & (is.na(valor) | !nzchar(valor) | valor %in% permitido), , drop = FALSE]
+  }
+  x
+}
+
 # Kanban 
 KanbanEmbudoUI <- function(id) {
   ns <- NS(id)
   racafeForms::racafeForm(variant = "plain",
     tags$head(tags$script(HTML(JS_KANBAN_EMBUDO))),
     useShinyjs(),
-    # Filtros — Origen y Detalle Origen anidados (Detalle depende del
-    # Origen elegido), mismo patron que DetalleCreacionMensual/
-    # DetalleAnalisisConversion (Generales.R). Los 3 campos son
-    # ListaDesplegable (pickerInput) por homogeneidad; en fluidRow/column
-    # en vez de flex con anchos fijos, para que no se solapen al reducir
-    # el viewport
     racafeForms::racafeFormRow(columns = 3, responsive = "auto",
-      uiOutput(ns("Origen_ui")), uiOutput(ns("DetOrigen_ui")), uiOutput(ns("Asesor_ui"))),
+      uiOutput(ns("Asesor_ui")), uiOutput(ns("Linea_ui")), uiOutput(ns("Segmento_ui"))),
     racafeForms::racafePanel(title = NULL, uiOutput(ns("kanban_board"))),
     tags$script(HTML(
       "document.addEventListener('click', function(e){
@@ -24,7 +33,7 @@ KanbanEmbudoUI <- function(id) {
     ))
   )
 }
-KanbanEmbudo <- function(id, usuario) {
+KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns
@@ -50,31 +59,25 @@ KanbanEmbudo <- function(id, usuario) {
       cargar_pipeline_embudo()
     })
     
-    # Origen / Detalle Origen / Asesor — los 3 como ListaDesplegable
-    # (pickerInput), mismo patron que DetalleCreacionMensual (Generales.R):
-    # render directo para pintar las choices correctas desde el primer
-    # paint, en vez de selectInput + updateSelectInput (que ademas
-    # generaba el desalineado visual entre Asesor y Origen/DetOrigen)
-    output$Origen_ui <- .crm_render_ui({
-      opciones <- .crm_opciones(pipeline_raw()$Origen)
-      racafeForms::racafeInputSelect(ns("filtro_origen"), "Origen", choices = opciones,
-        selected = .crm_seleccion_opciones(input, session, "filtro_origen", opciones), multiple = TRUE, size = 8)
+    pipeline_alcance <- reactive({
+      .kb_alcance(pipeline_raw(), filtros(), usuario(), es_admin())
     })
-    output$DetOrigen_ui <- .crm_render_ui({
-      base <- .crm_filtrar_opciones(pipeline_raw(), "Origen", input$filtro_origen)
-      opciones <- .crm_opciones(base$DetOrigen)
-      racafeForms::racafeInputSelect(ns("filtro_detorigen"), "Detalle Origen", choices = opciones,
-        selected = .crm_seleccion_opciones(input, session, "filtro_detorigen", opciones), multiple = TRUE, size = 8)
-    })
-    output$Asesor_ui <- .crm_render_ui({
-      opciones <- .crm_opciones(pipeline_raw()$Asesor)
-      racafeForms::racafeInputSelect(ns("filtro_asesor"), "Asesor", choices = opciones,
-        selected = .crm_seleccion_opciones(input, session, "filtro_asesor", opciones), multiple = TRUE, size = 8)
+    for (campo in c("Asesor", "Linea", "Segmento")) local({
+      clave <- campo
+      output[[paste0(clave, "_ui")]] <- .crm_render_ui({
+        opciones <- .crm_opciones(pipeline_alcance()[[clave]])
+        .crm_select(ns(paste0("filtro_", clave)),
+          if (clave == "Linea") "Línea de negocio" else clave, choices = opciones,
+          selected = .crm_seleccion_opciones(input, session, paste0("filtro_", clave), opciones),
+          multiple = TRUE)
+      })
     })
     pipeline_filtrado <- reactive({
-      dat <- .crm_filtrar_opciones(pipeline_raw(), "Origen", input$filtro_origen)
-      dat <- .crm_filtrar_opciones(dat, "DetOrigen", input$filtro_detorigen)
-      .crm_filtrar_opciones(dat, "Asesor", input$filtro_asesor)
+      dat <- pipeline_alcance()
+      for (campo in c("Asesor", "Linea", "Segmento")) {
+        dat <- .crm_filtrar_opciones(dat, campo, input[[paste0("filtro_", campo)]])
+      }
+      dat
     })
 
     # Metricas de conversion para el header de la columna CLIENTE (punto 5):
@@ -82,9 +85,9 @@ KanbanEmbudo <- function(id, usuario) {
     # SIN filtrar (pipeline_raw), igual que hacia el antiguo kpi_conversion,
     # para que no varien con los filtros de Origen/Asesor de la vista
     metricas_conversion_r <- reactive({
-      total_contactos_historico <- nrow(pipeline_raw())
-      total_leads_historico     <- tryCatch(nrow(CargarDatos("CONTACTOLEAD")), error = function(e) 0)
-      total_clientes            <- pipeline_raw() %>% filter(Etapa == "CLIENTE") %>% nrow()
+      total_contactos_historico <- nrow(pipeline_filtrado())
+      total_leads_historico     <- sum(pipeline_filtrado()$Etapa %in% c("LEAD", "CLIENTE"))
+      total_clientes            <- pipeline_filtrado() %>% filter(Etapa == "CLIENTE") %>% nrow()
       list(
         pct_lead_cliente     = if (total_leads_historico > 0) round(total_clientes / total_leads_historico * 100) else 0,
         pct_contacto_cliente = if (total_contactos_historico > 0) round(total_clientes / total_contactos_historico * 100) else 0

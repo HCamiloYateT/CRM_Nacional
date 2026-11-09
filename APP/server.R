@@ -39,11 +39,12 @@ server <- function(input, output, session) {
   filtros <- Filtros("Filtros", usuario, es_admin, dat = data_c)
   
   datos_rv <- reactiveVal(data)
+  productos_cache <- reactiveVal(productos_snap)
   
   data_c <- reactive({
     req(datos_rv())
     
-    .crm_preparar_datos(datos_rv(), productos_snap, segmentaciones_actual, ord_cmp)
+    .crm_preparar_datos(datos_rv(), productos_cache(), segmentaciones_actual, ord_cmp)
   })
   
   data_t <- reactive({
@@ -71,7 +72,7 @@ server <- function(input, output, session) {
   })
   
   # Maestro completo: no aplicar el filtro de fechas de facturación a saldos pendientes.
-  maestro_base_comercial <- reactive(.crm_preparar_datos(crm_maestro, productos_snap,
+  maestro_base_comercial <- reactive(.crm_preparar_datos(crm_maestro, productos_cache(),
     segmentaciones_actual, ord_cmp))
   maestro_comercial <- reactive(.gc_filtrar_dimensiones(maestro_base_comercial(), filtros()))
 
@@ -129,6 +130,7 @@ server <- function(input, output, session) {
   clientes_raw_cache <- reactiveVal(CargarDatos("CRMNALCLIENTE"))
   
   observeEvent(input$FT_Actualizar, {
+    productos_cache(.crm_snapshot_productos(CargarDatos("CRMNALPRODS")))
     clientes_raw_cache(CargarDatos("CRMNALCLIENTE"))
   })
   
@@ -267,7 +269,7 @@ server <- function(input, output, session) {
   
   ### Prospección ----
   CargarTabUnaVez("PR_Kanban", "ui_PR_Kanban", function() KanbanEmbudoUI("Kanban"),
-                  function() KanbanEmbudo("Kanban", usuario))
+                  function() KanbanEmbudo("Kanban", usuario, filtros, es_admin))
   
   CargarTabUnaVez("PR_Contactos", "ui_PR_Contactos", function() DetalleContactoUI("DetalleContacto"),
                   function() DetalleContacto("DetalleContacto", usuario))
@@ -325,6 +327,8 @@ server <- function(input, output, session) {
   CargarTabUnaVez("HE_Informes", "ui_HE_Informes", function() InformesUI("Informes"))
   
   ### Productos ----
+  CargarTabUnaVez("PD_SinClasificar", "ui_PD_SinClasificar", function() ProductosSinClasificarUI("SinClasificar"),
+    function() ProductosSinClasificar("SinClasificar", usuario, function(x) productos_cache(x)))
   CargarTabUnaVez("PD_Ejecucion", "ui_PD_Ejecucion", function() ProductosEjecucionUI("ProductosEjecucion"),
     function() ProductosEjecucion("ProductosEjecucion", maestro_comercial, filtros))
   
@@ -345,7 +349,7 @@ server <- function(input, output, session) {
   ### Consulta Individual ----
   CargarTabUnaVez("IN_Consulta", "ui_IN_Consulta", function() ConsultaIndividualUI("ConsultaIndividual"),
     function() ConsultaIndividual("ConsultaIndividual", maestro_base_comercial, clientes_raw_cache, filtros,
-      usuario, es_admin, nit_ppal, cartera_financiera_r, notas_datos))
+      usuario, es_admin, nit_ppal, cartera_financiera_r, notas_datos, directorio = reactive(n_cliente)))
   
 }
 

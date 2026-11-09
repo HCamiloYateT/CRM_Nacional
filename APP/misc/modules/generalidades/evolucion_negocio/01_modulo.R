@@ -12,13 +12,13 @@ EvolucionNegocioUI <- function(id, cierre = Sys.Date()) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
     racafeForms::racafeFormRow(columns = 3,
-      racafeForms::racafeInputSelect("vista", "Lectura del negocio", choices = c(
+      .crm_select("vista", "Lectura del negocio", choices = c(
         "Industria Nacional y líneas" = "Linea", "Evolución por segmento" = "Segmento",
         "Evolución por asesor" = "Asesor", "Clientes nuevos observados" = "Nuevos",
         "Plan de crecimiento 2029" = "Plan", "Referencias de la presentación" = "Referencia"),
         selected = "Linea", empty = FALSE, ns = ns),
       racafeForms::racafeInputDate("corte", "Consultar hasta", value = .com_fin_mes(cierre), ns = ns),
-      racafeForms::racafeInputNumeric("desde", "Desde el año", value = 2017, min = 2016,
+      racafeForms::racafeInputNumeric("desde", "Desde el año", value = 2017, min = 2016, thousand = "",
         max = as.integer(format(Sys.Date(), "%Y")), format = "integer", ns = ns)),
     racafeForms::racafeFormRow(columns = 3,
       racafeForms::racafeInputSwitch("comparable", "Comparar los mismos meses de cada año", value = FALSE, ns = ns),
@@ -31,10 +31,10 @@ EvolucionNegocioUI <- function(id, cierre = Sys.Date()) {
         "El mes efectivo y el origen de cada cifra se indican debajo y en la tabla."))),
     shiny::conditionalPanel("['Linea','Segmento','Asesor'].includes(input.vista)", ns = ns,
       racafeForms::racafeFormRow(columns = 2,
-        racafeForms::racafeInputSelect("negocio", "Línea del desglose",
+        .crm_select("negocio", "Línea del desglose",
           choices = c("A la medida", "Coproductos"),
           selected = c("A la medida", "Coproductos"), multiple = TRUE, gender = "f", ns = ns),
-        racafeForms::racafeInputSelect("base", "Año base para crecimiento",
+        .crm_select("base", "Año base para crecimiento",
           choices = as.character(2016:max(2016L, as.integer(format(Sys.Date(), "%Y")) - 1L)),
           selected = "2023", empty = FALSE, ns = ns)),
       shiny::plotOutput(ns("total"), height = "260px"),
@@ -79,13 +79,7 @@ EvolucionNegocioUI <- function(id, cierre = Sys.Date()) {
       racafeForms::racafeActionBar(left = shiny::tagList(
         racafeForms::racafeButton("ir_oportunidades", "Consultar oportunidades vigentes",
           icon = "arrow-right", ns = ns),
-        racafeForms::racafeButton("ir_prospeccion", "Consultar prospección vigente", icon = "arrow-right", ns = ns)))),
-    .crm_tabla_ui(ns("calidad"), titulo = "Fuentes y cobertura de la consulta"),
-    .crm_nota(c("Se respetan los filtros comerciales del controlbar; este informe usa su propio corte y año inicial.",
-      "Excel: asesor y segmento del catálogo disponible; no representan su asignación en cada año.",
-      "El ETL prevalece desde su primer mes por línea; el Excel no repone ventas excluidas por filtros.",
-      "Al filtrar productos o categorías solo se muestra ejecución del ETL, sin prorratear metas de cliente.",
-      "Referencia anual: solo años anteriores, para administradores con alcance comercial completo.")))
+        racafeForms::racafeButton("ir_prospeccion", "Consultar prospección vigente", icon = "arrow-right", ns = ns)))))
 }
 
 EvolucionNegocio <- function(id, hechos, clientes, filtros, cierre, es_admin,

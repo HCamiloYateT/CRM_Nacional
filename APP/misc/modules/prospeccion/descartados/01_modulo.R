@@ -13,9 +13,8 @@ DetalleDescartadosUI <- function(id) {
       column(3, .crm_caja_output(ns("kpi_cliente")))
     ),
     div(style = "width:220px;",
-        racafeForms::racafeInputSelect(id = ns("FiltroEtapa"), label = h6("Filtrar por Etapa de Descarte"),
+        .crm_select(id = ns("FiltroEtapa"), label = h6("Filtrar por Etapa de Descarte"),
                                 choices = c(
-                           "Todas" = "TODAS",
                            setNames(
                              c("CONTACTO", "PROSPECTO", "LEAD", "CLIENTE"),
                              c(.ETIQUETA_DESCARTE_ETAPA[["CONTACTO"]],
@@ -24,7 +23,8 @@ DetalleDescartadosUI <- function(id) {
                                .ETIQUETA_DESCARTE_ETAPA[["CLIENTE"]])
                            )
                          ),
-                                selected = "TODAS", multiple = FALSE, empty = FALSE)
+                                selected = c("CONTACTO", "PROSPECTO", "LEAD", "CLIENTE"),
+                                multiple = TRUE, empty = FALSE)
     ),
     br(),
     fluidRow(
@@ -73,12 +73,8 @@ DetalleDescartados <- function(id, usuario) {
     
     # Aplica el filtro de etapa sobre el historial de descartes.
     descartes_filtrados_r <- reactive({
-      etapa_filtro <- input$FiltroEtapa %||% "TODAS"
       dat <- descartes_r()
-      if (!identical(etapa_filtro, "TODAS")) {
-        dat <- dat %>% filter(Etapa == etapa_filtro)
-      }
-      dat
+      dat[dat$Etapa %in% input$FiltroEtapa, , drop = FALSE]
     })
     
     ### Indicadores ----

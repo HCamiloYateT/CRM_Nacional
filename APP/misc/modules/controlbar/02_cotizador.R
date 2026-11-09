@@ -110,25 +110,25 @@ ProductoUI <- function(id, numero, lineas) {
   div(id = ns("wrapper"), class = "cotizador-producto-grid",
       racafeForms::racafeFormGroup(title = paste("Producto", numero), variant = "bordered", divider = FALSE,
                                    racafeForms::racafeForm(size = "compact", variant = "plain",
-                                                           racafeForms::racafeInputSelect("LinNeg", label = "Línea de Negocio", required = TRUE,
+                                                           .crm_select("LinNeg", label = "Línea de Negocio", required = TRUE,
                                                                                           choices = .cot_choices_ui(lineas), selected = "", multiple = FALSE,
                                                                                           ns = ns, size = 8),
                                                            racafeForms::racafeFormRow(columns = 2, responsive = "fixed",
-                                                             racafeForms::racafeInputSelect("Categoria", label = "Categoría", required = TRUE,
+                                                             .crm_select("Categoria", label = "Categoría", required = TRUE,
                                                                                             choices = c("NINGUNO" = ""), selected = "", multiple = FALSE,
                                                                                             ns = ns, size = 8),
-                                                             racafeForms::racafeInputSelect("Producto", label = "Producto", required = TRUE,
+                                                             .crm_select("Producto", label = "Producto", required = TRUE,
                                                                                             choices = c("NINGUNO" = ""), selected = "", multiple = FALSE,
                                                                                             ns = ns, size = 8)
                                                            ),
                                                            racafeForms::racafeFormRow(columns = 2, responsive = "fixed",
-                                                             racafeForms::racafeInputSelect("Presentacion", label = "Presentación", required = TRUE,
+                                                             .crm_select("Presentacion", label = "Presentación", required = TRUE,
                                                                                             choices = c("SACOS DE 70 KGS" = "Sacos de 70kgs",
                                                                                                         "SACOS DE 62.5 KGS" = "Sacos de 62.5Kgs",
                                                                                                         "SACOS DE 35 KGS" = "Sacos de 35Kgs",
                                                                                                         "GRAINPRO 70 KGS" = "Grainpro 70kgs"),
                                                                                             selected = "", multiple = FALSE, ns = ns, size = 5),
-                                                             racafeForms::racafeInputSelect("Empaque", label = "Empaque", required = TRUE,
+                                                             .crm_select("Empaque", label = "Empaque", required = TRUE,
                                                                                             choices = c("BLANCO #6" = "Blanco #6",
                                                                                                         "PREMARCADO #7" = "Premarcado #7",
                                                                                                         "PREMARCADO #7 ARTE DEL CLIENTE" = "Premarcado #7 Arte del cliente"),
@@ -179,7 +179,7 @@ Producto <- function(id, catalogos_r) {
       freezeReactiveValue(input, "Categoria")
       freezeReactiveValue(input, "Producto")
       
-      racafeForms::racafeUpdateSelect(
+      .crm_update_select(
         session, "Producto", choices = c("NINGUNO" = ""), selected = ""
       )
       
@@ -189,7 +189,7 @@ Producto <- function(id, catalogos_r) {
         character(0)
       }
       
-      racafeForms::racafeUpdateSelect(
+      .crm_update_select(
         session, "Categoria",
         choices = c("NINGUNO" = "", opciones), selected = ""
       )
@@ -207,7 +207,7 @@ Producto <- function(id, catalogos_r) {
         character(0)
       }
       
-      racafeForms::racafeUpdateSelect(
+      .crm_update_select(
         session, "Producto",
         choices = c("NINGUNO" = "", opciones), selected = ""
       )
@@ -260,16 +260,16 @@ CotizacionUI <- function(id) {
                                                                                       value = TRUE, variant = "primary", ns = ns),
                                                        shiny::conditionalPanel(
                                                          condition = sprintf("!input['%s']", ns("COT_NombrePropio")),
-                                                         racafeForms::racafeInputSelect("COT_Responsable", label = "Responsable",
+                                                         .crm_select("COT_Responsable", label = "Responsable",
                                                                                         choices = .cot_choices_ui(Choices()$personas), selected = NULL,
                                                                                         multiple = FALSE, ns = ns, size = 10)
                                                        ),
                                                        racafeForms::racafeFormRow(columns = 2, responsive = "fixed",
-                                                         racafeForms::racafeInputSelect("COT_Divisa", label = "Divisa", required = TRUE,
+                                                         .crm_select("COT_Divisa", label = "Divisa", required = TRUE,
                                                                                         choices = c("PESO COLOMBIANO" = "Peso Colombiano", "DÓLARES" = "Dólares"),
                                                                                         selected = "Peso Colombiano", multiple = FALSE, empty = FALSE,
                                                                                         search = FALSE, ns = ns, size = 2),
-                                                         racafeForms::racafeInputSelect("COT_FPago", label = "Forma de Pago", required = TRUE,
+                                                         .crm_select("COT_FPago", label = "Forma de Pago", required = TRUE,
                                                                                         choices = .cot_choices_ui(Choices()$formapago), selected = "PAGO ANTICIPADO",
                                                                                         multiple = FALSE, ns = ns, size = 10)
                                                        )
@@ -430,7 +430,7 @@ Cotizacion <- function(id, usuario, dat) {
       cliente <- cliente_actual_r()
       
       if (nrow(cliente) != 1L || is.na(cliente$CliNitPpal[[1]])) {
-        racafeForms::racafeUpdateSelect(session, "COT_FPago", selected = "PAGO ANTICIPADO")
+        .crm_update_select(session, "COT_FPago", selected = "PAGO ANTICIPADO")
         
         return(invisible(NULL))
       }
@@ -439,7 +439,7 @@ Cotizacion <- function(id, usuario, dat) {
       forma_pago <- .obtener_fpg_cliente(cliente$CliNitPpal[[1]])
       
       if (!EsVacio(forma_pago)) {
-        racafeForms::racafeUpdateSelect(session, "COT_FPago", selected = forma_pago)
+        .crm_update_select(session, "COT_FPago", selected = forma_pago)
       }
     })
     
@@ -782,13 +782,13 @@ Cotizacion <- function(id, usuario, dat) {
       
       contador_productos_rv(0L)
       
-      racafeForms::racafeUpdateSelect(session, "COT_Cliente-sel", selected = character(0))
+      .crm_update_select(session, "COT_Cliente-sel", selected = character(0))
       
-      racafeForms::racafeUpdateSelect(session, "COT_Divisa", selected = "Peso Colombiano")
+      .crm_update_select(session, "COT_Divisa", selected = "Peso Colombiano")
       
-      racafeForms::racafeUpdateSelect(session, "COT_FPago", selected = "PAGO ANTICIPADO")
+      .crm_update_select(session, "COT_FPago", selected = "PAGO ANTICIPADO")
       
-      racafeForms::racafeUpdateSelect(session, "COT_Responsable", selected = character(0))
+      .crm_update_select(session, "COT_Responsable", selected = character(0))
       
       racafeForms::racafeUpdateDate(session, "COT_FechaIni",
                                     value = as.POSIXct(paste(Sys.Date(), "08:30:00"), tz = "America/Bogota"))

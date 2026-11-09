@@ -5,7 +5,7 @@ CrearNotasUI <- function(id) {
     racafeForms::racafeForm(size = "compact", variant = "plain",
                             racafeForms::racafeFormGroup(
                               racafeForms::racafeFormRow(columns = 2, responsive = "fixed",
-                                racafeForms::racafeInputSelect("NOT_Tipo", label = "Tipo", required = TRUE,
+                                .crm_select("NOT_Tipo", label = "Tipo", required = TRUE,
                                                                choices = c("NOTA DE REUNIÓN" = "text", "TAREA" = "list"),
                                                                selected = "text", multiple = FALSE, empty = FALSE,
                                                                search = FALSE, size = 2, ns = ns),
@@ -22,10 +22,10 @@ CrearNotasUI <- function(id) {
                                 racafeForms::racafeInputDate("NOT_FechaFin", label = "Fecha de Cumplimiento", required = TRUE,
                                                              value = Sys.Date() + 1, min = Sys.Date(), ns = ns),
                                 racafeForms::racafeFormRow(columns = 2, responsive = "fixed",
-                                  racafeForms::racafeInputSelect("NOT_Prioridad", label = "Prioridad", required = TRUE,
+                                  .crm_select("NOT_Prioridad", label = "Prioridad", required = TRUE,
                                                                  choices = stats::setNames(.TSK_PRIORIDADES, toupper(.TSK_PRIORIDADES)), selected = "MEDIA", multiple = FALSE,
                                                                  empty = FALSE, size = 4, ns = ns),
-                                  racafeForms::racafeInputSelect("NOT_Responsable", label = "Responsable", required = TRUE,
+                                  .crm_select("NOT_Responsable", label = "Responsable", required = TRUE,
                                                                  choices = stats::setNames(Choices()$personas, toupper(Choices()$personas)), selected = NULL, multiple = FALSE,
                                                                  empty = TRUE, size = 10, ns = ns)
                                 )
@@ -215,7 +215,7 @@ CrearNotas <- function(id, usuario) {
     }
     
     .limpiar_formulario <- function() {
-      racafeForms::racafeUpdateSelect(session, "NOT_Tipo", selected = "text")
+      .crm_update_select(session, "NOT_Tipo", selected = "text")
       
       updateTextInput(session = session, inputId = "NOT_Titulo", value = "")
       
@@ -223,9 +223,9 @@ CrearNotas <- function(id, usuario) {
       
       racafeForms::racafeUpdateDate(session = session, id = "NOT_FechaFin", value = Sys.Date() + 1)
       
-      racafeForms::racafeUpdateSelect(session, "NOT_Prioridad", selected = "MEDIA")
+      .crm_update_select(session, "NOT_Prioridad", selected = "MEDIA")
       
-      racafeForms::racafeUpdateSelect(session, "NOT_Responsable", selected = usuario())
+      .crm_update_select(session, "NOT_Responsable", selected = usuario())
       
       racafeForms::racafeUpdateSwitch(session, "NOT_CheckList", value = FALSE)
       
@@ -242,7 +242,7 @@ CrearNotas <- function(id, usuario) {
     observeEvent(usuario(), {
       req(usuario())
       
-      racafeForms::racafeUpdateSelect(session, "NOT_Responsable", selected = usuario())
+      .crm_update_select(session, "NOT_Responsable", selected = usuario())
     }, ignoreNULL = FALSE)
     
     observeEvent(input$NOT_Agregar, {

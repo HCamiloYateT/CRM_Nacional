@@ -87,3 +87,17 @@
 .rf-tabs>.tabbable>.nav .nav-link.active{color:#DA291C;border-bottom:2px solid #DA291C;}
 .rf-tabs>.tabbable>.tab-content{padding-top:14px;}
 .crm-prospeccion{margin-bottom:14px;}
+
+/* Separación breve entre controles, métricas y detalle. */
+.rf-row,.rf-form>.rf-field,.rf-form>.rf-action-bar{margin-bottom:10px;}
+.rf-form>.shiny-html-output+.row,.rf-form>.rf-row+.row{margin-top:10px;}
+.crm-embudo-resumen{display:flex;flex-direction:column;gap:10px;}
+.crm-identidad-badges{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 10px;}
+.crm-identidad-badges .badge{padding:6px 9px;font-size:12px;line-height:1.3;background:#F1F3F5;color:#343A40;}
+.crm-identidad-badges .badge-tipo{background:#7A2028;color:white;}
+.tooltip{z-index:2147483647!important;pointer-events:none;}
+.crm-basket-guia{margin:10px 0;}
+.crm-basket-guia .rf-notice-list{font-size:13px!important;line-height:1.6;}
+.crm-basket-guia li{margin:0 0 8px;}
+
+.tabbable>.tab-content{padding-top:10px;}

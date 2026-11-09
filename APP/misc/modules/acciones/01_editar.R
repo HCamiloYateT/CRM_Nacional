@@ -7,7 +7,7 @@ IdentificacionUI <- function(id) {
   tagList(
     uiOutput(ns("Titulo")),
     box(title = "Identificación", width = 12, collapsible = FALSE,
-        racafeForms::racafeInputSelect(id = ns("CampoAutorizaDatos"),
+        .crm_select(id = ns("CampoAutorizaDatos"),
                                 label = Obligatorio("Autoriza Tratamiento de Datos"), choices = c("SI", "NO"),
                                 selected = "SI", multiple = FALSE, empty = FALSE),
         fluidRow(
@@ -124,7 +124,7 @@ Identificacion <- function(id, usuario, codigo_contacto) {
                         value = datos_contacto()$PerRazSoc)
         updateTextInput(session = session, inputId = "CampoNit",
                         value = datos_contacto()$PerCod)
-        racafeForms::racafeUpdateSelect(session = session, selected = datos_contacto()$AutorizaTD,
+        .crm_update_select(session = session, selected = datos_contacto()$AutorizaTD,
                                 id = "CampoAutorizaDatos")
       }
     })
@@ -222,7 +222,7 @@ DirectorioUI <- function(id) {
         tags$hr(style = "border-color: grey;"),
         h6("Redes Sociales"),
         fluidRow(
-          column(5, racafeForms::racafeInputSelect(id = ns("CampoTipoRed"), label = NULL, choices = .TIPOS_RED_SOCIAL,
+          column(5, .crm_select(id = ns("CampoTipoRed"), label = NULL, choices = .TIPOS_RED_SOCIAL,
                                   selected = NULL, multiple = FALSE, empty = FALSE)),
           column(6, racafeForms::racafeInputText(id = ns("CampoUsuarioRed"), label = NULL,
                                   placeholder = "Enlace o usuario de la cuenta", width = "100%")),
@@ -256,7 +256,7 @@ DirectorioUI <- function(id) {
               tags$hr(style = "border-color: grey;"),
               h6("Redes Sociales"),
               fluidRow(
-                column(5, racafeForms::racafeInputSelect(id = ns("CampoTipoRedPersona"), label = NULL,
+                column(5, .crm_select(id = ns("CampoTipoRedPersona"), label = NULL,
                                         choices = .TIPOS_RED_SOCIAL, selected = NULL, multiple = FALSE, empty = FALSE)),
                 column(5, racafeForms::racafeInputText(id = ns("CampoUsuarioRedPersona"), label = NULL,
                                         placeholder = "Usuario o enlace", width = "100%")),
@@ -549,7 +549,7 @@ BuscadorDireccionUI <- function(id) {
     tags$div(style = "position: relative;",
              fluidRow(class = "align-items-end",
                       column(4,
-                             racafeForms::racafeInputSelect("Pais", label = h6("País"), choices = .PAISES_BUSCADOR,
+                             .crm_select("Pais", label = h6("País"), choices = .PAISES_BUSCADOR,
                                                            selected = "CO", empty = FALSE, ns = ns)
                       ),
                       column(8,
@@ -744,7 +744,7 @@ GeografiaUI <- function(id) {
                                                       label = Obligatorio("Nombre"), width = "100%")
                        ),
                        column(5,
-                              racafeForms::racafeInputSelect(id = ns("CampoTipoSede"), label = Obligatorio("Tipo"),
+                              .crm_select(id = ns("CampoTipoSede"), label = Obligatorio("Tipo"),
                                                       choices = .TIPOS_SEDE, selected = NULL, multiple = FALSE,
                                                       empty = FALSE)
                        )
@@ -951,7 +951,7 @@ Geografia <- function(id, usuario, codigo_contacto) {
         )
         shinyjs::hide("PanelNuevaSucursal")
         updateTextInput(session, "CampoNombreSucursal", value = "")
-        racafeForms::racafeUpdateSelect(session = session, selected = character(0), id = "CampoTipoSede")
+        .crm_update_select(session = session, selected = character(0), id = "CampoTipoSede")
         contador_actualizacion_sucursales(isolate(contador_actualizacion_sucursales()) + 1)
         racafeForms::racafeNotify(duration = 3, type = "success", title = "Sede agregada exitosamente",
                                 session = shiny::getDefaultReactiveDomain())
@@ -1038,11 +1038,11 @@ PotencialUI <- function(id) {
     box(title = "Potencial de Negocio", width = 12, collapsible = FALSE,
         fluidRow(
           column(4,
-                 racafeForms::racafeInputSelect(id = ns("CampoTostador"), label = h6("¿Es tostador?"),
+                 .crm_select(id = ns("CampoTostador"), label = h6("¿Es tostador?"),
                                          choices = .choices_potencial$si_no, selected = "NO", multiple = FALSE,
                                          empty = FALSE)),
           column(4,
-                 racafeForms::racafeInputSelect(id = ns("CampoAlianza"), label = h6("¿Tiene alianza con tostadora?"),
+                 .crm_select(id = ns("CampoAlianza"), label = h6("¿Tiene alianza con tostadora?"),
                                          choices = .choices_potencial$si_no, selected = "NO", multiple = FALSE,
                                          empty = FALSE),
                  conditionalPanel(condition = paste0("input['", ns("CampoAlianza"), "'] == 'SI'"),
@@ -1051,7 +1051,7 @@ PotencialUI <- function(id) {
                  )
           ),
           column(4,
-                 racafeForms::racafeInputSelect(id = ns("CampoMaquila"), label = h6("¿Maquila?"),
+                 .crm_select(id = ns("CampoMaquila"), label = h6("¿Maquila?"),
                                          choices = .choices_potencial$si_no, selected = "NO", multiple = FALSE,
                                          empty = FALSE),
                  conditionalPanel(condition = paste0("input['", ns("CampoMaquila"), "'] == 'SI'"),
@@ -1067,12 +1067,12 @@ PotencialUI <- function(id) {
                                          value = NA, min = 0, width = "100%")
           ),
           column(4,
-                 racafeForms::racafeInputSelect(id = ns("CampoTipoCompra"), label = h6("Tipo de Compra"),
+                 .crm_select(id = ns("CampoTipoCompra"), label = h6("Tipo de Compra"),
                                          choices = .choices_potencial$tipo_compra, selected = NULL, multiple = FALSE,
                                          empty = FALSE)
           ),
           column(4,
-                 racafeForms::racafeInputSelect(id = ns("CampoFrecuenciaCompra"), label = h6("Frecuencia de Compra"),
+                 .crm_select(id = ns("CampoFrecuenciaCompra"), label = h6("Frecuencia de Compra"),
                                          choices = .choices_potencial$frecuencia_compra, selected = NULL,
                                          multiple = FALSE, empty = FALSE)
           )
@@ -1088,12 +1088,12 @@ PotencialUI <- function(id) {
                  racafeForms::racafeInputNumeric(id = ns("CampoConsumoEsperado"), label = h6("Consumo Esperado"),
                                          value = NA, min = 0, width = "100%")),
           column(3,
-                 racafeForms::racafeInputSelect(id = ns("CampoUnidadConsumo"), label = h6("Unidad"),
+                 .crm_select(id = ns("CampoUnidadConsumo"), label = h6("Unidad"),
                                          choices = .choices_potencial$unidad_consumo, selected = "SACOS/MES",
                                          multiple = FALSE, empty = FALSE))
         ),
         h6("Certificaciones de Interés"),
-        racafeForms::racafeInputSelect("CampoCertificaciones", label = NULL, multiple = TRUE,
+        .crm_select("CampoCertificaciones", label = NULL, multiple = TRUE,
                                        choices = .choices_potencial$certificaciones, ns = ns,
                                        empty_label = "Seleccione una o varias"),
         racafeForms::racafeInputTextArea(id = ns("CampoObservaciones"), label = h6("Observaciones"), value = "",
@@ -1111,21 +1111,21 @@ Potencial <- function(id, usuario, codigo_contacto) {
       if (nrow(datos_potencial) == 0) {
         return(invisible(NULL))
       }
-      racafeForms::racafeUpdateSelect(session = session,
+      .crm_update_select(session = session,
                               selected = ifelse(datos_potencial$EsTostador[[1]] == 1, "SI", "NO"), id = "CampoTostador")
-      racafeForms::racafeUpdateSelect(session = session,
+      .crm_update_select(session = session,
                               selected = ifelse(datos_potencial$AlianzaTostadora[[1]] == 1, "SI", "NO"),
                               id = "CampoAlianza")
       updateTextInput(session, "CampoDetalleAlianza", value = datos_potencial$DetalleAlianza[[1]] %||% "")
-      racafeForms::racafeUpdateSelect(session = session,
+      .crm_update_select(session = session,
                               selected = ifelse(datos_potencial$Maquila[[1]] == 1, "SI", "NO"), id = "CampoMaquila")
       updateTextInput(session, "CampoDetalleMaquila", value = datos_potencial$DetalleMaquila[[1]] %||% "")
       racafeForms::racafeUpdateNumeric(session = session,
                               value = suppressWarnings(as.numeric(datos_potencial$AniosOperacion[[1]])),
                               id = "CampoAniosOperacion")
-      racafeForms::racafeUpdateSelect(session = session, selected = datos_potencial$TipoCompra[[1]] %||% "",
+      .crm_update_select(session = session, selected = datos_potencial$TipoCompra[[1]] %||% "",
                               id = "CampoTipoCompra")
-      racafeForms::racafeUpdateSelect(session = session, selected = datos_potencial$FrecuenciaCompra[[1]] %||% "",
+      .crm_update_select(session = session, selected = datos_potencial$FrecuenciaCompra[[1]] %||% "",
                               id = "CampoFrecuenciaCompra")
       
       calidades_previas <- if (!EsVacio(datos_potencial$CalidadesPreferidas[[1]])) {
@@ -1137,7 +1137,7 @@ Potencial <- function(id, usuario, codigo_contacto) {
       racafeForms::racafeUpdateNumeric(session = session,
                               value = suppressWarnings(as.numeric(datos_potencial$ConsumoEsperado[[1]])),
                               id = "CampoConsumoEsperado")
-      racafeForms::racafeUpdateSelect(session = session, selected = datos_potencial$UnidadConsumo[[1]] %||% "SACOS/MES",
+      .crm_update_select(session = session, selected = datos_potencial$UnidadConsumo[[1]] %||% "SACOS/MES",
                               id = "CampoUnidadConsumo")
       
       certificaciones_previas <- if (!EsVacio(datos_potencial$CertificacionesInteres[[1]])) {
@@ -1145,7 +1145,7 @@ Potencial <- function(id, usuario, codigo_contacto) {
       } else {
         NULL
       }
-      racafeForms::racafeUpdateSelect(session, "CampoCertificaciones", selected = certificaciones_previas)
+      .crm_update_select(session, "CampoCertificaciones", selected = certificaciones_previas)
       updateTextAreaInput(session, "CampoObservaciones", value = datos_potencial$Observaciones[[1]] %||% "")
     })
     
@@ -1187,7 +1187,7 @@ Potencial <- function(id, usuario, codigo_contacto) {
 
 EditarUI <- function(id) {
   ns <- NS(id)
-  tabsetPanel(
+  bs4Dash::tabsetPanel(
     tabPanel("Identificación", Saltos(), IdentificacionUI(ns("Identificacion"))),
     tabPanel("Directorio", Saltos(), DirectorioUI(ns("Directorio"))),
     tabPanel("Geografía", Saltos(), GeografiaUI(ns("Geografia"))),

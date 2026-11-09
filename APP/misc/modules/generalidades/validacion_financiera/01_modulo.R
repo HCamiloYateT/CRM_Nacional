@@ -2161,7 +2161,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     output$ui_segmentos_modal <- .crm_render_ui({
       shiny::tagList(
         .crm_descarga_ui("dl_segmentos", ns),
-        racafeForms::racafeInputSelect("VF_SegEstado", "Mostrar",
+        .crm_select("VF_SegEstado", "Mostrar",
           choices = c("Coincide", "Segmento diferente", "Sin segmento en CRM", "Sin segmento en PyG"),
           selected = c("Segmento diferente", "Sin segmento en CRM", "Sin segmento en PyG"),
           multiple = TRUE, ns = ns),

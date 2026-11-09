@@ -157,7 +157,7 @@ PresupuestoUI <- function(id) {
         solidHeader = TRUE, width = 12, collapsible = TRUE, collapsed = TRUE,
         fluidRow(
           column(10,
-                 racafeForms::racafeInputSelect(
+                 .crm_select(
                    id = "dim_breakdown", label = "Dimensión",
                    choices = c(
                      "Línea de Negocio" = "linneg", "Segmento" = "segmento",
@@ -186,7 +186,7 @@ PresupuestoUI <- function(id) {
                      column(12,
                             div(
                               style = "display:flex; align-items:center; gap:12px; margin-bottom:4px;",
-                              racafeForms::racafeInputSelect(
+                              .crm_select(
                                 id = "medida_proyeccion", label = NULL,
                                 choices = c("Sacos" = "sacos", "Margen" = "margen"),
                                 selected = "sacos", empty = FALSE, search = FALSE,
@@ -208,7 +208,7 @@ PresupuestoUI <- function(id) {
                      column(12,
                             div(
                               style = "display:flex; align-items:center; gap:12px; margin-bottom:4px;",
-                              racafeForms::racafeInputSelect(
+                              .crm_select(
                                 id = "medida_velocidad", label = NULL,
                                 choices = c("Sacos" = "sacos", "Margen" = "margen"),
                                 selected = "sacos", empty = FALSE, search = FALSE,

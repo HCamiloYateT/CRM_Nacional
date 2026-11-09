@@ -10,7 +10,7 @@ RelacionamientoUI <- function(id) {
         fluidRow(
           column(6,
                  h5("Nuevo Relacionamiento"),
-                 racafeForms::racafeInputSelect(id = ns("GES_Tipo"), label = Obligatorio("Tipo de Gestión"),
+                 .crm_select(id = ns("GES_Tipo"), label = Obligatorio("Tipo de Gestión"),
                                          choices = .TIPOS_RELACIONAMIENTO, selected = NULL, multiple = FALSE,
                                          empty = FALSE),
                  racafeForms::racafeInputTextArea(id = ns("GES_Comentario"), label = Obligatorio("Comentario"),
@@ -32,10 +32,10 @@ RelacionamientoUI <- function(id) {
         fluidRow(
           column(6,
                  h5("Programar Recordatorio"),
-                 racafeForms::racafeInputSelect(id = ns("REC_Asesor"), label = Obligatorio("Asesor"),
+                 .crm_select(id = ns("REC_Asesor"), label = Obligatorio("Asesor"),
                                          choices = Choices()$personas, selected = NULL, multiple = FALSE,
                                            empty = FALSE),
-                 racafeForms::racafeInputSelect(id = ns("REC_Canal"), label = Obligatorio("Canal"),
+                 .crm_select(id = ns("REC_Canal"), label = Obligatorio("Canal"),
                                          choices = .CANALES_RECORDATORIO, selected = NULL, multiple = FALSE,
                                          empty = FALSE),
                  racafeForms::racafeInputDateTime("REC_Fecha", label = Obligatorio("Fecha y Hora"),
