@@ -501,6 +501,8 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         CLCliNit = suppressWarnings(as.numeric(CLIENTE)),
         LinNegCod = suppressWarnings(as.numeric(LINNEG)),
         SegmentoPYG = .normalizar_segmento(SEGMENTACION_CLIENTE),
+        FechaCorteArchivo = as.Date(.gc_columna(.resolver(margenes_pyg),
+          c("FECHA_CORTE_ARCHIVO", "FechaCorteArchivo"))),
         SacosPYG = suppressWarnings(as.numeric(SACOS70)),
         MargenPYG = suppressWarnings(as.numeric(MARGEN))
       ) %>%
@@ -666,7 +668,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
           subtitle = paste0("Año ", .VF_ANHO)
         ) %>%
         gt::tab_spanner(
-          label = "CONVENCIONALES",
+          label = "Coproductos",
           columns = c(SacosConv, MNFCCConv)
         ) %>%
         gt::tab_spanner(
@@ -1200,24 +1202,18 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         x[[1L]]
       }
       
-      unidades_pyg <- pyg_base %>%
-        dplyr::filter(
-          ANHO == .VF_ANHO,
-          FecMes <= fecha_cierre_pyg,
-          !is.na(CLCliNit),
-          !is.na(LinNegCod)
-        ) %>%
+      base_segmentos <- pyg_base %>%
+        dplyr::filter(FecMes <= fecha_cierre_pyg, !is.na(CLCliNit), !is.na(LinNegCod)) %>%
         dplyr::left_join(nit_base, by = "CLCliNit") %>%
-        dplyr::mutate(CliNitPpal = dplyr::coalesce(CliNitPpal, CLCliNit)) %>%
-        dplyr::arrange(CliNitPpal, LinNegCod, dplyr::desc(FecMes)) %>%
+        dplyr::mutate(CliNitPpal = dplyr::coalesce(CliNitPpal, CLCliNit))
+      segmentos_recientes <- .vf_segmentos_recientes(base_segmentos)
+      unidades_pyg <- base_segmentos %>%
+        dplyr::filter(ANHO == .VF_ANHO) %>%
         dplyr::group_by(CliNitPpal, LinNegCod) %>%
-        dplyr::summarise(
-          SegmentoPYG = .primer_segmento(SegmentoPYG),
-          SacosBase = sum(SacosPYG, na.rm = TRUE),
-          MargenBase = sum(MargenPYG, na.rm = TRUE),
-          .groups = "drop"
-        )
-      
+        dplyr::summarise(SacosBase = sum(SacosPYG, na.rm = TRUE),
+          MargenBase = sum(MargenPYG, na.rm = TRUE), .groups = "drop") %>%
+        dplyr::inner_join(segmentos_recientes, by = c("CliNitPpal", "LinNegCod"))
+
       atributos <- data_base %>%
         dplyr::filter(
           lubridate::year(FecMes) == .VF_ANHO,
@@ -1554,7 +1550,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     cuadre_tabla_conv <- .registrar_tabla_cuadre(
       id = "tabla_cuadre_conv",
       datos = tabla_cuadre_conv,
-      titulo = "Convencionales"
+      titulo = "Coproductos"
     )
     
     cuadre_tabla_medida <- .registrar_tabla_cuadre(
@@ -2147,14 +2143,18 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         dplyr::mutate(Estado = .crm_estado_segmento(SegmentoPYG, SegmentoCRM))
       detalle <- detalle[detalle$Estado %in% input$VF_SegEstado, , drop = FALSE]
       detalle %>%
-        dplyr::select(CliNitPpal, Cliente, Linea, Asesor, SegmentoPYG, SegmentoCRM, Estado, SacosBase) %>%
+        dplyr::select(CliNitPpal, Cliente, Linea, Asesor, FechaSegmentoPYG, SegmentoPYG, SegmentoCRM,
+          Estado, SacosBase) %>%
         dplyr::arrange(Cliente, Linea)
     })
     .crm_tabla_servidor("segmentos_comercial", data = segmentos_comercial, modo_seleccion = "ninguno",
       col_labels = c(CliNitPpal = "NIT principal", Cliente = "Cliente", Linea = "Línea", Asesor = "Asesor",
-        SegmentoPYG = "Segmento en PyG", SegmentoCRM = "Segmento en clientes del CRM", Estado = "Revisión",
+        FechaSegmentoPYG = "Fecha de referencia PyG", SegmentoPYG = "Segmento más reciente en PyG",
+        SegmentoCRM = "Segmento en clientes del CRM", Estado = "Revisión",
         SacosBase = "Sacos 70 kg"),
       footer = c("Una fila por cliente principal y línea de negocio.",
+        "Se compara el último archivo disponible por línea; sin corte de archivo se usa la observación más reciente.",
+        "Un segmento vacío reciente no se rellena con clasificaciones antiguas.",
         "Revise las dos columnas de segmento para identificar el registro que requiere validación comercial.",
         "La segmentación de creación del cliente no interviene en esta comparación."))
 

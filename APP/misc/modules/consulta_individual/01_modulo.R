@@ -59,7 +59,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     datos_cliente <- shiny::reactive(.in_datos_cliente(entidad(), familia(), directorio(), historia()))
     output$identidad <- .crm_render_ui({
       x <- entidad()
-      badge <- function(texto, clase = "") shiny::tags$span(class = paste("badge", clase), texto)
+      badge <- function(texto, clase = "") racafeForms::racafeStatusBadge(texto, variant = "neutral")
       shiny::tagList(shiny::h4(x$Nombre), shiny::tags$div(class = "crm-identidad-badges",
         badge(paste("Tipo:", x$Tipo), "badge-tipo"), badge(paste("Vista:", x$Alcance)),
         badge(paste("NIT", dplyr::coalesce(x$NIT, "sin registrar"))),
@@ -90,33 +90,45 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
           .crm_tabla_ui(session$ns("familia"), "Cuenta padre y cuentas relacionadas visibles"),
           .crm_tabla_ui(session$ns("presupuesto"), "Presupuesto y metas de la cuenta"),
           if (crm) shiny::tagList(
-            .crm_tabla_ui(session$ns("directorio"), "Directorio empresarial"),
-            .crm_tabla_ui(session$ns("telefonos"), "Teléfonos"),
-            .crm_tabla_ui(session$ns("personas"), "Personas de contacto"),
-            .crm_tabla_ui(session$ns("redes"), "Redes sociales"),
-            .crm_tabla_ui(session$ns("ubicaciones"), "Ubicaciones"),
-            .crm_tabla_ui(session$ns("sucursales"), "Sucursales")) else {
+            .in_panel_ui("directorio", "Directorio empresarial", session$ns),
+            .in_panel_ui("telefonos", "Teléfonos", session$ns),
+            .in_panel_ui("personas", "Personas de contacto", session$ns),
+            .in_panel_ui("redes", "Redes sociales", session$ns),
+            .in_panel_ui("ubicaciones", "Ubicaciones", session$ns),
+            .in_panel_ui("sucursales", "Sucursales", session$ns)) else {
               .crm_nota("Para consultar directorio y gestiones propias, seleccione una entidad del CRM.")
             }),
         if (crm) tabPanel("Gestión y seguimiento",
           shiny::uiOutput(session$ns("alcance_seguimiento")),
-          .crm_tabla_ui(session$ns("gestiones"), "Gestiones realizadas"),
-          .crm_tabla_ui(session$ns("recordatorios"), "Recordatorios"),
-          .crm_tabla_ui(session$ns("tareas"), "Tareas y notas visibles para usted"),
-          .crm_tabla_ui(session$ns("cronologia"), "Recorrido comercial completo"),
+          .in_panel_ui("gestiones", "Gestiones realizadas", session$ns),
+          .in_panel_ui("recordatorios", "Recordatorios", session$ns),
+          .in_panel_ui("tareas", "Tareas y notas visibles para usted", session$ns),
+          .in_panel_ui("cronologia", "Recorrido comercial completo", session$ns),
           shiny::uiOutput(session$ns("estado_cronologia")),
           .crm_disclosure("Conversiones y alianzas registradas",
-            .crm_tabla_ui(session$ns("conversion_lead"), "Conversión a lead"),
-            .crm_tabla_ui(session$ns("conversion_cliente"), "Conversión a cliente"),
-            .crm_tabla_ui(session$ns("alianzas"), "Alianzas comerciales"))),
+            .in_panel_ui("conversion_lead", "Conversión a lead", session$ns),
+            .in_panel_ui("conversion_cliente", "Conversión a cliente", session$ns),
+            .in_panel_ui("alianzas", "Alianzas comerciales", session$ns))),
         if (potencial) tabPanel("Potencial y oportunidades",
           .crm_nota("Las oportunidades muestran el estado actual guardado para la entidad comercial asociada."),
-          .crm_tabla_ui(session$ns("potencial"), "Potencial registrado"),
-          .crm_tabla_ui(session$ns("oportunidades"), "Oportunidades de la entidad")),
+          .in_panel_ui("potencial", "Potencial registrado", session$ns),
+          .in_panel_ui("oportunidades", "Oportunidades de la entidad", session$ns)),
         if (comercial) tabPanel("Ejecución y productos", .gc_tarjetas_ui(session$ns, .IN_CAJAS),
           plotly::plotlyOutput(session$ns("tendencia"), height = "310px"),
           .crm_descarga_ui("descargar", session$ns),
-          .crm_tabla_ui(session$ns("productos"), "Compras por categoría y producto"),
+          .crm_tabla_ui(session$ns("productos"), "Marcas y nombres comerciales comprados"),
+          .crm_disclosure("Pedidos, precios históricos e indicadores de mercado",
+            .crm_nota(c("Sacos y margen corresponden a facturas del histórico hasta el corte del controlbar.",
+              "El precio por kilo es el registrado en la cabecera del pedido, no margen por kilo.",
+              "Las cabeceras sin precio o fecha quedan vacías; actualice DataPrep para completar la información.")),
+            shiny::uiOutput(session$ns("rango_precios")),
+            racafeForms::racafeInputNumeric("precio_comparar", "Precio por kilo a comparar (COP)",
+              value = 0, min = 0, decimals = 2, ns = session$ns),
+            .crm_nota("Escriba un precio positivo. Se buscan los pedidos con precio más cercano de esta cuenta."),
+            .crm_tabla_ui(session$ns("pedidos_precios"), "Pedidos y referencias comerciales del histórico"),
+            .crm_tabla_ui(session$ns("precio_cercano"), "Pedidos con precio más cercano"),
+            shiny::uiOutput(session$ns("fecha_mercado")),
+            .crm_tabla_ui(session$ns("mercado_precio"), "Indicadores del día del pedido más cercano")),
           .crm_tabla_ui(session$ns("movimientos"), "Facturación del periodo"),
           .crm_nota(c("El margen de meses abiertos es provisional; un importe desconocido no se convierte en cero.",
             "El periodo corresponde a las fechas seleccionadas en el controlbar."))),
@@ -189,6 +201,8 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     .crm_vancouver_server("ficha", ficha, searchable = FALSE)
     for (nombre in names(.IN_FUENTES)) local({
       clave <- nombre
+      .in_conteo(output, clave, shiny::reactive(.in_detalle_crm(fuentes()[[clave]], contexto_crm(),
+        .IN_FUENTES[[clave]]$campos)))
       if (clave == "oportunidades") {
         .crm_vancouver_server(clave, shiny::reactive(.in_oportunidades(fuentes()[[clave]], contexto_crm())),
           col_labels = c(Creacion = "Fecha de creación", FechaObjetivo = "Fecha objetivo", Linea = "Línea de negocio",
@@ -197,13 +211,15 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       } else .crm_vancouver_server(clave, shiny::reactive(.in_detalle_crm(fuentes()[[clave]], contexto_crm(),
         .IN_FUENTES[[clave]]$campos)))
     })
-    .crm_vancouver_server("tareas", shiny::reactive({
+    tareas_entidad <- shiny::reactive({
       x <- .tareas_visibles_usuario(tareas(), usuario(), es_admin())
       shiny::validate(shiny::need(!nrow(x) || "CodContacto" %in% names(x),
         "Las tareas existentes no tienen un vínculo de entidad. Consúltelas en Notas y Tareas."))
       .in_detalle_crm(list(datos = x), contexto_crm(), c("titulo", "Descripcion", "Responsable", "Prioridad",
         "FechaCumplimiento", "Cumplido", "Archivado"))
-    }))
+    })
+    .crm_vancouver_server("tareas", tareas_entidad)
+    .in_conteo(output, "tareas", tareas_entidad)
     .gc_tarjetas_server(.IN_CAJAS, valores, list(sacos = "numero", margen = "dinero"))
     .crm_vancouver_server("presupuesto", shiny::reactive(.in_presupuesto(metas_anuales(), entidad())),
       col_labels = c(PresupuestoEnRevision = "Requiere revisión del presupuesto"),
@@ -211,11 +227,14 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
         if (is.na(x)) "Sin información" else if (x) "Sí" else "No"
       })))
     productos <- shiny::reactive({
-      ejecucion() %>% dplyr::group_by(Categoria, Producto) %>%
+      ejecucion() %>%
+        dplyr::mutate(Marca = as.character(.gc_columna(ejecucion(), "Marca")),
+          NombreComercial = as.character(.gc_columna(ejecucion(), "MCNom"))) %>%
+        dplyr::group_by(Marca, NombreComercial) %>%
         dplyr::summarise(Sacos70kg = .com_suma(SacosFact), MargenFCC = .com_suma(Margen), .groups = "drop")
     })
     .crm_vancouver_server("productos", productos,
-      col_labels = c(Categoria = "Categoría", Producto = "Producto", Sacos70kg = "Sacos facturados (70 kg)",
+      col_labels = c(Marca = "Marca", NombreComercial = "Nombre comercial", Sacos70kg = "Sacos facturados (70 kg)",
         MargenFCC = "Margen total FCC (COP)"))
     .crm_vancouver_server("movimientos", shiny::reactive({
       x <- ejecucion()
@@ -223,6 +242,39 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
         "Producto", "SacosFact", "Margen", "EstadoFinanciero"), names(x))])
     }), col_labels = c(CLCliNit = "NIT", CLPdcCod = "Pedido", CLLotCod = "Lote", FecFact = "Fecha de factura",
       CLLinNegNo = "Línea", SacosFact = "Sacos 70 kg", EstadoFinanciero = "Estado financiero"))
+    pedidos_precios <- shiny::reactive(.in_precios_pedidos(historico()))
+    cercano <- shiny::reactive(.in_precio_cercano(pedidos_precios(), input$precio_comparar))
+    .crm_vancouver_server("pedidos_precios", pedidos_precios,
+      col_labels = c(PrecioKg = "Precio del pedido por kg (COP)", Sacos = "Sacos facturados (70 kg)",
+        Margen = "Margen total FCC (COP)", FechaPedido = "Creación del pedido", UltimaFactura = "Última factura"))
+    .crm_vancouver_server("precio_cercano", cercano,
+      col_labels = c(PrecioKg = "Precio histórico por kg (COP)", DiferenciaCOP = "Diferencia por kg (COP)",
+        Sacos = "Sacos facturados (70 kg)", FechaPedido = "Creación del pedido"))
+    output$rango_precios <- .crm_render_ui({
+      precios <- pedidos_precios()$PrecioKg
+      precios <- precios[is.finite(precios) & precios > 0]
+      if (!length(precios)) return(.crm_nota("No hay precios de pedido registrados para este histórico."))
+      shiny::tags$div(class = "crm-identidad-badges",
+        racafeForms::racafeDataBadge("Precio mínimo / kg", paste("COP", format(min(precios), big.mark = ","))),
+        racafeForms::racafeDataBadge("Precio máximo / kg", paste("COP", format(max(precios), big.mark = ","))))
+    })
+    indicadores_historicos <- shiny::reactive({ revision(); .in_fuente(cargar, "CRMINDICADORES") })
+    mercado_pedido <- shiny::reactive({
+      x <- cercano()
+      if (!nrow(x)) return(data.frame())
+      .in_mercado_fecha(indicadores_historicos(), x$FechaPedido[[1]])
+    })
+    .crm_vancouver_server("mercado_precio", mercado_pedido,
+      col_labels = c(FechaActualizacion = "Fecha del indicador", Valor = "Valor registrado"))
+    output$fecha_mercado <- .crm_render_ui({
+      x <- cercano()
+      if (!nrow(x)) return(.crm_nota("No hay pedidos con precio válido para comparar; escriba un precio positivo."))
+      if (is.na(x$FechaPedido[[1]])) return(.crm_nota("El pedido más cercano no tiene fecha de creación registrada."))
+      .crm_nota(c(paste("Referencia: pedido", x$Pedido[[1]], "del", x$FechaPedido[[1]],
+        "· Si hay empate de precios se usa el pedido más reciente con fecha registrada."),
+        "Los indicadores corresponden exactamente a ese día; no se sustituyen por cotizaciones de otra fecha.",
+        if (!nrow(mercado_pedido())) "No hay indicadores guardados para ese día."))
+    })
     .crm_vancouver_server("pendientes", shiny::reactive(.pen_preparar(historia(), periodo()[[2]])$detalle),
       columnas = c("Etapa", "Nivel", "Pedido", "Linea", "Lote", "Fecha", "Cantidad", "Motivo"))
     clientes_cartera <- shiny::reactive({
@@ -311,8 +363,10 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     .crm_vancouver_server("geografia", datos_cliente,
       columnas = c("NIT", "Cuenta", "Direccion", "Ciudad", "Departamento", "Region", "Pais"),
       col_labels = c(Region = "Región", Pais = "País"))
-    .crm_vancouver_server("cronologia", shiny::reactive(.in_cronologia(contexto_crm(), contactos(), fuentes(),
-      periodo()[[2]])), columnas = c("Momento", "EntidadCRM", "Evento", "Detalle", "Responsable", "Origen"),
+    cronologia <- shiny::reactive(.in_cronologia(contexto_crm(), contactos(), fuentes(), periodo()[[2]]))
+    .in_conteo(output, "cronologia", cronologia)
+    .crm_vancouver_server("cronologia", cronologia,
+      columnas = c("Momento", "EntidadCRM", "Evento", "Detalle", "Responsable", "Origen"),
       col_labels = c(Momento = "Fecha y hora registrada", EntidadCRM = "Entidad comercial",
         Origen = "Registro de origen"))
     output$estado_cronologia <- .crm_render_ui({

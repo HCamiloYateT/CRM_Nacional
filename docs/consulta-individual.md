@@ -79,3 +79,28 @@ consultar su seguimiento. No infiere vínculos por nombre ni amplía los permiso
 Verificación adicional: `tests/test_consulta360.R` y `node tests/test-consulta360.cjs`, con datos ficticios,
 modelos reales, años anteriores, presupuesto, padre/hija, geografía, conversiones y propuestas de venta cruzada.
 La interfaz se comprueba en escritorio y a 390 px; no se accedió a datos de producción.
+
+## Secciones colapsables y precios de pedido
+
+Directorio, seguimiento y potencial usan secciones corporativas colapsables con un badge de cantidad de registros.
+Un fallo de fuente indica «No disponible» y no se presenta como cero registros. Market Basket usa el mismo adaptador
+compatible si la versión instalada de racafeForms todavía no exporta `racafeDisclosure`.
+
+Ejecución muestra marcas y nombres comerciales. El detalle de pedidos utiliza el histórico completo de la cuenta
+hasta el corte y respeta los filtros comerciales. Muestra sacos facturados, margen y el precio por kilo de cabecera;
+no calcula precio de venta a partir del margen. Los precios mínimo y máximo excluyen valores ausentes o no positivos.
+
+Un precio ingresado encuentra todas las referencias con la menor diferencia absoluta. Para consultar indicadores
+se utiliza el pedido más reciente entre los empatados y su fecha real de creación. No se sustituye una cotización
+faltante por la de otro día. Los indicadores conservan sus unidades y la cuenta hija mantiene su propio NIT.
+DataPrep enriquece el histórico financiero con cabeceras inequívocas de pedidos, sin multiplicar filas ni cantidades.
+Para completar precios ausentes en exportaciones anteriores hay que ejecutar el ETL actualizado.
+
+Los labels de línea usan «Coproductos»; los códigos y valores internos originales se conservan para filtros y joins.
+La validación de segmentos usa el último corte de archivo por línea cuando está disponible. En exportaciones antiguas
+sin ese dato usa la última observación de cada cliente del año más reciente. Nunca rellena un vacío reciente con una
+clasificación anterior. El detalle muestra la fecha utilizada. El siguiente ETL conserva el corte de la carpeta PyG.
+
+Verificación: `tests/test_precios_segmentos.R` comprueba precios, indicadores del día exacto, snapshots recientes,
+labels y enriquecimiento ETL sin duplicación. `tests/test-perfil-precios.cjs` recorre los paneles, conteos, referencias,
+comparación y Market Basket con fuentes ficticias y una versión anterior instalada de racafeForms.

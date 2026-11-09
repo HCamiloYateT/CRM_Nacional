@@ -10,6 +10,9 @@ for (ruta in c("compartido/00_presentacion.R", "compartido/01_analitica_comercia
   "modules/gestion_comercial/fidelidad_riesgo/00_modelos.R", "modules/gestion_comercial/cartera/00_datos.R",
   "modules/encabezado/02_notificaciones_tareas.R", "modules/consulta_individual/00_datos.R",
   "modules/consulta_individual/01_modulo.R", "modules/consulta_individual/02_perfil_analitico.R",
+  "modules/consulta_individual/03_precios_pedidos.R",
+  "modules/generalidades/indicadores_mercado/00_constantes.R",
+  "modules/generalidades/indicadores_mercado/00_funciones.R",
   "modules/productos/compartido/00_funciones.R",
   "modules/productos/market_basket/01_modulo.R", "modules/prospeccion/compartido/00_estilo.R",
   "modules/prospeccion/compartido/00_constantes.R", "modules/prospeccion/compartido/00_funciones.R",
@@ -52,6 +55,7 @@ server <- function(input, output, session) {
       x$fecha <- c(as.Date("2026-01-01"), as.Date(input$fecha)); x
     })
     cargar <- function(tabla) {
+      if (tabla == "CRMINDICADORES") return(data.frame(FechaActualizacion = as.Date("2024-03-31"), TRM = 4100))
       if (tabla == "CRMNALCONTACTO") return(contactos_individual)
       if (tabla == "CRMNALHISTORIALETAPA") return(data.frame(CodContacto = "C2",
         FechaHora = as.POSIXct(c("2018-06-01", "2024-01-01", "2025-01-01"), tz = "America/Bogota"),

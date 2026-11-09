@@ -25,7 +25,9 @@
   quitar <- is.na(x) | as.character(x) == ""
   etiquetas <- if (is.null(nombres)) as.character(x) else nombres
   quitar <- quitar | toupper(trimws(etiquetas)) %in% c("NINGUNO", "NINGUNA")
-  x[!quitar]
+  x <- x[!quitar]
+  names(x) <- .crm_label_comercial(if (is.null(names(x))) as.character(x) else names(x))
+  x
 }
 .crm_select <- function(id, label = NULL, choices = NULL, ..., empty = FALSE, empty_label = "Seleccione...") {
   argumentos <- list(...)
@@ -44,4 +46,10 @@
 }
 .crm_update_select <- function(session, id, ..., choices = NULL) {
   racafeForms::racafeUpdateSelect(session, id, choices = .crm_choices(choices), ...)
+}
+
+# Los nombres comerciales se presentan sin cambiar valores ni códigos del ETL ----
+.crm_label_comercial <- function(x) {
+  if (!is.character(x)) return(x)
+  gsub("convencionales", "Coproductos", x, ignore.case = TRUE)
 }

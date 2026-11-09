@@ -23,6 +23,13 @@
     figura <- .crm_evaluar_salida(funcion)
     shiny::validate(shiny::need(!is.null(figura), "No hay datos para los filtros seleccionados."))
     figura <- plotly::plotly_build(figura)
+    etiqueta <- function(x) {
+      if (is.character(x)) return(gsub("convencionales", "Coproductos", x, ignore.case = TRUE))
+      if (is.list(x)) return(lapply(x, etiqueta))
+      x
+    }
+    figura$x$data <- etiqueta(figura$x$data)
+    figura$x$layout <- etiqueta(figura$x$layout)
     tiene_datos <- any(vapply(figura$x$data, function(traza) {
       any(vapply(traza[intersect(c("x", "y", "z", "labels", "values", "value", "text", "lat", "lon"),
         names(traza))], length, integer(1)) > 0L) || length(traza$link$value) > 0L

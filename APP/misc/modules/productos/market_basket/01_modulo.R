@@ -36,7 +36,7 @@ MarketBasketUI <- function(id) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
     shiny::tags$div(class = "crm-basket-guia",
-      racafeForms::racafeDisclosure("Qué es Market Basket y cómo usar este tablero",
+      .crm_disclosure("Qué es Market Basket y cómo usar este tablero",
         racafeForms::racafeNoticeList(list(
           shiny::tagList(shiny::tags$strong("Qué muestra. "),
             "Productos que un mismo cliente suele comprar. Sirve para explorar qué más ofrecerle."),
