@@ -11,6 +11,12 @@ DetalleCurvaConversionClienteUI <- function(id, tipo) {
                "Cohorte" = "CohorteAnalisis"
                )
   tagList(
+    .crm_disclosure("Cómo leer esta curva",
+      .crm_nota(c("La curva estima qué porcentaje ya avanzó a la siguiente etapa con el paso del tiempo.",
+        "El eje horizontal muestra el tiempo. Una curva que sube antes indica un avance más rápido.",
+        "Por ejemplo, 40% a los 30 días significa que el modelo estima ese avance para el grupo, no para cada entidad.",
+        "Las entidades que siguen en seguimiento aún no tienen un tiempo final: no se cuentan como fracasos.",
+        "Sirve para comparar grupos. No promete cuándo avanzará una entidad concreta."))),
     fluidRow(
       style = "display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;",
       div(style = "width:220px;",
@@ -32,9 +38,9 @@ DetalleCurvaConversionClienteUI <- function(id, tipo) {
              plotly::plotlyOutput(ns("curva_km"), height = "450px")
              ),
       column(3,
-             .crm_caja_modal_ui(ns("kpi_analizados")),
-             .crm_caja_modal_ui(ns("kpi_convertidos")),
-             .crm_caja_modal_ui(ns("kpi_censurados"))
+             .crm_caja_output(ns("kpi_analizados")),
+             .crm_caja_output(ns("kpi_convertidos")),
+             .crm_caja_output(ns("kpi_censurados"))
              )
       )
     )
@@ -138,7 +144,7 @@ DetalleCurvaConversionCliente <- function(id, datos_conversion, tipo) {
       if (is.null(fit)) return(NULL)
       summary(fit)$table
     })
-    .crm_caja_modal("kpi_analizados",
+    .pr_caja("kpi_analizados",
               valor = reactive({
                 tabla <- tabla_surv_r()
                 if (is.null(tabla)) 0 else html_valor(tabla[["records"]], formato = "coma", color = "#404040")
@@ -150,7 +156,7 @@ DetalleCurvaConversionCliente <- function(id, datos_conversion, tipo) {
               footer = paste0("Incluye todo el universo analizado, ",
                               "sin restringir por etapa o estado vigente."))
     
-    .crm_caja_modal("kpi_convertidos",
+    .pr_caja("kpi_convertidos",
               valor = reactive({
                 tabla <- tabla_surv_r()
                 if (is.null(tabla)) 0 else html_valor(tabla[["events"]], formato = "coma", color = "#198754")
@@ -161,7 +167,7 @@ DetalleCurvaConversionCliente <- function(id, datos_conversion, tipo) {
               footer = paste0("Contactos que alcanzaron históricamente la etapa Cliente, ",
                               "aunque actualmente estén en otra etapa o estado."))
     
-    .crm_caja_modal("kpi_censurados",
+    .pr_caja("kpi_censurados",
               valor = reactive({
                 tabla <- tabla_surv_r()
                 if (is.null(tabla)) {
@@ -729,11 +735,11 @@ DetalleClientesUI <- function(id) {
     fluidRow(
       column(4,
              .pr_panel(title = "Indicadores de Clientes", width = 12, collapsible = TRUE, collapsed = FALSE,
-                 .crm_caja_modal_ui(ns("kpi_total")),
+                 .crm_caja_output(ns("kpi_total")),
                  br(),
-                 .crm_caja_modal_ui(ns("kpi_conversion_contacto")),
+                 .crm_caja_output(ns("kpi_conversion_contacto")),
                  br(),
-                 .crm_caja_modal_ui(ns("kpi_conversion_lead")))),
+                 .crm_caja_output(ns("kpi_conversion_lead")))),
       column(8,
              .pr_panel(title = "Resumen por Dimensión", width = 12, collapsible = TRUE, collapsed = FALSE,
                  .crm_tabs(
@@ -845,7 +851,7 @@ DetalleClientes <- function(id, usuario) {
       universo_contactos_r() %>% filter(EsClienteActivo)
     })
     # KPIs ----
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_total",
       valor = reactive({
         html_valor(nrow(modulo_listado$datos()), formato = "coma", color = "#404040")
@@ -865,7 +871,7 @@ DetalleClientes <- function(id, usuario) {
       if (total_leads == 0) return(0)
       sum(universo$EsCliente & universo$EsLead, na.rm = TRUE) / total_leads
     })
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_conversion_contacto",
       valor = reactive({
         html_valor(tasa_conversion_contacto_r(), formato = "porcentaje", color = "#404040")
@@ -881,7 +887,7 @@ DetalleClientes <- function(id, usuario) {
       },
       footer = "Contactos convertidos históricamente a Cliente / total de Contactos creados."
     )
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_conversion_lead",
       valor = reactive({
         html_valor(tasa_conversion_lead_r(), formato = "porcentaje", color = "#404040")

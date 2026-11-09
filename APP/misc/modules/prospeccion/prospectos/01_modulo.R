@@ -121,8 +121,8 @@ DetalleProspectosUI <- function(id) {
       column(4,
              .pr_panel(title = "Indicadores de Prospectos", width = 12,
                  collapsible = TRUE, collapsed = FALSE,
-                 .crm_caja_modal_ui(ns("kpi_total")), br(),
-                 .crm_caja_modal_ui(ns("kpi_alianzas"))
+                 .crm_caja_output(ns("kpi_total")), br(),
+                 .crm_caja_output(ns("kpi_alianzas"))
              )
       ),
       column(8,
@@ -193,7 +193,7 @@ DetalleProspectos <- function(id, usuario) {
     })
     
     # KPIs ----
-    .crm_caja_modal("kpi_total",
+    .pr_caja("kpi_total",
               valor = reactive(
                 html_valor(nrow(prospectos_base()), formato = "coma", color = "#404040")
               ),
@@ -213,7 +213,7 @@ DetalleProspectos <- function(id, usuario) {
         count(ClienteAliado, name = "NumProspectos", sort = TRUE)
     })
     
-    .crm_caja_modal("kpi_alianzas",
+    .pr_caja("kpi_alianzas",
               valor = reactive(
                 html_valor(
                   dplyr::n_distinct(alianzas_r()$ClienteAliado),

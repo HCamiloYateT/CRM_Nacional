@@ -63,7 +63,8 @@ server <- function(input, output, session) {
     modulos_cargados <- cargados
     CargarTabUnaVez <- eval(funcion)
     f <- reactive(list(asesor = c("ANA", "LUIS"), segmento = "MEDIANO",
-      linneg = c("A LA MEDIDA", "CONVENCIONALES")))
+      linneg = c("A LA MEDIDA", "CONVENCIONALES"), fecha = c(as.Date("2026-01-01"), as.Date(input$fecha_tope)),
+      categoria = "Café", producto = c("A", "B", "C")))
     hechos <- data.frame(CliNitPpal = rep(1:30, each = 5), LinNegCod = 21000, CLCliNit = rep(1:30, each = 5),
       CLLinNegNo = "A LA MEDIDA", Asesor = "ANA", Segmento = "MEDIANO", PerRazSoc = "Cliente de prueba",
       FecFact = as.Date("2026-01-01") + rep(c(0, 30, 90, 180, 260), 30) + rep(1:30, each = 5),
@@ -76,7 +77,7 @@ server <- function(input, output, session) {
         f, reactive(TRUE))
     })
     CargarTabUnaVez("productos", "ui_productos", function() ProductosEjecucionUI("productos"), function() {
-      ProductosEjecucion("productos", reactive(hechos))
+      ProductosEjecucion("productos", reactive(hechos), f)
     })
     CargarTabUnaVez("fidelidad", "ui_fidelidad", function() FidelidadRiesgoUI("fidelidad"), function() {
       FidelidadRiesgo("fidelidad", reactive(hechos), reactive(cli), f)
@@ -88,7 +89,7 @@ server <- function(input, output, session) {
             ConsumoEsperado = 100, UnidadConsumo = "KG/MES") else {
             data.frame(CodContacto = paste0("C", 1:30), PerCod = 1:30, PerRazSoc = paste("Entidad", 1:30), Asesor = "ANA")
           }
-        })
+        }, filtros = f)
     })
     CargarTabUnaVez("cohortes", "ui_cohortes", function() CohortesEstadosUI("cohortes"), function() {
       segmentos <- tidyr::crossing(CliNitPpal = 1:30,
@@ -99,7 +100,7 @@ server <- function(input, output, session) {
       CohortesEstados("cohortes", panel, reactive(hechos), fecha_limite = reactive(as.Date(input$fecha_tope)))
     })
     CargarTabUnaVez("basket", "ui_basket", function() MarketBasketUI("basket"), function() {
-      MarketBasket("basket", reactive(hechos), reactive(c(f(), list(categoria = "Café", producto = c("A", "B", "C")))))
+      MarketBasket("basket", reactive(hechos), f)
     })
   }), local)
 }

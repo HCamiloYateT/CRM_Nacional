@@ -288,7 +288,7 @@ server <- function(input, output, session) {
                   function() EmbudoConversion("EmbudoConversion"))
   
   CargarTabUnaVez("PR_Potencial", "ui_PR_Potencial", function() PotencialMercadoUI("PotencialMercado"),
-    function() PotencialMercado("PotencialMercado", usuario, es_admin, maestro_comercial))
+    function() PotencialMercado("PotencialMercado", usuario, es_admin, maestro_comercial, filtros = filtros))
   
   ### Cohortes de Clientes ----
   segmentos_cohortes <- eventReactive(input$FT_Actualizar, {
@@ -326,7 +326,7 @@ server <- function(input, output, session) {
   
   ### Productos ----
   CargarTabUnaVez("PD_Ejecucion", "ui_PD_Ejecucion", function() ProductosEjecucionUI("ProductosEjecucion"),
-    function() ProductosEjecucion("ProductosEjecucion", maestro_comercial))
+    function() ProductosEjecucion("ProductosEjecucion", maestro_comercial, filtros))
   
   CargarTabUnaVez("PD_MarketBasket", "ui_PD_MarketBasket", function() MarketBasketUI("MarketBasket"),
     function() MarketBasket("MarketBasket", maestro_base_comercial, filtros,
@@ -343,7 +343,9 @@ server <- function(input, output, session) {
   })
 
   ### Consulta Individual ----
-  CargarTabUnaVez("IN_Consulta", "ui_IN_Consulta", function() ConsultaIndividualUI("ConsultaIndividual"))
+  CargarTabUnaVez("IN_Consulta", "ui_IN_Consulta", function() ConsultaIndividualUI("ConsultaIndividual"),
+    function() ConsultaIndividual("ConsultaIndividual", maestro_base_comercial, clientes_raw_cache, filtros,
+      usuario, es_admin, nit_ppal, cartera_financiera_r, notas_datos))
   
 }
 

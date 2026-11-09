@@ -116,7 +116,7 @@
 .mba_clave <- function(items) paste(sort(items), collapse = ",")
 .mba_itemsets <- function(membresia, cestas, soporte = 0.03, minimo = 3L, longitud = 3L, limite = 50000L) {
   n <- length(cestas)
-  if (!is.finite(soporte) || soporte <= 0 || soporte > 1 || !is.finite(minimo) || minimo < 1 ||
+  if (!is.finite(soporte) || soporte < 0 || soporte > 1 || !is.finite(minimo) || minimo < 1 ||
       !longitud %in% 2:5) stop("Revise soporte, mínimo de cestas y longitud (2 a 5).")
   if (!n) return(list(conjuntos = list(), n = 0L, minimo = minimo, candidatos = 0L))
   umbral <- max(ceiling(minimo), ceiling(soporte * n - 1e-10))

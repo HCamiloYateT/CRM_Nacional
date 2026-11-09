@@ -3,11 +3,11 @@
   productos = "Productos con movimiento",
   clientes = "Clientes con compra", margen_kg = "Margen por kilo", pedidos = "Pedidos facturados",
   cerrado = "Margen contable cerrado", abierto = "Margen abierto provisional")
-ProductosEjecucionUI <- function(id) {
+ProductosEjecucionUI <- function(id, periodo_local = FALSE) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
     racafeForms::racafeFormRow(columns = 3,
-      racafeForms::racafeInputDateRange("periodo", "Periodo de facturación",
+      if (periodo_local) racafeForms::racafeInputDateRange("periodo", "Periodo de facturación",
         start = as.Date(format(Sys.Date(), "%Y-01-01")), end = Sys.Date(), ns = ns),
       racafeForms::racafeInputSelect("nivel", "Agrupar por",
         choices = c("Producto" = "producto", "Categoría" = "categoria"),
@@ -25,18 +25,19 @@ ProductosEjecucionUI <- function(id) {
       shiny::column(6, plotly::plotlyOutput(ns("rentabilidad"), height = "280px"))),
     .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("productos"), titulo = "Ejecución por producto o categoría"),
     .crm_tabla_ui(ns("calidad"), titulo = "Cobertura y calidad del periodo"),
-    .crm_nota(c("Se aplican los filtros del controlbar y el periodo de facturación indicado aquí.",
+    .crm_nota(c("Se aplican los filtros del controlbar y su periodo de facturación.",
       "Las cantidades operativas de lote no se suman: solo hechos facturados, sin proyecciones de pedidos.",
       "El margen total conserva ajustes y devoluciones. El abierto es provisional y se presenta también por separado.",
       "Margen/kg = margen neto / (sacos netos × 70); no se promedian márgenes unitarios.",
       "Pareto usa sacos positivos; la tabla conserva negativos y productos sin homologar.",
       "Pulse una fila para consultar sus clientes y movimientos. No se asignan presupuestos de cliente a productos.")))
 }
-ProductosEjecucion <- function(id, hechos) {
+ProductosEjecucion <- function(id, hechos, filtros = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     datos <- shiny::reactive({
-      shiny::req(length(input$periodo) == 2L)
-      .prod_preparar(hechos(), as.Date(input$periodo), isTRUE(input$cerrados))
+      periodo <- if (is.null(filtros)) input$periodo else filtros()$fecha
+      shiny::req(length(periodo) == 2L)
+      .prod_preparar(hechos(), as.Date(periodo), isTRUE(input$cerrados))
     })
     nivel <- shiny::reactive(.com_elegir(input$nivel, c("producto", "categoria"), "producto"))
     tabla <- shiny::reactive(.prod_resumen(datos(), nivel()))

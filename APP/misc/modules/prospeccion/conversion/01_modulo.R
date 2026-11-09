@@ -66,21 +66,21 @@ EmbudoConversionUI <- function(id) {
     ),
     
     fluidRow(
-      column(2, .crm_caja_modal_ui(ns("kpi_total_contactos"))),
-      column(2, .crm_caja_modal_ui(ns("kpi_total_leads"))),
-      column(2, .crm_caja_modal_ui(ns("kpi_total_prospectos"))),
-      column(3, .crm_caja_modal_ui(ns("kpi_total_clientes"))),
-      column(3, .crm_caja_modal_ui(ns("kpi_total_descartados")))
+      column(2, .crm_caja_output(ns("kpi_total_contactos"))),
+      column(2, .crm_caja_output(ns("kpi_total_leads"))),
+      column(2, .crm_caja_output(ns("kpi_total_prospectos"))),
+      column(3, .crm_caja_output(ns("kpi_total_clientes"))),
+      column(3, .crm_caja_output(ns("kpi_total_descartados")))
     ),
     
     .pr_panel(
       title = "Conversión Histórica",
       width = 12, collapsible = FALSE,
       fluidRow(
-        column(3, .crm_caja_modal_ui(ns("kpi_tasa_contacto_lead"))),
-        column(3, .crm_caja_modal_ui(ns("kpi_tasa_prospecto_a_lead"))),
-        column(3, .crm_caja_modal_ui(ns("kpi_tasa_lead_cliente"))),
-        column(3, .crm_caja_modal_ui(ns("kpi_mejor_canal")))
+        column(3, .crm_caja_output(ns("kpi_tasa_contacto_lead"))),
+        column(3, .crm_caja_output(ns("kpi_tasa_prospecto_a_lead"))),
+        column(3, .crm_caja_output(ns("kpi_tasa_lead_cliente"))),
+        column(3, .crm_caja_output(ns("kpi_mejor_canal")))
       ),
       tags$hr(),
       .crm_tabs(
@@ -138,9 +138,9 @@ EmbudoConversionUI <- function(id) {
       title = "Velocidad del Ciclo",
       width = 12, collapsible = FALSE,
       fluidRow(
-        column(4, .crm_caja_modal_ui(ns("kpi_tiempo_contacto_lead"))),
-        column(4, .crm_caja_modal_ui(ns("kpi_tiempo_lead_cliente"))),
-        column(4, .crm_caja_modal_ui(ns("kpi_tiempo_ciclo_total")))
+        column(4, .crm_caja_output(ns("kpi_tiempo_contacto_lead"))),
+        column(4, .crm_caja_output(ns("kpi_tiempo_lead_cliente"))),
+        column(4, .crm_caja_output(ns("kpi_tiempo_ciclo_total")))
       )
     ),
     
@@ -148,10 +148,10 @@ EmbudoConversionUI <- function(id) {
       title = "Pérdida y Calidad",
       width = 12, collapsible = FALSE,
       fluidRow(
-        column(3, .crm_caja_modal_ui(ns("kpi_tasa_descarte_contacto"))),
-        column(3, .crm_caja_modal_ui(ns("kpi_tasa_descarte_prospecto"))),
-        column(3, .crm_caja_modal_ui(ns("kpi_tasa_descarte_lead"))),
-        column(3, .crm_caja_modal_ui(ns("kpi_motivo_top")))
+        column(3, .crm_caja_output(ns("kpi_tasa_descarte_contacto"))),
+        column(3, .crm_caja_output(ns("kpi_tasa_descarte_prospecto"))),
+        column(3, .crm_caja_output(ns("kpi_tasa_descarte_lead"))),
+        column(3, .crm_caja_output(ns("kpi_motivo_top")))
       ),
       tags$hr(),
       plotly::plotlyOutput(ns("grafico_descartados"), height = "380px")
@@ -161,9 +161,9 @@ EmbudoConversionUI <- function(id) {
       title = "Actividad Reciente — 30 días",
       width = 12, collapsible = FALSE,
       fluidRow(
-        column(4, .crm_caja_modal_ui(ns("kpi_contactos_30d"))),
-        column(4, .crm_caja_modal_ui(ns("kpi_leads_30d"))),
-        column(4, .crm_caja_modal_ui(ns("kpi_clientes_30d")))
+        column(4, .crm_caja_output(ns("kpi_contactos_30d"))),
+        column(4, .crm_caja_output(ns("kpi_leads_30d"))),
+        column(4, .crm_caja_output(ns("kpi_clientes_30d")))
       )
     ),
     
@@ -522,7 +522,7 @@ EmbudoConversion <- function(id) {
     
     ### Volumen ----
     # Muestra el numero vigente de contactos.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_total_contactos",
       valor = reactive(metricas()$total_contactos),
       texto = "Contactos", icono = "address-book",
@@ -531,7 +531,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra el numero vigente de leads.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_total_leads",
       valor = reactive(metricas()$total_leads),
       texto = "Leads", icono = "bullseye",
@@ -540,7 +540,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra el numero vigente de prospectos.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_total_prospectos",
       valor = reactive(metricas()$total_prospectos),
       texto = "Prospectos", icono = "handshake",
@@ -549,7 +549,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra el numero vigente de clientes.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_total_clientes",
       valor = reactive(metricas()$total_clientes),
       texto = "Clientes", icono = "user-check",
@@ -558,7 +558,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra el numero vigente de descartados.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_total_descartados",
       valor = reactive(metricas()$total_descartados),
       texto = "Descartados", icono = "ban",
@@ -568,7 +568,7 @@ EmbudoConversion <- function(id) {
     
     ### Conversion ----
     # Muestra la conversion historica de Contacto a Lead.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_tasa_contacto_lead",
       valor = reactive(metricas()$tasa_contacto_lead),
       formato = "porcentaje",
@@ -579,7 +579,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra la conversion historica de Prospecto a Lead.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_tasa_prospecto_a_lead",
       valor = reactive(metricas()$tasa_prospecto_a_lead),
       formato = "porcentaje",
@@ -590,7 +590,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra la conversion historica de Lead a Cliente.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_tasa_lead_cliente",
       valor = reactive(metricas()$tasa_lead_cliente),
       formato = "porcentaje",
@@ -601,7 +601,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Identifica el canal con mayor tasa de conversion.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_mejor_canal",
       valor = reactive({
         dat <- metricas()$conversion_por_canal %>%
@@ -639,7 +639,7 @@ EmbudoConversion <- function(id) {
     
     ### Velocidad ----
     # Muestra los dias promedio desde la creacion hasta Lead.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_tiempo_contacto_lead",
       valor = reactive(metricas()$tiempo_contacto_lead),
       formato = "numero",
@@ -650,7 +650,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra los dias promedio entre Lead y Cliente.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_tiempo_lead_cliente",
       valor = reactive(metricas()$tiempo_lead_cliente),
       formato = "numero",
@@ -661,7 +661,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra la duracion promedio del ciclo completo.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_tiempo_ciclo_total",
       valor = reactive(metricas()$tiempo_ciclo_total),
       formato = "numero",
@@ -673,7 +673,7 @@ EmbudoConversion <- function(id) {
     
     ### Perdida y Calidad ----
     # Muestra la tasa historica de descarte desde Contacto.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_tasa_descarte_contacto",
       valor = reactive(metricas()$tasa_descarte_contacto),
       formato = "porcentaje",
@@ -684,7 +684,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra la tasa historica de descarte desde Lead.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_tasa_descarte_lead",
       valor = reactive(metricas()$tasa_descarte_lead),
       formato = "porcentaje",
@@ -695,7 +695,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra la tasa historica de descarte desde Prospecto.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_tasa_descarte_prospecto",
       valor = reactive(metricas()$tasa_descarte_prospecto),
       formato = "porcentaje",
@@ -706,7 +706,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra el principal motivo de descarte sin abrir un detalle.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_motivo_top",
       valor = reactive({
         dat <- metricas()$motivos_descarte
@@ -723,7 +723,7 @@ EmbudoConversion <- function(id) {
     
     ### Actividad Reciente ----
     # Muestra los contactos creados durante los ultimos 30 dias.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_contactos_30d",
       valor = reactive(metricas()$contactos_30d),
       texto = "Contactos (últimos 30d)",
@@ -733,7 +733,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra las transiciones a Lead durante los ultimos 30 dias.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_leads_30d",
       valor = reactive(metricas()$leads_30d),
       texto = "Leads (últimos 30d)",
@@ -743,7 +743,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra las conversiones a Cliente durante los ultimos 30 dias.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_clientes_30d",
       valor = reactive(metricas()$clientes_30d),
       texto = "Clientes (últimos 30d)",
