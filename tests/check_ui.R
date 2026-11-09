@@ -13,8 +13,8 @@ checks <- 0L
 }
 paths <- c(list.files(file.path(root, "APP/misc/modules/controlbar"), "[.]R$", full.names = TRUE),
   list.files(file.path(root, "APP/misc/modules/encabezado"), "[.]R$", full.names = TRUE),
-  file.path(root, "APP/misc/modules/generalidades/01_resumen_ejecutivo.R"),
-  file.path(root, "APP/misc/modules/generalidades/02_validacion_financiera.R"),
+  file.path(root, "APP/misc/modules/generalidades/resumen_ejecutivo/01_modulo.R"),
+  file.path(root, "APP/misc/modules/generalidades/validacion_financiera/01_modulo.R"),
   file.path(root, "APP/misc/ui/header.R"))
 .collect <- function(tree) {
   result <- character()
@@ -61,7 +61,12 @@ paths <- c(list.files(file.path(root, "APP/misc/modules/controlbar"), "[.]R$", f
 }
 for (path in paths) {
   relative <- substring(path, nchar(root) + 2L)
-  original <- system2("git", c("-C", shQuote(root), "show", shQuote(paste0(base_ref, ":", relative))), stdout = TRUE)
+  anterior <- relative
+  anterior <- sub("generalidades/resumen_ejecutivo/01_modulo.R", "generalidades/01_resumen_ejecutivo.R", anterior,
+    fixed = TRUE)
+  anterior <- sub("generalidades/validacion_financiera/01_modulo.R", "generalidades/02_validacion_financiera.R", anterior,
+    fixed = TRUE)
+  original <- system2("git", c("-C", shQuote(root), "show", shQuote(paste0(base_ref, ":", anterior))), stdout = TRUE)
   before <- parse(text = original, keep.source = TRUE)
   after <- parse(path, keep.source = TRUE)
   .check(identical(.collect(before), .collect(after)))

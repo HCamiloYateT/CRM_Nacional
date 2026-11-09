@@ -9,7 +9,7 @@ cálculo y actualización registrados muestran anticipadamente el preloader.
 
 ## Tareas
 
-`APP/misc/modules/gestion_comercial/05_tareas.R` integra el tablero en Notas y Tareas.
+`APP/misc/modules/gestion_comercial/notas_tareas/01_modulo.R` integra el tablero en Notas y Tareas.
 El dropdown y el tablero comparten una fuente reactiva de notas. Crear un registro,
 actualizar o guardar un cambio refresca ambas vistas. El botón Nueva tarea abre el
 formulario existente de Crear Tareas/Notas del controlbar.
@@ -29,7 +29,7 @@ creación, la conexión directa ni el envío SMTP del archivo de referencia.
 
 ## Calculadoras
 
-`APP/misc/modules/herramientas/01_calculadoras.R` contiene las calculadoras de pesos
+`APP/misc/modules/herramientas/calculadoras/01_modulo.R` contiene las calculadoras de pesos
 excelso, dólares excelso y coproductos, siguiendo la ubicación del sidebar.
 Sus tres expresiones de cálculo se compararon con el adjunto y se conservan.
 Los controles y actualizaciones usan racafeForms; las tarjetas y los resultados

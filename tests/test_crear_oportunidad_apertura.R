@@ -23,7 +23,7 @@ e$`::` <- function(pkg, nombre) {
   }
   getExportedValue(p, n)
 }
-sys.source("APP/misc/modules/gestion_comercial/03_oportunidades.R", e)
+sys.source("APP/misc/modules/gestion_comercial/oportunidades/01_modulo.R", e)
 e$CrearOportunidad <- function(...) list(creaciones = shiny::reactive(0L))
 e$CrearOportunidadUI <- function(id) { formularios <<- c(formularios, id); shiny::tags$div(id = id) }
 e$DescartarOportunidad <- function(...) list(n = shiny::reactive(0L))

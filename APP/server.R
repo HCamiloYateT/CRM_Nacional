@@ -202,9 +202,14 @@ server <- function(input, output, session) {
   CargarTabUnaVez("GE_Validacion", "ui_GE_Validacion", function() ValidacionFinancieraUI("ValidacionFinanciera"))
 
   CargarTabUnaVez("GE_Evolucion", "ui_GE_Evolucion",
-    function() AnalisisComercialUI("AnalisisEvolucion", "evolucion", ultimo_periodo_pyg),
-    function() AnalisisComercial("AnalisisEvolucion", hechos_analisis_comercial, clientes_raw_cache, filtros, "evolucion",
-      historico = comercial_historico_r))
+    function() EvolucionNegocioUI("EvolucionNegocio", ultimo_periodo_pyg),
+    function() EvolucionNegocio("EvolucionNegocio", maestro_base_comercial, clientes_raw_cache, filtros,
+      ultimo_periodo_pyg, es_admin, historico = function() {
+        if (!is.null(homologaciones$evolucion_historica)) return(homologaciones$evolucion_historica)
+        ruta <- Sys.getenv("CRM_EVOLUCION_HISTORICA", unset = file.path(.ruta_app, "data", "evolucion_historica.rds"))
+        if (file.exists(ruta)) .ev_leer_historico(ruta) else NULL
+      }, primera_compra = function() .ev_primera_compra(fact_cliente, nit_ppal),
+      navegar = function(tab) bs4Dash::updateTabItems(session, "menu_principal", selected = tab)))
   
   CargarTabUnaVez("GE_Participacion", "ui_GE_Participacion",
     function() AnalisisComercialUI("AnalisisParticipacion", "participacion", ultimo_periodo_pyg),
@@ -214,7 +219,7 @@ server <- function(input, output, session) {
   CargarTabUnaVez("GE_Comparacion", "ui_GE_Comparacion", function() ComparacionIndicadoresUI("CompIndicadores"),
                   function() ComparacionIndicadores("CompIndicadores"))
   
-  CargarTabUnaVez("GE_Inventarios", "ui_GE_Inventarios", function() h4("Inventarios"))
+  CargarTabUnaVez("GE_Inventarios", "ui_GE_Inventarios", function() InventariosUI("Inventarios"))
   
   ### Gestión Comercial ----
   #### Presupuesto ----
@@ -234,7 +239,7 @@ server <- function(input, output, session) {
     TableroTareas("Tareas", usuario = usuario, datos = menu_tareas$tareas$datos, es_admin = es_admin,
       abrir = menu_tareas$tareas$abrir, refrescar = menu_tareas$tareas$refrescar)
   })
-  CargarTabUnaVez("GC_Alertas", "ui_GC_Alertas", function() h4("Alertas y Notificaciones"))
+  CargarTabUnaVez("GC_Alertas", "ui_GC_Alertas", function() AlertasNotificacionesUI("AlertasNotificaciones"))
   CargarTabUnaVez("GC_Fidelidad", "ui_GC_Fidelidad", function() FidelidadRiesgoUI("FidelidadRiesgo"),
     function() FidelidadRiesgo("FidelidadRiesgo", hechos_analisis_comercial, clientes_raw_cache, filtros))
   CargarTabUnaVez("GC_Cartera", "ui_GC_Cartera", function() CarteraComercialUI("CarteraComercial"),
@@ -263,34 +268,34 @@ server <- function(input, output, session) {
   CargarTabUnaVez("PR_Conversion", "ui_PR_Conversion", function() EmbudoConversionUI("EmbudoConversion"),
                   function() EmbudoConversion("EmbudoConversion"))
   
-  CargarTabUnaVez("PR_Potencial", "ui_PR_Potencial", function() h4("Potencial de Mercado"))
+  CargarTabUnaVez("PR_Potencial", "ui_PR_Potencial", function() PotencialMercadoUI("PotencialMercado"))
   
   ### Dinámica de Clientes ----
-  CargarTabUnaVez("DC_Nuevos", "ui_DC_Nuevos", function() h4("Clientes Nuevos"))
+  CargarTabUnaVez("DC_Nuevos", "ui_DC_Nuevos", function() ClientesNuevosUI("ClientesNuevos"))
   
-  CargarTabUnaVez("DC_Perdidos", "ui_DC_Perdidos", function() h4("Clientes Perdidos"))
+  CargarTabUnaVez("DC_Perdidos", "ui_DC_Perdidos", function() ClientesPerdidosUI("ClientesPerdidos"))
   
   ### Cohortes de Clientes ----
-  CargarTabUnaVez("CO_Retencion", "ui_CO_Retencion", function() CohorteClientesUI("CohorteRetencion", "retencion"),
-    function() CohorteClientes("CohorteRetencion", maestro_comercial, "retencion"))
+  CargarTabUnaVez("CO_Retencion", "ui_CO_Retencion", function() CohorteRetencionUI("CohorteRetencion"),
+    function() CohorteRetencion("CohorteRetencion", maestro_comercial))
   
-  CargarTabUnaVez("CO_Ventas", "ui_CO_Ventas", function() CohorteClientesUI("CohorteVentas", "ventas"),
-    function() CohorteClientes("CohorteVentas", maestro_comercial, "ventas"))
+  CargarTabUnaVez("CO_Ventas", "ui_CO_Ventas", function() CohorteVentasUI("CohorteVentas"),
+    function() CohorteVentas("CohorteVentas", maestro_comercial))
   
-  CargarTabUnaVez("CO_Margen", "ui_CO_Margen", function() CohorteClientesUI("CohorteMargen", "margen"),
-    function() CohorteClientes("CohorteMargen", maestro_comercial, "margen"))
+  CargarTabUnaVez("CO_Margen", "ui_CO_Margen", function() CohorteMargenUI("CohorteMargen"),
+    function() CohorteMargen("CohorteMargen", maestro_comercial))
   
-  CargarTabUnaVez("CO_Frecuencia", "ui_CO_Frecuencia", function() CohorteClientesUI("CohorteFrecuencia", "frecuencia"),
-    function() CohorteClientes("CohorteFrecuencia", maestro_comercial, "frecuencia"))
+  CargarTabUnaVez("CO_Frecuencia", "ui_CO_Frecuencia", function() CohorteFrecuenciaUI("CohorteFrecuencia"),
+    function() CohorteFrecuencia("CohorteFrecuencia", maestro_comercial))
   
   ### Herramientas ----
   CargarTabUnaVez("HE_Calculadoras", "ui_HE_Calculadoras", function() CalculadoraUI("Calculadora"), function() {
     Calculadora("Calculadora", dat_ind = indicadores_mod$datos_r, usr = usuario, clientes = clientes_raw_cache)
   })
   
-  CargarTabUnaVez("HE_Conversion", "ui_HE_Conversion", function() h4("Tablas de Conversión"))
+  CargarTabUnaVez("HE_Conversion", "ui_HE_Conversion", function() TablasConversionUI("TablasConversion"))
   
-  CargarTabUnaVez("HE_Informes", "ui_HE_Informes", function() h4("Informes"))
+  CargarTabUnaVez("HE_Informes", "ui_HE_Informes", function() InformesUI("Informes"))
   
   ### Productos ----
   CargarTabUnaVez("PD_Ejecucion", "ui_PD_Ejecucion", function() ProductosEjecucionUI("ProductosEjecucion"),
@@ -311,7 +316,7 @@ server <- function(input, output, session) {
   })
 
   ### Consulta Individual ----
-  CargarTabUnaVez("IN_Consulta", "ui_IN_Consulta", function() h4("Consulta Individual"))
+  CargarTabUnaVez("IN_Consulta", "ui_IN_Consulta", function() ConsultaIndividualUI("ConsultaIndividual"))
   
 }
 

@@ -26,7 +26,7 @@ conservando sus proyecciones, trazabilidad, auditorías y exportación maestra.
   no se reconstruyen ambas a partir de la misma base financiera.
 - La primera compra por NIT utiliza `FecPrimerFact` de la facturación independiente, enlazada con los lotes;
   se limita al universo histórico que define el nuevo ETL.
-- `APP/misc/data_contract.R` comparte el contrato entre el ETL y la app. La carga valida nombres, fechas,
+- `APP/misc/datos/01_contrato.R` comparte el contrato entre el ETL y la app. La carga valida nombres, fechas,
   cierre PyG y claves dimensionales antes de publicar los objetos en el entorno de la app.
 - Los cruces rechazan dimensiones duplicadas. Las órdenes de compra se consolidan por lote conservando sus textos.
 - Las filas PyG sin marca/empaque pueden heredar un atributo de producto solo si es único para línea y código.
@@ -104,8 +104,8 @@ resumen operativo, conversión de leads y formularios con datos reales. El repos
 | Script | Resultado |
 | --- | --- |
 | `APP/global.R` | Modificado |
-| `APP/misc/factores.R` | Revisado; conserva implementación |
-| `APP/misc/functions.R` | Revisado; conserva implementación |
+| `APP/misc/config/factores.R` | Revisado; conserva implementación |
+| `APP/misc/compartido/03_funciones.R` | Revisado; conserva implementación |
 | `APP/misc/modules/acciones/00_Constantes.R` | Revisado; conserva implementación |
 | `APP/misc/modules/acciones/00_Funciones.R` | Modificado |
 | `APP/misc/modules/acciones/01_editar.R` | Modificado |
@@ -115,10 +115,10 @@ resumen operativo, conversión de leads y formularios con datos reales. El repos
 | `APP/misc/modules/acciones/05_reactivar.R` | Modificado |
 | `APP/misc/modules/acciones/06_crear_oportunidad.R` | Modificado |
 | `APP/misc/modules/acciones/07_descartar_oportunidad.R` | Modificado |
-| `APP/misc/modules/admon/00_constantes.R` | Revisado; conserva implementación |
-| `APP/misc/modules/admon/00_funciones.R` | Revisado; conserva implementación |
-| `APP/misc/modules/admon/01_choices.R` | Revisado; conserva implementación |
-| `APP/misc/modules/admon/02_administrar.R` | Revisado; conserva implementación |
+| `APP/misc/modules/admon/catalogos/00_constantes.R` | Revisado; conserva implementación |
+| `APP/misc/modules/admon/catalogos/00_funciones.R` | Revisado; conserva implementación |
+| `APP/misc/modules/admon/catalogos/01_choices.R` | Revisado; conserva implementación |
+| `APP/misc/modules/admon/catalogos/02_modulo.R` | Revisado; conserva implementación |
 | `APP/misc/modules/controlbar/01_filtros.R` | Modificado |
 | `APP/misc/modules/controlbar/02_cotizador.R` | Modificado |
 | `APP/misc/modules/controlbar/03_crear_nota.R` | Revisado; conserva implementación |
@@ -128,31 +128,31 @@ resumen operativo, conversión de leads y formularios con datos reales. El repos
 | `APP/misc/modules/encabezado/02_notificaciones_tareas.R` | Revisado; conserva implementación |
 | `APP/misc/modules/encabezado/03_form_persona.R` | Modificado |
 | `APP/misc/modules/encabezado/04_migrar_cartera.R` | Revisado; conserva implementación |
-| `APP/misc/modules/generalidades/00_Constantes.R` | Revisado; conserva implementación |
-| `APP/misc/modules/generalidades/00_Funciones.R` | Revisado; conserva implementación |
-| `APP/misc/modules/generalidades/01_resumen_ejecutivo.R` | Revisado; conserva implementación |
-| `APP/misc/modules/generalidades/02_validacion_financiera.R` | Modificado |
-| `APP/misc/modules/generalidades/03_comparacion_indicadores.R` | Modificado |
-| `APP/misc/modules/gestion_comercial/02_presupuesto.R` | Revisado; conserva implementación |
-| `APP/misc/modules/prospeccion/00_Constantes.R` | Revisado; conserva implementación |
-| `APP/misc/modules/prospeccion/00_Funciones.R` | Modificado |
-| `APP/misc/modules/prospeccion/01_crear_contacto.R` | Revisado; conserva implementación |
-| `APP/misc/modules/prospeccion/02_panel.R` | Modificado |
-| `APP/misc/modules/prospeccion/03_kanban.R` | Modificado |
-| `APP/misc/modules/prospeccion/04_detalle_contacto.R` | Modificado |
-| `APP/misc/modules/prospeccion/05_detalle_prospecto.R` | Modificado |
-| `APP/misc/modules/prospeccion/06_detalle_leads.R` | Modificado |
-| `APP/misc/modules/prospeccion/07_detalle_cliente.R` | Modificado |
-| `APP/misc/modules/prospeccion/08_detalle_descartados.R` | Modificado |
-| `APP/misc/modules/prospeccion/09_embudo_conversion.R` | Modificado |
-| `APP/misc/parametros.R` | Revisado; conserva implementación |
+| `APP/misc/modules/generalidades/indicadores_mercado/00_constantes.R` | Revisado; conserva implementación |
+| `APP/misc/modules/generalidades/indicadores_mercado/00_funciones.R` | Revisado; conserva implementación |
+| `APP/misc/modules/generalidades/resumen_ejecutivo/01_modulo.R` | Revisado; conserva implementación |
+| `APP/misc/modules/generalidades/validacion_financiera/01_modulo.R` | Modificado |
+| `APP/misc/modules/generalidades/indicadores_mercado/01_modulo.R` | Modificado |
+| `APP/misc/modules/gestion_comercial/presupuesto/01_modulo.R` | Revisado; conserva implementación |
+| `APP/misc/modules/prospeccion/compartido/00_constantes.R` | Revisado; conserva implementación |
+| `APP/misc/modules/prospeccion/compartido/00_funciones.R` | Modificado |
+| `APP/misc/modules/prospeccion/contactos/01_crear_contacto.R` | Revisado; conserva implementación |
+| `APP/misc/modules/prospeccion/compartido/01_panel.R` | Modificado |
+| `APP/misc/modules/prospeccion/kanban/01_modulo.R` | Modificado |
+| `APP/misc/modules/prospeccion/contactos/02_modulo.R` | Modificado |
+| `APP/misc/modules/prospeccion/prospectos/01_modulo.R` | Modificado |
+| `APP/misc/modules/prospeccion/leads/01_modulo.R` | Modificado |
+| `APP/misc/modules/prospeccion/clientes/01_modulo.R` | Modificado |
+| `APP/misc/modules/prospeccion/descartados/01_modulo.R` | Modificado |
+| `APP/misc/modules/prospeccion/conversion/01_modulo.R` | Modificado |
+| `APP/misc/config/parametros.R` | Revisado; conserva implementación |
 | `APP/misc/ui/body.R` | Modificado |
 | `APP/misc/ui/controlbar.R` | Revisado; conserva implementación |
 | `APP/misc/ui/footer.R` | Modificado |
 | `APP/misc/ui/header.R` | Modificado |
 | `APP/misc/ui/preloader.R` | Revisado; conserva implementación |
 | `APP/misc/ui/sidebar.R` | Revisado; conserva implementación |
-| `APP/misc/values.R` | Revisado; conserva implementación |
+| `APP/misc/config/valores.R` | Revisado; conserva implementación |
 | `APP/server.R` | Modificado |
 | `APP/ui.R` | Revisado; conserva implementación |
 | `DataPrep.R` | Modificado |

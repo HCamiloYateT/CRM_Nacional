@@ -1,9 +1,9 @@
 # Ejecutar desde la raíz del repo; sin conexiones ni escrituras de negocio.
 library(dplyr)
-source("APP/misc/01_analitica_comercial.R")
-source("APP/misc/modules/gestion_comercial/04_pendientes.R")
-source("APP/misc/modules/cohortes_clientes/00_cohortes.R")
-source("APP/misc/modules/gestion_comercial/03_oportunidades.R")
+source("APP/misc/compartido/01_analitica_comercial.R")
+source("APP/misc/modules/gestion_comercial/pendientes_gestion/01_modulo.R")
+source("APP/misc/modules/cohortes_clientes/compartido/00_cohortes.R")
+source("APP/misc/modules/gestion_comercial/oportunidades/01_modulo.R")
 
 # Dos facturas del mismo lote no multiplican asignación, producción o despacho.
 maestro <- tibble::tibble(CLPdcCod = c(1, 1, 1, 1, 2, 3), CLPdcLin = 1,

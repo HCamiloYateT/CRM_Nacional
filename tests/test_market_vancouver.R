@@ -1,7 +1,7 @@
 # Tabla de mercado con Vancouver y sin contenedor bs4Card ----
 library(shiny)
 library(dplyr)
-sys.source("APP/misc/modules/generalidades/03_comparacion_indicadores.R", envir = environment())
+sys.source("APP/misc/modules/generalidades/indicadores_mercado/01_modulo.R", envir = environment())
 .CargarHistoricoIndicadores <- function(fecha) data.frame(Fecha = as.Date(fecha))
 .ConstruirComparacionIndicadores <- function(datos_anteriores, datos_actuales) data.frame(
   Nombre_Indicador = c("TRM", "Café"), Valor_Anterior = c(4000, 100), Valor_Actual = c(4200, 95),

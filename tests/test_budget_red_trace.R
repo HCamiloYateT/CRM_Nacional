@@ -9,7 +9,7 @@ library(tidyr)
   partes <- if (is.call(x)) as.list(x)[-1L] else as.list(x)
   for (i in seq_along(partes)) if (!identical(partes[[i]], quote(expr = ))) .extraer_grafico(partes[[i]])
 }
-.extraer_grafico(parse("APP/misc/modules/gestion_comercial/02_presupuesto.R"))
+.extraer_grafico(parse("APP/misc/modules/gestion_comercial/presupuesto/01_modulo.R"))
 .env_grafico$.MESES <- month.name
 .env_grafico$calendario_r <- function() list(mes_actual = 9L, mes_vigente = 11L, meses_rest = 2L)
 # Capturar los datos entregados a Plotly sin requerir navegador ni conexión de negocio.

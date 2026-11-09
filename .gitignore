@@ -2,3 +2,5 @@
 APP/data/comercial_historico.rds
 APP/data/comercial_historico.RData
 APP/data/data.RData
+# Histórico financiero importado de Excel; se distribuye con los datos del despliegue.
+APP/data/evolucion_historica.rds
