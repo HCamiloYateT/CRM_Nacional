@@ -1,6 +1,7 @@
 # Calendario vigente, meta y NIT sin formato de importes ----
 library(shiny)
 sys.source("APP/misc/compartido/00_presentacion.R", envir = environment())
+sys.source("APP/misc/compartido/04_interaccion.R", envir = environment())
 .cal <- .crm_calendario_presupuesto(as.Date("2026-09-01"), 2026, as.Date("2026-11-07"))
 stopifnot(.cal$mes_actual == 9L, .cal$mes_vigente == 11L, .cal$meses_rest == 2L,
   .crm_calendario_presupuesto(as.Date("2025-12-01"), 2025, as.Date("2026-11-07"))$meses_rest == 0L,

@@ -75,8 +75,8 @@
   cifras <- grepl("^Sacos|^Lotes$|^Producidos$|^Despachados$|^Facturados$|^Meses para recuperar$", names(datos))
   align <- stats::setNames(ifelse(cifras | vapply(datos, is.numeric, logical(1)), "right", "left"), names(datos))
   if ("Año" %in% names(datos)) align[["Año"]] <- "left"
-  racafeShiny::racafeTableVancouver(datos, min_width = min_width, align = align, decimals = NULL,
-    font_size = 11, row_padding = 2, header_color = "#495057", header_width = 1.5, source_note = nota)
+  shiny::tagList(racafeShiny::racafeTableVancouver(datos, min_width = min_width, align = align, decimals = NULL,
+    font_size = 11, row_padding = 2, header_color = "#495057", header_width = 1.5), .crm_nota(nota))
 }
 
 # INDICADORES REACTIVOS DEL CLIENTE ----
@@ -209,28 +209,18 @@
       .header_tarjeta("Facturación (sacos)", "header_cli_facturacion", "file-invoice-dollar",
         paste("Última:", .header_fecha(lotes$FecFact)), mostrar_boton = TRUE)
     ),
-    shiny::tags$div(
-      style = "font-size:11px;color:#495057;text-align:left;margin:4px 0 8px;",
-      "Cantidades expresadas en sacos equivalentes de 70 kg."
-    ),
+    .crm_nota("Cantidades expresadas en sacos equivalentes de 70 kg."),
     shiny::tags$strong(style = "font-size:12px;", "Productos y cantidades"),
     .header_tabla(por_producto),
-    shiny::tags$div(
-      style = "font-size:11px;color:#495057;text-align:left;margin:4px 0 8px;",
-      "Cantidades expresadas en sacos equivalentes de 70 kg."
-    ),
-    if (sin_pedido > 0 || sin_operacion > 0) shiny::tags$p(
-      style = "font-size:11px;color:#916000;margin:7px 0;",
+    .crm_nota("Cantidades expresadas en sacos equivalentes de 70 kg."),
+    if (sin_pedido > 0 || sin_operacion > 0) .crm_nota(
       paste(sin_pedido, "líneas sin fecha en EXPPEDID;",
             sin_operacion, "registros facturados sin fecha de producción o despacho en EXPCUALO.")
     ),
     racafeShiny::racafeCollapsible(
       id = "header_detalle_pedidos", title = "Detalle de pedidos, lotes y fechas", open = FALSE,
       .header_tabla(detalle, min_width = "1500px"),
-      shiny::tags$div(
-        style = "font-size:11px;color:#495057;text-align:left;margin:4px 0 8px;",
-        "Cantidades expresadas en sacos equivalentes de 70 kg."
-      )
+      .crm_nota("Cantidades expresadas en sacos equivalentes de 70 kg.")
     )
   )
   attr(contenido, "header_detalle") <- detalle

@@ -38,7 +38,7 @@ DetalleAlianza <- function(id, nit_aliado, fechas_alianza) {
         arrange(RelMes)
     })
     
-    output$resumen <- renderUI({
+    output$resumen <- .crm_render_ui({
       dat <- cosecha_r()
       if (nrow(dat) == 0) {
         return(tags$p(style = "color:#94A3B8;",
@@ -64,7 +64,7 @@ DetalleAlianza <- function(id, nit_aliado, fechas_alianza) {
       )
     })
     
-    output$serie <- plotly::renderPlotly({
+    output$serie <- .crm_render_plotly({
       dat <- cosecha_r()
       if (nrow(dat) == 0) {
         return(plotly::config(
@@ -121,8 +121,8 @@ DetalleProspectosUI <- function(id) {
       column(4,
              box(title = "Indicadores de Prospectos", width = 12,
                  collapsible = TRUE, collapsed = FALSE,
-                 racafeModulos::CajaModalUI(ns("kpi_total")), br(),
-                 racafeModulos::CajaModalUI(ns("kpi_alianzas"))
+                 .crm_caja_modal_ui(ns("kpi_total")), br(),
+                 .crm_caja_modal_ui(ns("kpi_alianzas"))
              )
       ),
       column(8,
@@ -131,11 +131,11 @@ DetalleProspectosUI <- function(id) {
                  tabsetPanel(
                    tabPanel("Usuario",
                             Saltos(),
-                            racafeModulos::TablaReactable2UI(ns("tabla_usuario"))
+                            .crm_tabla_legacy_ui(ns("tabla_usuario"))
                    ),
                    tabPanel("Origen",
                             Saltos(),
-                            racafeModulos::TablaReactable2UI(ns("tabla_origen")),
+                            .crm_tabla_legacy_ui(ns("tabla_origen")),
                             tags$hr(),
                             shinyjs::hidden(
                               tags$div(id = ns("BloqueDetOrigen"),
@@ -143,13 +143,13 @@ DetalleProspectosUI <- function(id) {
                                          "Detalle Origen (según fila seleccionada arriba)",
                                          tamano_pct = 0.8, color = "#64748B"
                                        ),
-                                       racafeModulos::TablaReactable2UI(ns("tabla_det_origen"))
+                                       .crm_tabla_legacy_ui(ns("tabla_det_origen"))
                               )
                             )
                    ),
                    tabPanel("Alianza",
                             Saltos(),
-                            racafeModulos::TablaReactable2UI(ns("tabla_alianza"))
+                            .crm_tabla_legacy_ui(ns("tabla_alianza"))
                    )
                  )
              )
@@ -193,7 +193,7 @@ DetalleProspectos <- function(id, usuario) {
     })
     
     # KPIs ----
-    racafeModulos::CajaModal("kpi_total",
+    .crm_caja_modal("kpi_total",
               valor = reactive(
                 html_valor(nrow(prospectos_base()), formato = "coma", color = "#404040")
               ),
@@ -213,7 +213,7 @@ DetalleProspectos <- function(id, usuario) {
         count(ClienteAliado, name = "NumProspectos", sort = TRUE)
     })
     
-    racafeModulos::CajaModal("kpi_alianzas",
+    .crm_caja_modal("kpi_alianzas",
               valor = reactive(
                 html_valor(
                   dplyr::n_distinct(alianzas_r()$ClienteAliado),
@@ -226,13 +226,13 @@ DetalleProspectos <- function(id, usuario) {
               titulo_modal = "Prospectos por Alianza — click en una fila para ver análisis de ventas",
               icono_modal = "handshake",
               contenido_modal = function() tagList(
-                racafeModulos::TablaReactable2UI(ns("tabla_kpi_alianzas")),
+                .crm_tabla_legacy_ui(ns("tabla_kpi_alianzas")),
                 tags$hr(),
                 uiOutput(ns("bloque_analisis_alianza"))
               )
     )
     
-    mod_tabla_kpi_alianzas <- racafeModulos::TablaReactable2(
+    mod_tabla_kpi_alianzas <- .crm_tabla_legacy(
       id = "tabla_kpi_alianzas", data = resumen_alianzas_r,
       columnas = NULL,
       col_specs = list(
@@ -269,7 +269,7 @@ DetalleProspectos <- function(id, usuario) {
       fechas_alianza_rv(as.Date(registros$FechaHoraCrea))
     })
     
-    output$bloque_analisis_alianza <- renderUI({
+    output$bloque_analisis_alianza <- .crm_render_ui({
       req(alianza_nombre_rv())
       
       tagList(
@@ -304,7 +304,7 @@ DetalleProspectos <- function(id, usuario) {
       "UsuarioCreaContacto"
     )
     
-    racafeModulos::TablaReactable2(
+    .crm_tabla_legacy(
       id = "tabla_usuario", data = datos_usuario_r, columnas = NULL,
       col_specs = .col_specs_resumen_prospecto(
         "UsuarioCreaContacto",
@@ -327,7 +327,7 @@ DetalleProspectos <- function(id, usuario) {
       "Origen"
     )
     
-    modulo_tabla_origen <- racafeModulos::TablaReactable2(
+    modulo_tabla_origen <- .crm_tabla_legacy(
       id = "tabla_origen", data = datos_origen_r, columnas = NULL,
       col_specs = .col_specs_resumen_prospecto(
         "Origen",
@@ -376,7 +376,7 @@ DetalleProspectos <- function(id, usuario) {
       "DetOrigen"
     )
     
-    racafeModulos::TablaReactable2(
+    .crm_tabla_legacy(
       id = "tabla_det_origen", data = datos_det_origen_r,
       columnas = NULL,
       col_specs = .col_specs_resumen_prospecto(
@@ -398,7 +398,7 @@ DetalleProspectos <- function(id, usuario) {
       })
     .estilo_total_alianza <- .estilo_fila_total(datos_alianza_r, "ClienteAliado")
     
-    racafeModulos::TablaReactable2(id = "tabla_alianza", data = datos_alianza_r, columnas = NULL,
+    .crm_tabla_legacy(id = "tabla_alianza", data = datos_alianza_r, columnas = NULL,
                     col_specs = .col_specs_resumen_prospecto("ClienteAliado", "Alianza", .estilo_total_alianza),
                     modo_seleccion = "ninguno", id_col = "ClienteAliado",
                     sortable = TRUE, searchable = TRUE, page_size = 10, compact = TRUE,

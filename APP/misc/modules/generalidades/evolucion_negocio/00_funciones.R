@@ -220,7 +220,7 @@
     ggplot2::scale_y_continuous(labels = scales::label_number(big.mark = ",")) +
     ggplot2::labs(x = NULL, y = if (medida == "Margen") "Margen FCC · millones COP" else "Sacos de 70 kg",
       fill = NULL, title = if (medida == "Margen") "Evolución del margen" else "Evolución del volumen") +
-    ggplot2::theme_minimal(base_size = 11) +
+    .crm_tema_grafico() +
     ggplot2::theme(legend.position = "bottom", axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
   if (proyectar) {
     z <- anual[is.finite(anual[[proy]]), ]; z$Valor <- z[[proy]] / divisor

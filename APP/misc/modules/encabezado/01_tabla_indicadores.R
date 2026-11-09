@@ -27,9 +27,7 @@ TablaIndicadores <- function(id) {
     
     # Funciones ----
     .pie_tabla <- function(texto) {
-      shiny::tags$div(class = "text-muted text-right",
-                      style = "font-size:10px;line-height:1.3;padding:3px 8px;margin:0;",
-                      texto)
+      .crm_nota(texto)
     }
     
     .estilo_tabla <- function(tabla) {

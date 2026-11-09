@@ -1,9 +1,11 @@
 # Tablero y dropdown: pertenencia exacta, filtros y reapertura ----
 library(shiny)
 library(dplyr)
+sys.source("APP/misc/compartido/04_interaccion.R", envir = environment())
 sys.source("APP/misc/modules/encabezado/02_notificaciones_tareas.R", envir = environment())
 sys.source("APP/misc/modules/gestion_comercial/notas_tareas/01_modulo.R", envir = environment())
 .TSK_PRIORIDADES <- c("URGENTE", "IMPORTANTE", "MEDIA", "BAJA")
+.etiquetas_todas <- c("Comercial", "Clientes", "Otro", "__sin__")
 .notas_prueba <- data.frame(cons = 1:5, titulo = paste("Tarea", 1:5), Tipo = "list",
   Usuario = c("ANA", "LUIS", "ANABEL", "ANA", "ANA"), Responsable = c("ANA", "ANA|LUIS", "ANABEL", "ANA", "ANA"),
   FechaCumplimiento = as.Date("2026-12-01"), Prioridad = c("URGENTE", "BAJA", "MEDIA", "MEDIA", "MEDIA"),
@@ -12,8 +14,10 @@ sys.source("APP/misc/modules/gestion_comercial/notas_tareas/01_modulo.R", envir 
   Respuesta = "", stringsAsFactors = FALSE)
 stopifnot(identical(.tareas_visibles_usuario(.notas_prueba, "ANA")$cons, c(1L, 2L, 4L, 5L)),
   identical(.tareas_pendientes(.notas_prueba, "ANA")$cons, 1:2),
-  identical(.tareas_filtrar_tablero(.notas_prueba, "ANA", etiquetas = "Clientes")$cons, 2L),
-  nrow(.tareas_filtrar_tablero(.notas_prueba, "ANA", buscar = "[")) == 0L)
+  identical(.tareas_filtrar_tablero(.notas_prueba, "ANA", etiquetas = "Clientes",
+    prioridades = .TSK_PRIORIDADES)$cons, 2L),
+  nrow(.tareas_filtrar_tablero(.notas_prueba, "ANA", buscar = "[", etiquetas = .etiquetas_todas,
+    prioridades = .TSK_PRIORIDADES)) == 0L)
 .cambios_prueba <- list()
 .tareas_modificar_bd <- function(original, accion, cumplidas = NULL, respuesta = NULL, usuario = NULL, es_admin = FALSE) {
   .cambios_prueba[[length(.cambios_prueba) + 1L]] <<- list(id = original$cons, accion = accion)
@@ -25,6 +29,7 @@ servidor_tareas <- function(input, output, session) {
     abrir = fuente$abrir, refrescar = fuente$refrescar)
 }
 testServer(servidor_tareas, {
+  session$setInputs(`tablero-etiquetas` = .etiquetas_todas, `tablero-prioridades` = .TSK_PRIORIDADES)
   session$flushReact()
   stopifnot(fuente$n() == 2L, nrow(fuente$datos()) == 4L,
     grepl("Tarea 1", output$`tablero-tablero`$html, fixed = TRUE),
@@ -44,7 +49,8 @@ cat("OK: tareas propias/asignadas, filtros, sincronización y escritura solo des
 # El permiso administrativo se propaga a ambas vistas y reacciona a cambios de rol.
 stopifnot(nrow(.tareas_visibles_usuario(.notas_prueba, "ADMIN", es_admin = TRUE)) == 5L,
   nrow(.tareas_visibles_usuario(.notas_prueba, "ADMIN", es_admin = FALSE)) == 0L,
-  identical(.tareas_filtrar_tablero(.notas_prueba, "ADMIN", es_admin = TRUE)$cons, 1:3))
+  identical(.tareas_filtrar_tablero(.notas_prueba, "ADMIN", es_admin = TRUE,
+    etiquetas = .etiquetas_todas, prioridades = .TSK_PRIORIDADES)$cons, 1:3))
 servidor_admin <- function(input, output, session) {
   admin <- reactiveVal(TRUE)
   fuente <- NotificacionesTareas("fuente", usuario = reactive("ANA"), notas = reactive(.notas_prueba),
@@ -53,6 +59,7 @@ servidor_admin <- function(input, output, session) {
     abrir = fuente$abrir, refrescar = fuente$refrescar, es_admin = admin)
 }
 testServer(servidor_admin, {
+  session$setInputs(`tablero-etiquetas` = .etiquetas_todas, `tablero-prioridades` = .TSK_PRIORIDADES)
   session$flushReact()
   stopifnot(fuente$n() == 3L, nrow(fuente$datos()) == 5L,
     grepl("Tarea 3", output$`tablero-tablero`$html, fixed = TRUE))
@@ -66,6 +73,7 @@ cat("OK: administrador ve todas; cambiar el rol restaura el filtro de pertenenci
 # Tarjetas compactas: título/responsables en summary; metadatos dentro del detalle.
 testServer(TableroTareas, args = list(usuario = reactive("ANA"), datos = reactive(.notas_prueba),
   abrir = function(id) NULL, refrescar = function() NULL), {
+  session$setInputs(etiquetas = .etiquetas_todas, prioridades = .TSK_PRIORIDADES)
   session$flushReact()
   html <- output$tablero$html
   stopifnot(grepl('<details class="crm-tarea-detalle">', html, fixed = TRUE),

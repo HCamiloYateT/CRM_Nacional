@@ -1,10 +1,7 @@
 body <- bs4DashBody(
   useShinyjs(),
   .recursos_compartidos,
-  racafeShiny::racafeLoaderUI(startup = FALSE, busy = TRUE,
-    triggers = c(actualizar = "FT_Actualizar", actualizar = "ind_kpis-actualizar", consultar = "Tareas-actualizar",
-      calculando = "Calculadora-pesos-Calcular", calculando = "Calculadora-dolares-Calcular",
-      calculando = "Calculadora-coproductos-Calcular", calculando = "MarketBasket-analizar")),
+  .crm_loader_ui(),
   bs4TabItems(
     # Generalidades ----
     bs4TabItem(tabName = "GE_Resumen", uiOutput("ui_GE_Resumen")),
@@ -61,4 +58,5 @@ body <- bs4DashBody(
     bs4TabItem(tabName = "IN_Consulta", uiOutput("ui_IN_Consulta"))
   )
 )
+
 

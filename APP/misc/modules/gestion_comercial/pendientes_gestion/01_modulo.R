@@ -120,11 +120,16 @@
 PendientesGestionUI <- function(id) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
+    racafeForms::racafeActionBar(left = shiny::tagList(
+      shiny::tagAppendAttributes(racafeForms::racafeButton("crear", "Nueva tarea o nota", icon = "plus", ns = ns),
+        `data-crm-crear-tarea` = "true"),
+      racafeForms::racafeButton("actualizar", "Actualizar", variant = "secondary", icon = "arrows-rotate", ns = ns))),
+    racafeForms::racafeFormRow(columns = 2, responsive = "auto",
+      racafeForms::racafeInputSelect("etapa", "Pendiente", choices = .PEN_ETAPAS,
+        selected = .PEN_ETAPAS, multiple = TRUE, ns = ns),
+      racafeForms::racafeInputSwitch("incluir_futuros", "Incluir pedidos futuros", value = TRUE, ns = ns)),
     .gc_tarjetas_ui(ns, c(pedidos = "Pedidos por gestionar", producir = "Lotes por producir",
       despachar = "Lotes por despachar", facturar = "Lotes por facturar")),
-    racafeForms::racafeFormRow(columns = 2,
-      racafeForms::racafeInputSelect("etapa", "Pendiente", choices = c("Todos", .PEN_ETAPAS), ns = ns),
-      racafeForms::racafeInputSwitch("incluir_futuros", "Incluir pedidos futuros", value = TRUE, ns = ns)),
     .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("detalle")),
     .crm_nota(c("Cantidades en sacos equivalentes de 70 kg; tolerancia: 0,1 sacos.",
       "Los saldos por etapa no se suman: un pedido puede requerir varias gestiones.",
@@ -136,10 +141,12 @@ PendientesGestion <- function(id, maestro, usuario = function() "SIN IDENTIFICAR
     lote_seleccionado <- shiny::reactiveVal(NULL)
     orden_pendiente <- shiny::reactiveVal(NULL)
     revision_ordenes <- shiny::reactiveVal(0L)
-    flujo <- shiny::reactive(.pen_preparar(maestro()))
+    revision_flujo <- shiny::reactiveVal(0L)
+    shiny::observeEvent(input$actualizar, revision_flujo(revision_flujo() + 1L))
+    flujo <- shiny::reactive({ revision_flujo(); .pen_preparar(maestro()) })
     datos <- shiny::reactive({
       x <- flujo()$detalle
-      if (!is.null(input$etapa) && input$etapa != "Todos") x <- x[x$Etapa == input$etapa, ]
+      x <- x[x$Etapa %in% input$etapa, , drop = FALSE]
       if (identical(input$incluir_futuros, FALSE)) {
         claves <- flujo()$pedidos %>% dplyr::filter(!is.na(Fecha), Fecha > Sys.Date())
         x <- dplyr::anti_join(x, claves[c("Pedido", "Linea")], by = c("Pedido", "Linea"))
@@ -193,7 +200,7 @@ PendientesGestion <- function(id, maestro, usuario = function() "SIN IDENTIFICAR
         condicion = paste0("Lote = ", format(codigo, scientific = FALSE, trim = TRUE))), error = NULL),
         error = function(e) list(datos = NULL, error = conditionMessage(e)))
     })
-    output$bitacora_oc <- shiny::renderUI({
+    output$bitacora_oc <- .crm_render_ui({
       x <- bitacora()
       if (!is.null(x$error)) return(.crm_nota(paste("No se pudo consultar la bitácora:", x$error)))
       .crm_tabla_vancouver(x$datos, font_size = 11, row_padding = 2)

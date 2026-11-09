@@ -1,6 +1,7 @@
 # Regresión: las diferencias cero no deben ocultar el cuadre mensual ----
 library(shiny)
 sys.source("APP/misc/compartido/00_presentacion.R", envir = environment())
+sys.source("APP/misc/compartido/04_interaccion.R", envir = environment())
 .extraer_cuadre <- function(x, destino) {
   nombres <- c(".col_sacos_cuadre", ".col_diferencia_cuadre", ".col_pct_cuadre",
     ".registrar_tabla_cuadre", ".VF_CUADRE_MINIMO", ".VF_TOLERANCIA_SACOS")

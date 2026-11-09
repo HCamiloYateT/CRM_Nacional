@@ -60,7 +60,7 @@ const {chromium} = require('playwright');
     await page.locator('#cohortes-fil_ppto').selectOption('sin');
     await page.waitForFunction(() =>
       document.querySelector('#cohortes-kpi_vig_total-valor_display')?.textContent.trim() === '2.00');
-    await page.locator('#cohortes-fil_ppto').selectOption('todos');
+    await page.locator('#cohortes-fil_ppto').selectOption(['con', 'sin', 'nd']);
     await page.waitForFunction(() =>
       document.querySelector('#cohortes-kpi_vig_total-valor_display')?.textContent.trim() === '5.00');
     await page.setViewportSize({width: 390, height: 844});
@@ -73,3 +73,4 @@ const {chromium} = require('playwright');
     await browser.close();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });
+

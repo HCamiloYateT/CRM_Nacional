@@ -7,7 +7,6 @@
 }
 
 .filtros_seleccion <- function(actual, disponibles) {
-  if (is.null(actual)) return(disponibles)
   intersect(as.character(actual), disponibles)
 }
 
@@ -84,12 +83,12 @@ Filtros <- function(id, usuario, es_admin, dat) {
       autorizado <- isTRUE(es_admin())
       permitidos <- if (autorizado) asesores else intersect(asesores, toupper(trimws(as.character(usuario()))))
       asesores_permitidos(permitidos)
-      actualizar("FT_Asesor", permitidos, .filtros_seleccion(isolate(input$FT_Asesor), permitidos))
+      actualizar("FT_Asesor", permitidos, .crm_seleccion_opciones(input, session, "FT_Asesor", permitidos))
       racafeForms::racafeUpdateEnabled(session, "FT_Asesor", enabled = autorizado)
       segmentos <- .filtros_choices(c(catalogos$segmento, x$Segmento))
       lineas <- .filtros_choices(catalogos$linneg, incluir_sin_dato = FALSE)
-      actualizar("FT_Segmento", segmentos, .filtros_seleccion(isolate(input$FT_Segmento), segmentos))
-      actualizar("FT_LinNeg", lineas, .filtros_seleccion(isolate(input$FT_LinNeg), lineas))
+      actualizar("FT_Segmento", segmentos, .crm_seleccion_opciones(input, session, "FT_Segmento", segmentos))
+      actualizar("FT_LinNeg", lineas, .crm_seleccion_opciones(input, session, "FT_LinNeg", lineas))
       fechas <- as.Date(x$FecFact)
       fechas <- fechas[!is.na(fechas)]
       if (length(fechas)) {
@@ -112,7 +111,7 @@ Filtros <- function(id, usuario, es_admin, dat) {
       # Conservar categorías presentes en los hechos, incluido PyG sin marca o empaque.
       observadas <- disponibles() %>% filter(CLLinNegNo %in% lineas) %>% pull(Categoria)
       categorias <- .filtros_choices(c(categorias, observadas))
-      actualizar("FT_Categoria", categorias, .filtros_seleccion(isolate(input$FT_Categoria), categorias))
+      actualizar("FT_Categoria", categorias, .crm_seleccion_opciones(input, session, "FT_Categoria", categorias))
     }, ignoreNULL = FALSE)
     
     observeEvent(list(input$FT_LinNeg, input$FT_Categoria, catalogos_rv()), {
@@ -128,7 +127,7 @@ Filtros <- function(id, usuario, es_admin, dat) {
       observados <- disponibles() %>%
         filter(CLLinNegNo %in% lineas, Categoria %in% categorias) %>% pull(Producto)
       productos <- .filtros_choices(c(productos, observados))
-      actualizar("FT_Producto", productos, .filtros_seleccion(isolate(input$FT_Producto), productos))
+      actualizar("FT_Producto", productos, .crm_seleccion_opciones(input, session, "FT_Producto", productos))
     }, ignoreNULL = FALSE)
     
     observeEvent(list(input$FT_Producto, input$FT_Asesor, input$FT_Fecha), {

@@ -279,7 +279,7 @@
     })
     
     # Mensaje de estado vacío — solo visible cuando no hay datos
-    output$sin_datos <- shiny::renderUI({
+    output$sin_datos <- .crm_render_ui({
       if (!is.null(data_prep())) return(NULL)
       shiny::tags$div(
         style = paste0(
@@ -299,7 +299,7 @@
       col_specs = .coldefs, id_col = "CliNitPpal", modo_seleccion = "ninguno", page_size = 20L)
 
     # UI del botón de descarga — solo visible cuando hay datos
-    output$ui_descarga <- shiny::renderUI({
+    output$ui_descarga <- .crm_render_ui({
       shiny::req(!is.null(data_prep()))
       .crm_descarga_ui("btn_descarga", session$ns, label = "Descargar")
     })
@@ -331,8 +331,8 @@ CohortesEstadosUI <- function(id) {
       racafeForms::racafeFormRow(columns = 2,
         shiny::uiOutput(ns("ui_fechas")),
         racafeForms::racafeInputSelect("fil_ppto", "Presupuesto",
-          choices = c("Total" = "todos", "Con Ppto" = "con", "Sin Ppto" = "sin"),
-          selected = "todos", empty = FALSE, ns = ns))),
+          choices = c("Con Ppto" = "con", "Sin Ppto" = "sin", "Sin dato" = "nd"),
+          selected = c("con", "sin", "nd"), multiple = TRUE, ns = ns))),
     shiny::uiOutput(ns("sin_datos")),
 
     # Bloque KPIs de periodo: inicio vs mes vigente ----
@@ -495,7 +495,7 @@ CohortesEstados <- function(id, bd, data_t) {
     # Datos reactivos ----
     
     # Selectores de meses disponibles; conservar selección al refrescar el panel ----
-    output$ui_fechas <- renderUI({
+    output$ui_fechas <- .crm_render_ui({
       fechas <- sort(unique(bd()$FecProceso))
       if (!length(fechas)) return(NULL)
       opciones <- stats::setNames(as.character(fechas), .coha_mes(fechas))
@@ -508,7 +508,7 @@ CohortesEstados <- function(id, bd, data_t) {
         racafeForms::racafeInputSelect("fecha_fin", "Mes final", choices = opciones,
           selected = final, empty = FALSE, ns = ns))
     })
-    output$sin_datos <- renderUI({
+    output$sin_datos <- .crm_render_ui({
       if (!nrow(bd())) return(.crm_nota("No hay estados ni ventas disponibles para el año en curso."))
       req(input$fecha_ini, input$fecha_fin)
       if (!nrow(bd_f())) .crm_nota("No hay unidades comerciales para los filtros seleccionados.")
@@ -544,12 +544,8 @@ CohortesEstados <- function(id, bd, data_t) {
       dat <- bd() %>%
         semi_join(ucs_activas(), by = join_by(LinNegCod, CliNitPpal)) %>%
         filter(FecProceso >= mes_inicio(), FecProceso <= mes_vigente())
-      if (identical(input$fil_ppto, "con")) {
-        dat <- dplyr::filter(dat, Presupuestado == "PRESUPUESTADO")
-      } else if (identical(input$fil_ppto, "sin")) {
-        dat <- dplyr::filter(dat, Presupuestado == "NO PRESUPUESTADO")
-      }
-      dat
+      estados <- c(con = "PRESUPUESTADO", sin = "NO PRESUPUESTADO", nd = "NO DISPONIBLE")
+      dplyr::filter(dat, Presupuestado %in% unname(estados[input$fil_ppto]))
     })
     
     # Corte vigente: snapshot del último mes de bd_f
@@ -957,13 +953,13 @@ CohortesEstados <- function(id, bd, data_t) {
     )
     
     ### Labels de mes ----
-    output$lbl_mes_inicial <- renderUI({
+    output$lbl_mes_inicial <- .crm_render_ui({
       tags$h6(
         paste0("Mes Inicial \u2014 ", .coha_mes(mes_inicio())),
         style = "font-weight:700; color:#374151;"
       )
     })
-    output$lbl_mes_vigente <- renderUI({
+    output$lbl_mes_vigente <- .crm_render_ui({
       tags$h6(
         paste0("Mes Vigente \u2014 ", .coha_mes(mes_vigente())),
         style = "font-weight:700; color:#374151;"
@@ -1611,7 +1607,7 @@ CohortesEstados <- function(id, bd, data_t) {
     )
     
     ### Gráfico de crecimiento ----
-    output$plot_crecimiento <- plotly::renderPlotly({
+    output$plot_crecimiento <- .crm_render_plotly({
       req(serie_crecimiento())
       df <- serie_crecimiento()
       
@@ -1676,3 +1672,4 @@ CohortesEstados <- function(id, bd, data_t) {
     
   })
 }
+

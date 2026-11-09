@@ -91,7 +91,7 @@ CohorteClientes <- function(id, hechos, metrica) {
         digits = if (metrica %in% c("retencion", "frecuencia")) 1 else 2))), paste0("M", 0:600)))
     .crm_vancouver_server("clientes", data = panel, page_size = 15,
       col_labels = c(CliNitPpal = "NIT principal", LinNegCod = "Línea"))
-    output$evolucion <- shiny::renderPlot({
+    output$evolucion <- .crm_render_plot({
       x <- resumen()
       shiny::validate(shiny::need(nrow(x) > 0, "No hay cohortes para este periodo y estos filtros."))
       ggplot2::ggplot(x, ggplot2::aes(x = Edad, y = Valor, group = Cohorte, colour = as.character(Cohorte))) +
@@ -99,7 +99,7 @@ CohorteClientes <- function(id, hechos, metrica) {
         ggplot2::scale_colour_manual(values = grDevices::colorRampPalette(
           c("#DA291C", "#6C757D", "#212529"))(dplyr::n_distinct(x$Cohorte))) +
         ggplot2::labs(x = "Meses desde la primera compra observada", y = .COH_TITULOS[[metrica]], colour = "Cohorte") +
-        ggplot2::theme_minimal(base_size = 11) + ggplot2::theme(legend.position = "bottom")
+        .crm_tema_grafico() + ggplot2::theme(legend.position = "bottom")
     })
     .gc_descarga(output, panel, paste0("Cohortes_", metrica))
     list(datos = panel)
