@@ -570,8 +570,8 @@ CohortesEstados <- function(id, bd, data_t) {
       ucs <- bd_vig() %>%
         filter(EstadoPanel == "ACTIVO") %>%
         mutate(
-          meses_rec = ifelse(is.na(NumMesesRecuperar), 4L, NumMesesRecuperar),
-          fec_lim   = UltFecFact %m+% months(meses_rec)
+          meses_rec = dplyr::coalesce(as.numeric(NumMesesRecuperar), 4),
+          fec_lim   = UltFecFact %m+% lubridate::period(month = meses_rec)
         ) %>%
         filter(!is.na(fec_lim), month(fec_lim) == month(mes_vigente())) %>%
         select(LinNegCod, CliNitPpal)
