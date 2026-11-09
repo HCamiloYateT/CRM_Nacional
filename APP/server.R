@@ -1,4 +1,5 @@
 server <- function(input, output, session) {
+  .crm_iniciar_loader(input)
   
   # Datos reactivos ----
   usuario <- reactive({
@@ -47,7 +48,7 @@ server <- function(input, output, session) {
   
   data_t <- reactive({
     f <- filtros()
-    req(data_c(), f$asesor, f$segmento, f$linneg, f$categoria, f$producto)
+    req(data_c(), !is.null(f))
     
     data_c() %>%
       filter(Excluir != "SI", ProdExcluir != "SI", Asesor %in% f$asesor, Segmento %in% f$segmento,
@@ -326,6 +327,7 @@ server <- function(input, output, session) {
   CargarTabUnaVez("IN_Consulta", "ui_IN_Consulta", function() ConsultaIndividualUI("ConsultaIndividual"))
   
 }
+
 
 
 

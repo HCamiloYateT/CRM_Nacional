@@ -23,6 +23,8 @@
     x$MNFCCPpto == 0 & x$SacosAnho > 0 ~ "Compra sin presupuesto", TRUE ~ "Compra recurrente")
   x
 }
+.FID_ESTADOS <- c("Revisar inactividad", "Sin compra observada", "Primera compra observada del año",
+  "Primera compra observada en nueva línea", "Compra sin presupuesto", "Presupuesto no disponible", "Compra recurrente")
 FidelidadRiesgoUI <- function(id) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
@@ -30,9 +32,8 @@ FidelidadRiesgoUI <- function(id) {
       racafeForms::racafeInputDate("corte", "Fecha de análisis", value = Sys.Date(), ns = ns),
       racafeForms::racafeInputNumeric("umbral", "Umbral de revisión (días)", value = 90, min = 1,
         format = "number", ns = ns),
-      racafeForms::racafeInputSelect("estado", "Estado", choices = c("Todos", "Revisar inactividad",
-        "Sin compra observada", "Primera compra observada del año", "Primera compra observada en nueva línea",
-        "Compra sin presupuesto", "Presupuesto no disponible", "Compra recurrente"), ns = ns)),
+      racafeForms::racafeInputSelect("estado", "Estado", choices = .FID_ESTADOS,
+        selected = .FID_ESTADOS, multiple = TRUE, ns = ns)),
     .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("resumen")), .crm_tabla_ui(ns("clientes")),
     .crm_nota(c("La primera compra es la primera observada en la exportación: no equivale a la creación del cliente.",
       "Un cliente sin presupuesto no se clasifica automáticamente como recuperado.",
@@ -45,7 +46,7 @@ FidelidadRiesgo <- function(id, hechos, clientes, filtros) {
       shiny::req(input$corte, is.finite(input$umbral), input$umbral > 0)
       x <- .fid_preparar(hechos(), .com_clientes(clientes(), as.Date(input$corte), filtros()),
         as.Date(input$corte), input$umbral)
-      if (!is.null(input$estado) && input$estado != "Todos") x <- x[x$Estado == input$estado, ]
+      x <- x[x$Estado %in% input$estado, , drop = FALSE]
       x
     })
     resumen <- shiny::reactive(datos() %>% dplyr::group_by(Estado) %>%

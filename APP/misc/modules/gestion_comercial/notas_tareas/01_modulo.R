@@ -7,8 +7,9 @@
   datos$Prioridad[is.na(datos$Prioridad) | !datos$Prioridad %in% .TSK_PRIORIDADES] <- "MEDIA"
   if (!archivadas) datos <- datos[is.na(datos$Archivado) | datos$Archivado == 0, , drop = FALSE]
   if (!cumplidas) datos <- datos[is.na(datos$Cumplido) | datos$Cumplido == 0, , drop = FALSE]
-  if (length(prioridades)) datos <- datos[datos$Prioridad %in% prioridades, , drop = FALSE]
-  if (length(etiquetas) && !"__todas__" %in% etiquetas) {
+  if (!length(prioridades) || !length(etiquetas)) return(datos[0, , drop = FALSE])
+  datos <- datos[datos$Prioridad %in% prioridades, , drop = FALSE]
+  if (length(etiquetas)) {
     coinciden <- vapply(as.character(datos$Etiquetas), function(x) {
       tags <- if (is.na(x) || !nzchar(x)) "__sin__" else trimws(strsplit(x, "|", fixed = TRUE)[[1]])
       any(toupper(tags) %in% toupper(etiquetas))
@@ -29,12 +30,12 @@ TableroTareasUI <- function(id) {
       shiny::tagAppendAttributes(racafeForms::racafeButton("crear", "Nueva tarea o nota", icon = "plus", ns = ns),
         `data-crm-crear-tarea` = "true"),
       racafeForms::racafeButton("actualizar", "Actualizar", icon = "arrows-rotate", variant = "secondary", ns = ns))),
-    racafeForms::racafeFormRow(columns = 3, responsive = "fixed",
+    racafeForms::racafeFormRow(columns = 3, responsive = "auto",
       racafeForms::racafeInputText("buscar", "Buscar", placeholder = "Título, descripción o actividad", ns = ns),
-      racafeForms::racafeInputSelect("etiquetas", "Etiquetas", choices = c("Todas" = "__todas__"),
-        selected = "__todas__", multiple = TRUE, ns = ns),
+      racafeForms::racafeInputSelect("etiquetas", "Etiquetas", choices = c("Sin etiqueta" = "__sin__"),
+        selected = "__sin__", multiple = TRUE, gender = "f", ns = ns),
       racafeForms::racafeInputSelect("prioridades", "Prioridad", choices = .TSK_PRIORIDADES,
-        selected = .TSK_PRIORIDADES, multiple = TRUE, ns = ns)),
+        selected = .TSK_PRIORIDADES, multiple = TRUE, gender = "f", ns = ns)),
     shiny::tags$div(class = "crm-tareas-switches",
       racafeForms::racafeInputSwitch("archivadas", "Incluir archivadas", value = FALSE, ns = ns),
       racafeForms::racafeInputSwitch("cumplidas", "Incluir cumplidas", value = FALSE, ns = ns)),
@@ -43,29 +44,36 @@ TableroTareasUI <- function(id) {
 
 TableroTareas <- function(id, usuario, datos, abrir, refrescar, es_admin = function() FALSE) {
   shiny::moduleServer(id, function(input, output, session) {
+    etiquetas_iniciadas <- shiny::reactiveVal(FALSE)
+    etiquetas_previas <- shiny::reactiveVal(character())
+    fuente <- shiny::reactive(.tareas_visibles_usuario(datos(), usuario(), es_admin()))
     shiny::observeEvent(input$actualizar, refrescar())
-    shiny::observeEvent(datos(), {
-      fuente <- datos()
+    shiny::observeEvent(fuente(), {
+      fuente <- fuente()
       shiny::req(is.data.frame(fuente))
       tags <- unique(unlist(lapply(as.character(fuente$Etiquetas), function(x) {
         if (is.na(x)) character() else trimws(strsplit(x, "|", fixed = TRUE)[[1]])
       })))
       tags <- sort(tags[nzchar(tags)])
-      choices <- c("Todas" = "__todas__", stats::setNames(tags, tags), "Sin etiqueta" = "__sin__")
+      choices <- c(stats::setNames(tags, tags), "Sin etiqueta" = "__sin__")
       actual <- shiny::isolate(input$etiquetas)
-      actual <- intersect(actual, unname(choices))
-      racafeForms::racafeUpdateSelect(session, "etiquetas", choices = choices,
-        selected = if (length(actual)) actual else "__todas__")
+      seleccionar_todas <- !etiquetas_iniciadas() || setequal(actual, etiquetas_previas())
+      seleccion <- if (seleccionar_todas) unname(choices) else intersect(actual, unname(choices))
+      racafeForms::racafeUpdateSelect(session, "etiquetas", choices = choices, selected = seleccion)
+      etiquetas_previas(unname(choices))
+      etiquetas_iniciadas(TRUE)
     }, ignoreNULL = TRUE)
     seleccion <- shiny::reactive({
-      fuente <- datos()
+      fuente <- fuente()
       if (!is.data.frame(fuente)) return(NULL)
       .tareas_filtrar_tablero(fuente, usuario(), input$buscar, input$etiquetas, input$prioridades,
         isTRUE(input$archivadas), isTRUE(input$cumplidas), es_admin = es_admin())
     })
-    output$tablero <- shiny::renderUI({
+    output$tablero <- .crm_render_ui({
       fuente <- seleccion()
       if (is.null(fuente)) return(racafeForms::racafeFormMessage("No fue posible cargar las tareas.", type = "error"))
+      if (!nrow(fuente)) return(racafeForms::racafeFormMessage(
+        "No hay tareas ni notas para los filtros seleccionados.", type = "empty"))
       columnas <- lapply(.TSK_PRIORIDADES, function(prioridad) {
         filas <- fuente[fuente$Prioridad == prioridad, , drop = FALSE]
         tarjetas <- lapply(seq_len(nrow(filas)), function(i) {

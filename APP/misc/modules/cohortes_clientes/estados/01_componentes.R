@@ -9,12 +9,12 @@
   session <- shiny::getDefaultReactiveDomain()
   .val <- function(x) if (shiny::is.reactive(x)) x() else x
   accion <- isTRUE(mostrar_boton) && !is.null(contenido_modal)
-  session$output[[paste0(id, "_tarjeta")]] <- shiny::renderUI({
+  session$output[[paste0(id, "_tarjeta")]] <- .crm_render_ui({
     .crm_caja_ui(session$ns(id), texto = .val(texto), icono = .val(icono), footer = .val(footer),
       mostrar_boton = accion, id_boton = "btn_abrir", tooltip = .val(titulo_modal))
   })
   shiny::moduleServer(id, function(input, output, session) {
-    output$valor_display <- shiny::renderUI({
+    output$valor_display <- .crm_render_ui({
       v <- .val(valor)
       if (is.numeric(v)) .coha_formato(formato)(v) else v
     })
@@ -48,7 +48,7 @@
         tabla$limpiar()
       }, ignoreInit = TRUE)
       session <- shiny::getDefaultReactiveDomain()
-      session$output[[paste0(id, "_nota")]] <- shiny::renderUI({
+      session$output[[paste0(id, "_nota")]] <- .crm_render_ui({
         .crm_nota(if (shiny::is.reactive(footer)) footer() else footer)
       })
       return(invisible(tabla))
@@ -59,7 +59,7 @@
   }
   shiny::moduleServer(id, function(input, output, session) {
     .val <- function(x) if (shiny::is.reactive(x)) x() else x
-    output$tabla <- shiny::renderUI({
+    output$tabla <- .crm_render_ui({
       datos <- .val(data)
       if (!nrow(datos)) return(.crm_nota("Sin registros para los filtros seleccionados."))
       tabla <- .crm_tabla_datos(datos, col_specs = col_specs)
@@ -92,3 +92,4 @@
     }, ignoreInit = TRUE)
   })
 }
+

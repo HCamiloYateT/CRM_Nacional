@@ -7,10 +7,10 @@ DetalleDescartadosUI <- function(id) {
   
   tagList(
     fluidRow(
-      column(3, racafeModulos::CajaModalUI(ns("kpi_contacto"))),
-      column(3, racafeModulos::CajaModalUI(ns("kpi_prospecto"))),
-      column(3, racafeModulos::CajaModalUI(ns("kpi_lead"))),
-      column(3, racafeModulos::CajaModalUI(ns("kpi_cliente")))
+      column(3, .crm_caja_modal_ui(ns("kpi_contacto"))),
+      column(3, .crm_caja_modal_ui(ns("kpi_prospecto"))),
+      column(3, .crm_caja_modal_ui(ns("kpi_lead"))),
+      column(3, .crm_caja_modal_ui(ns("kpi_cliente")))
     ),
     div(style = "width:220px;",
         racafeForms::racafeInputSelect(id = ns("FiltroEtapa"), label = h6("Filtrar por Etapa de Descarte"),
@@ -32,13 +32,13 @@ DetalleDescartadosUI <- function(id) {
         8,
         box(title = "Motivos de Descarte", width = 12,
             collapsible = TRUE, collapsed = FALSE,
-            racafeModulos::TablaReactable2UI(ns("tabla_razon1")),
+            .crm_tabla_legacy_ui(ns("tabla_razon1")),
             shinyjs::hidden(
               tags$div(id = ns("BloqueOtrosRazon1"),
                        tags$hr(),
                        FormatearTexto("Categorías agrupadas en OTROS",
                                       tamano_pct = 0.8, color = "#64748B"),
-                       racafeModulos::TablaReactable2UI(ns("tabla_otros_razon1")))
+                       .crm_tabla_legacy_ui(ns("tabla_otros_razon1")))
             )
         )
       ),
@@ -88,7 +88,7 @@ DetalleDescartados <- function(id, usuario) {
     })
     
     # Cuenta y calcula el porcentaje de descartados vigentes desde CONTACTO.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_contacto",
       valor = reactive({
         n_etapa <- sum(
@@ -119,7 +119,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Cuenta y calcula el porcentaje de descartados vigentes desde PROSPECTO.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_prospecto",
       valor = reactive({
         n_etapa <- sum(
@@ -150,7 +150,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Cuenta y calcula el porcentaje de descartados vigentes desde LEAD.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_lead",
       valor = reactive({
         n_etapa <- sum(
@@ -181,7 +181,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Cuenta y calcula el porcentaje de descartados vigentes desde CLIENTE.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_cliente",
       valor = reactive({
         n_etapa <- sum(
@@ -221,7 +221,7 @@ DetalleDescartados <- function(id, usuario) {
     estilo_razon1 <- .estilo_fila_total(datos_razon1_r, "Categoria")
     
     # Construye la tabla principal de razones.
-    modulo_tabla_razon1 <- racafeModulos::TablaReactable2(
+    modulo_tabla_razon1 <- .crm_tabla_legacy(
       id = "tabla_razon1", data = datos_razon1_r, columnas = NULL,
       col_specs = .col_specs_resumen_etapa(estilo_razon1, "Razón"),
       modo_seleccion = "fila", id_col = "Categoria",
@@ -291,7 +291,7 @@ DetalleDescartados <- function(id, usuario) {
     })
     
     # Genera la nube con el tamano de cada palabra segun su frecuencia.
-    output$nube_palabras <- plotly::renderPlotly({
+    output$nube_palabras <- .crm_render_plotly({
       dat <- datos_nube_r()
       
       if (nrow(dat) == 0) {
@@ -335,7 +335,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Construye la tabla de razones agrupadas.
-    modulo_tabla_otros_razon1 <- racafeModulos::TablaReactable2(
+    modulo_tabla_otros_razon1 <- .crm_tabla_legacy(
       id = "tabla_otros_razon1", data = detalle_otros_razon1_r,
       columnas = NULL,
       col_specs = .col_specs_resumen_etapa(
@@ -381,22 +381,22 @@ DetalleDescartados <- function(id, usuario) {
       contenido_razon2 <- if (es_numerico) {
         tagList(
           fluidRow(
-            column(3, racafeModulos::CajaModalUI(ns("kpi_precio_min"))),
-            column(3, racafeModulos::CajaModalUI(ns("kpi_precio_prom"))),
-            column(3, racafeModulos::CajaModalUI(ns("kpi_precio_mediana"))),
-            column(3, racafeModulos::CajaModalUI(ns("kpi_precio_max")))
+            column(3, .crm_caja_modal_ui(ns("kpi_precio_min"))),
+            column(3, .crm_caja_modal_ui(ns("kpi_precio_prom"))),
+            column(3, .crm_caja_modal_ui(ns("kpi_precio_mediana"))),
+            column(3, .crm_caja_modal_ui(ns("kpi_precio_max")))
           ),
           plotly::plotlyOutput(ns("histograma_precio"), height = "260px")
         )
       } else {
         tagList(
-          racafeModulos::TablaReactable2UI(ns("tabla_razon2_modal")),
+          .crm_tabla_legacy_ui(ns("tabla_razon2_modal")),
           shinyjs::hidden(
             tags$div(
               id = ns("BloqueOtrosRazon2"), tags$hr(),
               FormatearTexto("Categorías agrupadas en OTROS",
                              tamano_pct = 0.8, color = "#64748B"),
-              racafeModulos::TablaReactable2UI(ns("tabla_otros_razon2"))
+              .crm_tabla_legacy_ui(ns("tabla_otros_razon2"))
             )
           )
         )
@@ -422,7 +422,7 @@ DetalleDescartados <- function(id, usuario) {
     })
     
     # Muestra el precio minimo.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_precio_min",
       valor = reactive({
         p <- precios_modal_r()
@@ -433,7 +433,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Muestra el precio promedio.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_precio_prom",
       valor = reactive({
         p <- precios_modal_r()
@@ -444,7 +444,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Muestra la mediana del precio.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_precio_mediana",
       valor = reactive({
         p <- precios_modal_r()
@@ -455,7 +455,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Muestra el precio maximo.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_precio_max",
       valor = reactive({
         p <- precios_modal_r()
@@ -466,7 +466,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Grafica la distribucion de los valores numericos.
-    output$histograma_precio <- plotly::renderPlotly({
+    output$histograma_precio <- .crm_render_plotly({
       p <- precios_modal_r()
       
       if (length(p) == 0) {
@@ -507,7 +507,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Construye la tabla de razones secundarias.
-    racafeModulos::TablaReactable2(
+    .crm_tabla_legacy(
       id = "tabla_razon2_modal", data = datos_razon2_modal_r,
       columnas = NULL,
       col_specs = .col_specs_resumen_etapa(
@@ -531,7 +531,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Construye la tabla secundaria de categorias agrupadas.
-    racafeModulos::TablaReactable2(
+    .crm_tabla_legacy(
       id = "tabla_otros_razon2", data = detalle_otros_razon2_r,
       columnas = NULL,
       col_specs = .col_specs_resumen_etapa(

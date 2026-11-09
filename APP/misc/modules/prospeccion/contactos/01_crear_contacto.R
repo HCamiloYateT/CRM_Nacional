@@ -190,13 +190,13 @@ CrearContacto <- function(id, usuario) {
       .BuscarRazonesSimilares(razon)
     })
     
-    output$ValidacionNit <- renderUI({
+    output$ValidacionNit <- .crm_render_ui({
       mensaje <- resultado_nit_r()
       if (is.null(mensaje)) return(NULL)
       racafeForms::racafeFormMessage(mensaje, type = "error", size = "compact")
     })
     
-    output$SimilitudRazonSocial <- renderUI({
+    output$SimilitudRazonSocial <- .crm_render_ui({
       coincidencias <- similares_r()
       if (!nrow(coincidencias)) return(NULL)
       shiny::tagList(

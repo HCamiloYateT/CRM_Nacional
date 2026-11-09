@@ -70,7 +70,7 @@ TablaDetalleDat <- function(id, dat) {
                              col_specs = .build_coldefs(dat()),
                              footer = "Transacciones de la base activa; filtros y ordenamiento solo afectan esta vista.")
       }
-      output$contenedor <- renderUI(.crm_tabla_ui(session$ns(mid), titulo = "Detalle de Transacciones",
+      output$contenedor <- .crm_render_ui(.crm_tabla_ui(session$ns(mid), titulo = "Detalle de Transacciones",
                                                   subtitulo = "Todas las columnas del dataset activo"))
     }, ignoreNULL = TRUE)
 
@@ -102,6 +102,16 @@ TablaDetalleDat <- function(id, dat) {
 PresupuestoUI <- function(id) {
   ns <- NS(id)
   tagList(
+    # Switch vista acumulada / mensual para graficos de serie
+    fluidRow(
+      column(4,
+             div(
+               style = "margin-left: 5px;",
+               racafeForms::racafeInputSwitch("vista_acumulada", label = "Vista acumulada",
+                 value = TRUE, variant = "primary", ns = ns)
+             )
+      )
+    ),
     # KPIs principales
     fluidRow(
       column(3, .crm_caja_output(ns("kpi_cumpl_sacos_ytd"))),
@@ -120,16 +130,6 @@ PresupuestoUI <- function(id) {
         )
       ),
       column(12, uiOutput(ns("nota_presupuesto")))
-    ),
-    # Switch vista acumulada / mensual para graficos de serie
-    fluidRow(
-      column(4,
-             div(
-               style = "margin-left: 5px;",
-               racafeForms::racafeInputSwitch("vista_acumulada", label = "Vista acumulada",
-                 value = TRUE, variant = "primary", ns = ns)
-             )
-      )
     ),
     # Graficos de serie temporal sacos y margen
     fluidRow(
@@ -858,9 +858,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     })
     
     .filtro_completo <- function(datos, columna, seleccion) {
-      if (is.null(seleccion) || "TODOS" %in% toupper(as.character(seleccion))) return(TRUE)
+      if (is.null(seleccion)) return(FALSE)
       seleccion <- setdiff(as.character(seleccion), "")
-      if (columna == "Segmento" && setequal(seleccion, c("GRANDE", "MEDIANO", "PEQUEÑO"))) return(TRUE)
       if (length(seleccion) == 0L) return(FALSE)
       if (columna %in% c("Categoria", "Producto") &&
           exists("productos_snap", envir = .GlobalEnv, inherits = FALSE)) {
@@ -1206,10 +1205,10 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       meta <- .meta_mensual_requerida(total, ejecutado, cal$meses_rest)
       .nota_meta(meta$negativo, meta$ajustado)
     }
-    output$nota_serie_sacos <- renderUI({
+    output$nota_serie_sacos <- .crm_render_ui({
       .nota_presupuesto_ui(nota_serie_r("Sacos_Real", "Sacos_Ppto"))
     })
-    output$nota_serie_margen <- renderUI({
+    output$nota_serie_margen <- .crm_render_ui({
       .nota_presupuesto_ui(nota_serie_r("Margen_Real", "Margen_Ppto"))
     })
     nota_dimension_r <- reactive({
@@ -1217,10 +1216,10 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       .nota_meta(c(df$Ritmo_Sacos_Negativo, df$Ritmo_Margen_Negativo),
                  c(df$Ritmo_Sacos_Ajustado, df$Ritmo_Margen_Ajustado))
     })
-    output$nota_dimension <- renderUI({
+    output$nota_dimension <- .crm_render_ui({
       .nota_presupuesto_ui(nota_dimension_r())
     })
-    output$nota_proyeccion_dimension <- renderUI({
+    output$nota_proyeccion_dimension <- .crm_render_ui({
       df <- breakdown_r()
       medida <- input$medida_proyeccion
       .nota_presupuesto_ui(.nota_meta(
@@ -1228,7 +1227,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         if (medida == "sacos") df$Ritmo_Sacos_Ajustado else df$Ritmo_Margen_Ajustado
       ))
     })
-    output$nota_velocidad_dimension <- renderUI({
+    output$nota_velocidad_dimension <- .crm_render_ui({
       df <- breakdown_r()
       medida <- input$medida_velocidad
       .nota_presupuesto_ui(.nota_meta(
@@ -1645,7 +1644,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     )
     
     ## Tabla GT mensual/acumulada ----
-    output$Presupuesto <- renderUI({
+    output$Presupuesto <- .crm_render_ui({
       periodo     <- periodo_r()
       periodo_ant <- periodo - 1L
       cn          <- col_names_r()
@@ -1843,9 +1842,9 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       return(gt1)
     })
     
-    output$nota_presupuesto <- renderUI({
+    output$nota_presupuesto <- .crm_render_ui({
       shiny::tagList(
-        shiny::tags$div(class = "crm-convenciones", racafeShiny::racafeTableNote(
+        shiny::tags$div(class = "crm-convenciones", .crm_nota(
           c(paste0("Año anterior: ", periodo_r() - 1L), paste0("Mensual: ", periodo_r()),
             paste0("Acumulado: ", periodo_r())), title = "Convenciones",
           swatches = c("#F0FDF4", "#F8FAFC", "#EFF6FF"))),
@@ -1855,12 +1854,12 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     })
 
     ## Titulo dinamico sub-card proyeccion ----
-    output$titulo_proyeccion <- renderUI({
+    output$titulo_proyeccion <- .crm_render_ui({
       paste0("Proyección de cierre por dimensión \u2014 ", periodo_r())
     })
     
     ## Graficos de serie temporal ----
-    output$GraficoPresupuestoSacos <- renderPlotly({
+    output$GraficoPresupuestoSacos <- .crm_render_plotly({
       construir_grafico_serie(
         datos_grafico_r(), input$vista_acumulada,
         "Sacos_Real", "Sacos_Ppto", "Sacos70",
@@ -1869,7 +1868,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         "Sacos Acumulados", "Sacos Mensuales", "numero"
       )
     })
-    output$GraficoPresupuestoMargen <- renderPlotly({
+    output$GraficoPresupuestoMargen <- .crm_render_plotly({
       construir_grafico_serie(
         datos_grafico_r(), input$vista_acumulada,
         "Margen_Real", "Margen_Ppto", "MargenFCC",
@@ -1880,7 +1879,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     })
     
     ## UI dinamica: dos tablas breakdown (Sacos arriba, Margen abajo) ----
-    output$tabla_sacos_ui <- renderUI({
+    output$tabla_sacos_ui <- .crm_render_ui({
       ver <- .breakdown_ver_sacos()
       .crm_tabla_ui(
         .ns_local(paste0("tabla_ss_", ver)),
@@ -1891,7 +1890,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       )
     })
     
-    output$tabla_margen_ui <- renderUI({
+    output$tabla_margen_ui <- .crm_render_ui({
       ver <- .breakdown_ver_margen()
       .crm_tabla_ui(
         .ns_local(paste0("tabla_ma_", ver)),
@@ -2010,7 +2009,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     }, ignoreInit = FALSE)
     
     ## Footer metodologia ----
-    output$footer_metodologia <- renderUI({
+    output$footer_metodologia <- .crm_render_ui({
       racafeForms::racafeNoticeList(
         c("Cumplimiento: ejecutado / presupuesto.",
           "Brecha: ejecutado − presupuesto acumulado al mes.",
@@ -2023,7 +2022,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     })
 
     ## Grafico cuadrantes: proyeccion de cierre vs cumplimiento acumulado ----
-    output$grafico_proyeccion <- renderPlotly({
+    output$grafico_proyeccion <- .crm_render_plotly({
       req(breakdown_r())
       df      <- breakdown_r()
       lbl     <- .dim_lbl(input$dim_breakdown)
@@ -2129,7 +2128,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     })
     
     ## Diagrama bullet: ritmo mensual actual vs requerido ----
-    output$grafico_velocidad <- renderPlotly({
+    output$grafico_velocidad <- .crm_render_plotly({
       req(breakdown_r())
       df      <- breakdown_r()
       lbl     <- .dim_lbl(input$dim_breakdown)

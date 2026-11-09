@@ -359,7 +359,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
     })
     
     # Outputs ----
-    output$Titulo <- renderUI({
+    output$Titulo <- .crm_render_ui({
       req(mostrar_titulo)
       
       h4(
@@ -525,7 +525,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
       )
     })
     
-    output$ModalContenido <- renderUI({
+    output$ModalContenido <- .crm_render_ui({
       req(
         accion_seleccionada()
       )

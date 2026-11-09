@@ -1,6 +1,7 @@
 # Cierre financiero y comparación comercial ----
 library(shiny)
 sys.source("APP/misc/compartido/00_presentacion.R", envir = environment())
+sys.source("APP/misc/compartido/04_interaccion.R", envir = environment())
 .noviembre <- as.Date("2026-11-07")
 for (.cierre in as.Date(c("2026-10-01", "2026-11-01", "2026-12-01"))) {
   .cal <- .crm_calendario_cierre(as.Date(.cierre, origin = "1970-01-01"), 2026, .noviembre)

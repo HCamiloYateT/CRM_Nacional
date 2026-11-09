@@ -120,7 +120,7 @@ MarketBasket <- function(id, hechos, filtros, on_result = NULL) {
         "Los filtros cambiaron. Vuelva a Analizar para actualizar el alcance."))
       x$resultado
     })
-    output$estado <- shiny::renderUI({
+    output$estado <- .crm_render_ui({
       if (is.null(input$analizar) || input$analizar == 0) return(.crm_nota("Configure la cesta y pulse Analizar."))
       x <- calculo()
       if (!is.null(x$error)) return(racafeForms::racafeFormMessage(x$error, type = "error"))
@@ -188,16 +188,16 @@ MarketBasket <- function(id, hechos, filtros, on_result = NULL) {
     })
     .crm_vancouver_server("parametros", data = shiny::reactive(dplyr::bind_cols(resultado()$parametros,
       resultado()$diagnostico)))
-    output$fuerza <- shiny::renderPlot({
+    output$fuerza <- .crm_render_plot({
       x <- resultado()$reglas
       shiny::validate(shiny::need(nrow(x) > 0, "Sin reglas para graficar."))
       ggplot2::ggplot(x, ggplot2::aes(x = Soporte, y = Confianza, size = CestasAmbos, colour = Lift)) +
         ggplot2::geom_point(alpha = 0.7) + ggplot2::scale_colour_gradient(low = "#6C757D", high = "#DA291C") +
         ggplot2::scale_x_continuous(labels = scales::label_percent()) +
         ggplot2::scale_y_continuous(labels = scales::label_percent()) +
-        ggplot2::labs(title = "Soporte, confianza y lift", size = "Cestas") + ggplot2::theme_minimal(base_size = 11)
+        ggplot2::labs(title = "Soporte, confianza y lift", size = "Cestas") + .crm_tema_grafico()
     })
-    output$pares <- shiny::renderPlot({
+    output$pares <- .crm_render_plot({
       r <- resultado()
       x <- r$reglas[!grepl(",", r$reglas$Antecedente) & !grepl(",", r$reglas$Consecuente), ]
       principales <- head(as.character(r$frecuencias$Item), 12)
@@ -206,7 +206,7 @@ MarketBasket <- function(id, hechos, filtros, on_result = NULL) {
       ggplot2::ggplot(x, ggplot2::aes(x = SiCompra, y = TambienCompra, fill = Lift)) + ggplot2::geom_tile() +
         ggplot2::scale_fill_gradient2(low = "#6C757D", mid = "#F8F9FA", high = "#DA291C", midpoint = 1) +
         ggplot2::labs(x = "Antecedente", y = "Consecuente", title = "Lift entre los doce ítems más frecuentes") +
-        ggplot2::theme_minimal(base_size = 9) +
+        .crm_tema_grafico() +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
     })
     output$descargar <- shiny::downloadHandler(filename = function() paste0("MarketBasket_", Sys.Date(), ".xlsx"),

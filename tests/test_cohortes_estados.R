@@ -2,6 +2,7 @@
 library(dplyr)
 library(shiny)
 library(lubridate)
+source("APP/misc/compartido/04_interaccion.R")
 source("APP/misc/modules/cohortes_clientes/estados/00_datos.R")
 source("APP/misc/modules/cohortes_clientes/estados/02_modulo.R")
 
@@ -56,7 +57,7 @@ local({
   env$.crm_nota <- function(...) NULL
   panel_r <- reactiveVal(panel)
   testServer(env$CohortesEstados, args = list(bd = panel_r, data_t = reactive(hechos)), {
-    session$setInputs(fecha_ini = "2026-01-01", fecha_fin = "2026-03-01", fil_ppto = "todos",
+    session$setInputs(fecha_ini = "2026-01-01", fecha_fin = "2026-03-01", fil_ppto = c("con", "sin", "nd"),
       sel_tipo_matriz = "pct_fila")
     ind <- indicadores_trans()
     stopifnot(ind$aa == 1, ind$ai == 1, ind$ia == 1, ind$ii == 1,
@@ -67,6 +68,8 @@ local({
       mensual$ia == 1, mensual$ii == 4)
     session$setInputs(fil_ppto = "sin")
     stopifnot(nrow(bd_f()) == 0L, nrow(alertas_inactivar()) == 0L, n_en_riesgo() == 0L)
+    session$setInputs(fil_ppto = character())
+    stopifnot(nrow(bd_f()) == 0L)
     session$setInputs(fil_ppto = "con")
     stopifnot(nrow(bd_f()) == nrow(panel))
 
@@ -87,3 +90,4 @@ local({
   })
 })
 cat("OK: estados aprobados, presupuesto, transiciones, NUEVO anual, filtros y margen abierto.\n")
+

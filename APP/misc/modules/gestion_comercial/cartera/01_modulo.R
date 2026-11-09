@@ -121,7 +121,7 @@ CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admi
       x <- .car_preparar(saldos(), corte())
       x[x$Negocio %in% input$negocio, , drop = FALSE]
     })
-    output$fuente <- shiny::renderUI({
+    output$fuente <- .crm_render_ui({
       h <- fuente()
       .crm_nota(c(paste("Archivo de cartera con cortes hasta", .gc_fecha_max(as.Date(h$cartera$TCEFch))),
         paste("Consulta al corte", corte())))
@@ -162,24 +162,24 @@ CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admi
       }
       x[c("NIT", "PerRazSoc", "Factura", "Negocio", "FechaVence", "DiasVencido", "Saldo", "Tipo", "Rango")]
     })
-    output$grafico_ui <- shiny::renderUI({
+    output$grafico_ui <- .crm_render_ui({
       if (length(input$vista) == 1L && input$vista %in% c("Resumen", "Vencida", "Vencimientos")) {
         shiny::plotOutput(session$ns("grafico"), height = "260px")
       }
     })
-    output$grafico <- shiny::renderPlot({
+    output$grafico <- .crm_render_plot({
       shiny::req(input$vista %in% c("Resumen", "Vencida", "Vencimientos"))
       x <- tabla()
       shiny::validate(shiny::need(nrow(x) > 0, "Sin movimientos para este corte."))
       if (input$vista == "Vencimientos") {
         ggplot2::ggplot(x, ggplot2::aes(x = Periodo, y = SaldoCOP)) +
           ggplot2::geom_col(fill = "#DA291C") + ggplot2::labs(x = "Vencimiento contractual", y = "COP") +
-          ggplot2::theme_minimal(base_size = 11)
+          .crm_tema_grafico()
       } else {
         etiqueta <- if (input$vista == "Resumen") "Tipo" else "Rango"
         ggplot2::ggplot(x, ggplot2::aes(x = .data[[etiqueta]], y = SaldoCOP)) +
           ggplot2::geom_col(fill = "#DA291C") + ggplot2::coord_flip() +
-          ggplot2::labs(x = NULL, y = "Saldo COP") + ggplot2::theme_minimal(base_size = 11)
+          ggplot2::labs(x = NULL, y = "Saldo COP") + .crm_tema_grafico()
       }
     })
     seleccion <- .crm_vancouver_server("tabla", data = tabla, modo_seleccion = "fila",

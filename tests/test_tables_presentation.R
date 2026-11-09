@@ -1,6 +1,7 @@
 # Tablas Vancouver: filtros, orden, claves y reapertura de detalles ----
 library(shiny)
 sys.source("APP/misc/compartido/00_presentacion.R", envir = environment())
+sys.source("APP/misc/compartido/04_interaccion.R", envir = environment())
 .datos_prueba <- data.frame(.clave = c("A", "B", "TOTAL"), Dimension = c("Alfa", "Beta", "TOTAL"),
   Monto = c(20, 10, 30), Porcentaje = c(0.2, 0.1, 0.3), check.names = FALSE)
 .specs_prueba <- list(.clave = list(show = FALSE),

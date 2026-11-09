@@ -57,8 +57,10 @@
 
 # Renderiza un output de texto formateado como dinero o porcentaje
 .calc_render_val <- function(output, id, reactive_fn, col, tipo = "dollar") {
-  output[[id]] <- renderUI({
+  output[[id]] <- .crm_render_ui({
     val <- reactive_fn() %>% pull(!!col)
+    shiny::validate(shiny::need(length(val) == 1L && is.finite(val),
+      "No hay un resultado numérico válido. Revise los campos y pulse Calcular."))
     val_fmt <- switch(tipo,
                       "dollar"  = scales::dollar(val, accuracy = 0.01),
                       "percent" = scales::percent(val, accuracy = 0.01),
@@ -427,7 +429,7 @@ CalculadoraPesosExcelso <- function(id, dat_ind, usr, margenes = NULL, guardar_m
   moduleServer(id, function(input, output, session) {
     
     margenes_pendientes_rv <- reactiveVal(NULL)
-    output$guardar_margenes_ui <- renderUI({
+    output$guardar_margenes_ui <- .crm_render_ui({
       if (!usr() %in% c("CMEDINA", "JGCANON")) return(NULL)
       racafeForms::racafeButtonSave("GuardarMargenes", label = "Guardar márgenes", ns = session$ns)
     })

@@ -90,7 +90,7 @@ AnalisisComercial <- function(id, hechos, clientes, filtros, tipo = "evolucion",
         .crm_tabla_vancouver(.crm_nits_tabla(x[cols]), font_size = 11, row_padding = 2)
       })
     if (tipo == "evolucion") .crm_vancouver_server("serie", data = serie)
-    output$grafico <- shiny::renderPlot({
+    output$grafico <- .crm_render_plot({
       medida <- .com_elegir(input$medida, c("Sacos", "Margen", "MargenKg", "MargenUSClb"), "Margen")
       x <- if (tipo == "evolucion") serie() else tabla()
       shiny::validate(shiny::need(nrow(x) > 0, "No hay información para este periodo."))
@@ -101,7 +101,7 @@ AnalisisComercial <- function(id, hechos, clientes, filtros, tipo = "evolucion",
           ggplot2::scale_colour_manual(values = grDevices::colorRampPalette(
             c("#6C757D", "#212529", "#DA291C"))(dplyr::n_distinct(x$Anho))) +
           ggplot2::scale_x_continuous(breaks = 1:12) + ggplot2::labs(x = "Mes", y = medida, colour = "Año") +
-          ggplot2::theme_minimal(base_size = 11)
+          .crm_tema_grafico()
       } else {
         x <- x[order(abs(x[[medida]]), decreasing = TRUE), , drop = FALSE]
         x <- head(x, 15)
@@ -109,7 +109,7 @@ AnalisisComercial <- function(id, hechos, clientes, filtros, tipo = "evolucion",
           ggplot2::geom_col(fill = "#DA291C", na.rm = TRUE) + ggplot2::coord_flip() +
           ggplot2::labs(x = NULL, y = medida,
             caption = "Las 15 mayores contribuciones absolutas; tabla completa abajo.") +
-          ggplot2::theme_minimal(base_size = 11)
+          .crm_tema_grafico()
       }
     })
     .gc_descarga(output, tabla, paste0("Analisis_", tipo))

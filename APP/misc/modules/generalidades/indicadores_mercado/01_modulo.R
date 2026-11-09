@@ -92,7 +92,7 @@ ComparacionIndicadores <- function(id) {
       )
     })
     
-    output$tabla_comparacion <- shiny::renderUI({
+    output$tabla_comparacion <- .crm_render_ui({
       resultado <- datos_comparacion_r()
       shiny::req(!is.null(resultado))
       

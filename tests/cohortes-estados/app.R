@@ -3,6 +3,7 @@ library(shiny)
 library(dplyr)
 library(lubridate)
 source("APP/misc/compartido/00_presentacion.R")
+source("APP/misc/compartido/04_interaccion.R")
 source("APP/misc/modules/cohortes_clientes/estados/00_datos.R")
 source("APP/misc/modules/cohortes_clientes/estados/01_componentes.R")
 source("APP/misc/modules/cohortes_clientes/estados/02_modulo.R")
@@ -26,3 +27,4 @@ server <- function(input, output, session) {
   CohortesEstados("cohortes", bd = reactive(panel), data_t = reactive(hechos))
 }
 shinyApp(ui, server)
+

@@ -61,36 +61,28 @@ KanbanEmbudo <- function(id, usuario) {
     # render directo para pintar las choices correctas desde el primer
     # paint, en vez de selectInput + updateSelectInput (que ademas
     # generaba el desalineado visual entre Asesor y Origen/DetOrigen)
-    output$Origen_ui <- renderUI({
-      origenes <- pipeline_raw()$Origen %>% unique() %>% sort()
-      racafeForms::racafeInputSelect(id = ns("filtro_origen"), label = h6("Origen"), choices = c("Todos", origenes),
-                              selected = "Todos", multiple = FALSE, size = 8, empty = FALSE)
+    output$Origen_ui <- .crm_render_ui({
+      opciones <- .crm_opciones(pipeline_raw()$Origen)
+      racafeForms::racafeInputSelect(ns("filtro_origen"), "Origen", choices = opciones,
+        selected = .crm_seleccion_opciones(input, session, "filtro_origen", opciones), multiple = TRUE, size = 8)
     })
-    output$DetOrigen_ui <- renderUI({
-      req(input$filtro_origen)
-      det <- if (identical(input$filtro_origen, "Todos")) {
-        pipeline_raw()$DetOrigen
-      } else {
-        pipeline_raw() %>% filter(Origen == input$filtro_origen) %>% pull(DetOrigen)
-      }
-      det <- det[!is.na(det)] %>% unique() %>% sort()
-      racafeForms::racafeInputSelect(id = ns("filtro_detorigen"), label = h6("Detalle Origen"),
-                              choices = c("Todos", det), selected = "Todos", multiple = FALSE, size = 8, empty = FALSE)
+    output$DetOrigen_ui <- .crm_render_ui({
+      base <- .crm_filtrar_opciones(pipeline_raw(), "Origen", input$filtro_origen)
+      opciones <- .crm_opciones(base$DetOrigen)
+      racafeForms::racafeInputSelect(ns("filtro_detorigen"), "Detalle Origen", choices = opciones,
+        selected = .crm_seleccion_opciones(input, session, "filtro_detorigen", opciones), multiple = TRUE, size = 8)
     })
-    output$Asesor_ui <- renderUI({
-      asesores <- pipeline_raw()$Asesor %>% unique() %>% sort()
-      racafeForms::racafeInputSelect(id = ns("filtro_asesor"), label = h6("Asesor"), choices = c("Todos", asesores),
-                              selected = "Todos", multiple = FALSE, size = 8, empty = FALSE)
+    output$Asesor_ui <- .crm_render_ui({
+      opciones <- .crm_opciones(pipeline_raw()$Asesor)
+      racafeForms::racafeInputSelect(ns("filtro_asesor"), "Asesor", choices = opciones,
+        selected = .crm_seleccion_opciones(input, session, "filtro_asesor", opciones), multiple = TRUE, size = 8)
     })
-    
     pipeline_filtrado <- reactive({
-      dat <- pipeline_raw()
-      if (!is.null(input$filtro_origen) && input$filtro_origen != "Todos") dat <- dat %>% filter(Origen == input$filtro_origen)
-      if (!is.null(input$filtro_detorigen) && input$filtro_detorigen != "Todos") dat <- dat %>% filter(DetOrigen == input$filtro_detorigen)
-      if (!is.null(input$filtro_asesor) && input$filtro_asesor != "Todos") dat <- dat %>% filter(Asesor == input$filtro_asesor)
-      dat
+      dat <- .crm_filtrar_opciones(pipeline_raw(), "Origen", input$filtro_origen)
+      dat <- .crm_filtrar_opciones(dat, "DetOrigen", input$filtro_detorigen)
+      .crm_filtrar_opciones(dat, "Asesor", input$filtro_asesor)
     })
-    
+
     # Metricas de conversion para el header de la columna CLIENTE (punto 5):
     # % Lead->Cliente y % Contacto->Cliente. Se calculan sobre el universo
     # SIN filtrar (pipeline_raw), igual que hacia el antiguo kpi_conversion,
@@ -106,7 +98,7 @@ KanbanEmbudo <- function(id, usuario) {
     })
     
     # Board ----
-    output$kanban_board <- renderUI({
+    output$kanban_board <- .crm_render_ui({
       dat <- pipeline_filtrado()
       if (nrow(dat) == 0) {
         return(div(class = "kpb-board kpb-board-vacio", tags$i(class = "fas fa-inbox fa-2x"),
@@ -225,7 +217,7 @@ KanbanEmbudo <- function(id, usuario) {
         footer = modalButton("Cerrar"))
       showModal(modal_construido)
     })
-    output$ModalContenido <- renderUI({
+    output$ModalContenido <- .crm_render_ui({
       req(accion_seleccionada())
       modulo <- .REGISTRO_MODULOS_KANBAN[[accion_seleccionada()]]
       req(modulo)

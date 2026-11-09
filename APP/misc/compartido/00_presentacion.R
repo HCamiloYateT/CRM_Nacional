@@ -1,12 +1,17 @@
 # Notas compactas fuera de cajas y tablas ----
-.crm_nota <- function(texto, ...) {
+.crm_nota <- function(texto, title = NULL, swatches = NULL, ...) {
   if (is.null(texto)) return(NULL)
+  if (inherits(texto, c("shiny.tag", "shiny.tag.list"))) texto <- list(texto)
   if (is.character(texto)) {
     html <- inherits(texto, "html")
     texto <- unlist(strsplit(texto, "\n|(?<=[.]) +(?=[[:upper:]])", perl = TRUE))
     if (html) texto <- lapply(texto, shiny::HTML)
   }
-  racafeShiny::racafeTableNote(texto, font_size = 11, color = "#495057", ...)
+  if (!is.null(swatches)) texto <- lapply(seq_along(texto), function(i) shiny::tagList(
+    shiny::tags$span(class = "crm-nota-swatch", `aria-hidden` = "true",
+      style = paste0("background:", swatches[[i]], ";")), texto[[i]]))
+  shiny::tagAppendAttributes(racafeForms::racafeNoticeList(texto, title = title, font_size = 11,
+    text_color = "#495057", accent_color = "#495057", ...), class = "crm-nota")
 }
 
 .crm_titulo_modal <- function(titulo, icono = NULL) shiny::tagList(titulo)
@@ -92,7 +97,7 @@
   output <- session$output
   .valor <- function(x) if (shiny::is.reactive(x)) x() else x
   accion <- isTRUE(mostrar_boton) && !is.null(contenido_modal)
-  output[[paste0(id, "_tarjeta")]] <- shiny::renderUI({
+  output[[paste0(id, "_tarjeta")]] <- .crm_render_ui({
     .crm_caja_ui(session$ns(id), texto = .valor(texto), icono = .valor(icono), footer = .valor(footer),
                   mostrar_boton = accion, id_boton = "btn_abrir", tooltip = .valor(titulo_modal),
                   color_fondo = .valor(color_fondo_hex))
@@ -237,7 +242,7 @@
     .evento <- function(id, valor) paste0("Shiny.setInputValue(",
       jsonlite::toJSON(session$ns(id), auto_unbox = TRUE), ",", jsonlite::toJSON(valor, auto_unbox = TRUE),
       ",{priority:'event'});")
-    output$tabla <- shiny::renderUI({
+    output$tabla <- .crm_render_ui({
       datos <- .datos()
       filas <- .filas()
       desde <- (min(pagina(), .paginas()) - 1L) * page_size
@@ -278,7 +283,7 @@
   id <- if (!is.null(argumentos[["id", exact = TRUE]])) argumentos[["id", exact = TRUE]] else argumentos[[1]]
   session <- shiny::getDefaultReactiveDomain()
   output <- session$output
-  output[[paste0(id, "_nota")]] <- shiny::renderUI({
+  output[[paste0(id, "_nota")]] <- .crm_render_ui({
     nota <- if (shiny::is.reactive(footer)) footer() else footer
     if (is.null(nota)) return(NULL)
     tipo <- if (footer_tipo == "danger") "error" else if (footer_tipo == "warning") "warning" else "info"

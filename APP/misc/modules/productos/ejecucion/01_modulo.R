@@ -79,15 +79,15 @@ ProductosEjecucion <- function(id, hechos) {
       x <- x[order(abs(x[[medida()]]), decreasing = TRUE, na.last = TRUE), ]
       head(x, top())
     })
-    output$ranking <- shiny::renderPlot({
+    output$ranking <- .crm_render_plot({
       x <- ranking()
       shiny::validate(shiny::need(nrow(x) > 0, "No hay ejecución para este periodo."))
       ggplot2::ggplot(x, ggplot2::aes(x = stats::reorder(Etiqueta, .data[[medida()]]), y = .data[[medida()]])) +
         ggplot2::geom_col(fill = "#DA291C", na.rm = TRUE) + ggplot2::coord_flip() +
         ggplot2::labs(x = NULL, y = medida(), title = "Ranking de contribución neta") +
-        ggplot2::theme_minimal(base_size = 10)
+        .crm_tema_grafico()
     })
-    output$pareto <- shiny::renderPlot({
+    output$pareto <- .crm_render_plot({
       x <- tabla(); x <- x[order(x$Participacion, decreasing = TRUE), ]
       x$Acumulado <- cumsum(x$Participacion)
       x$Posicion <- seq_len(nrow(x))
@@ -100,7 +100,7 @@ ProductosEjecucion <- function(id, hechos) {
         ggplot2::scale_y_continuous(labels = scales::label_percent()) +
         ggplot2::labs(x = "Productos/categorías ordenados", y = "Participación acumulada",
           title = "Concentración 80/20") +
-        ggplot2::theme_minimal(base_size = 11)
+        .crm_tema_grafico()
     })
     serie <- shiny::reactive({
       x <- datos()
@@ -112,7 +112,7 @@ ProductosEjecucion <- function(id, hechos) {
         Margen = .prod_suma(Margen), Clientes = dplyr::n_distinct(NIT[!is.na(NIT)]), .groups = "drop") %>%
         dplyr::mutate(MargenKg = .prod_div(Margen, Sacos * 70))
     })
-    output$tendencia <- shiny::renderPlot({
+    output$tendencia <- .crm_render_plot({
       x <- serie()
       shiny::validate(shiny::need(nrow(x) > 0, "Sin serie temporal."))
       ggplot2::ggplot(x, ggplot2::aes(x = Mes, y = .data[[medida()]], colour = Serie, group = Serie)) +
@@ -121,16 +121,16 @@ ProductosEjecucion <- function(id, hechos) {
         ggplot2::scale_colour_manual(values = grDevices::colorRampPalette(
           c("#DA291C", "#6C757D", "#212529"))(dplyr::n_distinct(x$Serie))) +
         ggplot2::labs(x = NULL, y = medida(), title = "Evolución de los cinco principales y resto") +
-        ggplot2::theme_minimal(base_size = 10) + ggplot2::theme(legend.position = "bottom")
+        .crm_tema_grafico() + ggplot2::theme(legend.position = "bottom")
     })
-    output$rentabilidad <- shiny::renderPlot({
+    output$rentabilidad <- .crm_render_plot({
       x <- tabla()
       shiny::validate(shiny::need(nrow(x) > 0, "Sin productos en el periodo."))
       ggplot2::ggplot(x, ggplot2::aes(x = Sacos, y = MargenKg, size = Clientes)) +
         ggplot2::geom_point(colour = "#DA291C", alpha = 0.65, na.rm = TRUE) +
         ggplot2::geom_hline(yintercept = 0, colour = "#6C757D", linetype = "dashed") +
         ggplot2::labs(x = "Sacos netos de 70 kg", y = "Margen neto/kg", title = "Volumen, rentabilidad y alcance") +
-        ggplot2::theme_minimal(base_size = 11)
+        .crm_tema_grafico()
     })
     output$descargar <- shiny::downloadHandler(filename = function() paste0("Productos_", Sys.Date(), ".xlsx"),
       content = function(file) writexl::write_xlsx(list(Resumen = tabla(), Serie = serie(),

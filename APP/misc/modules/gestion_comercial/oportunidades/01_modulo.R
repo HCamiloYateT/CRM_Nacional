@@ -73,17 +73,19 @@
 OportunidadesGestionUI <- function(id) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
-    racafeForms::racafeActionBar(left = racafeForms::racafeButton("actualizar", "Actualizar", ns = ns,
-      variant = "secondary", icon = "arrows-rotate")),
-    racafeForms::racafeFormRow(columns = 2,
-      racafeForms::racafeInputSelect("contacto", "Contacto para una nueva oportunidad", choices = character(), ns = ns),
-      racafeForms::racafeButton("crear", "Nueva oportunidad", icon = "plus", ns = ns)),
+    racafeForms::racafeActionBar(left = shiny::tagList(
+      racafeForms::racafeButton("crear", "Nueva oportunidad", icon = "plus", ns = ns),
+      racafeForms::racafeButton("actualizar", "Actualizar", ns = ns,
+        variant = "secondary", icon = "arrows-rotate"))),
+    racafeForms::racafeFormRow(columns = 3, responsive = "auto",
+      racafeForms::racafeInputSelect("contacto", "Contacto para una nueva oportunidad",
+        choices = character(), ns = ns),
+      racafeForms::racafeInputSelect("estado", "Mostrar", choices = c("Activas", "Descartadas"),
+        selected = "Activas", multiple = TRUE, gender = "f", ns = ns),
+      racafeForms::racafeInputSelect("dimension", "Agrupar tablero por", choices = c("Autor", "Categoria", "Producto"),
+        empty = FALSE, ns = ns)),
     .gc_tarjetas_ui(ns, c(total = "Oportunidades activas", vencidas = "Vencidas",
       sacos = "Objetivo de sacos 70 kg", margen = "Margen objetivo")),
-    racafeForms::racafeFormRow(columns = 2,
-      racafeForms::racafeInputSelect("estado", "Mostrar", choices = c("Activas", "Todas", "Descartadas"), ns = ns),
-      racafeForms::racafeInputSelect("dimension", "Agrupar tablero por", choices = c("Autor", "Categoria", "Producto"),
-        ns = ns)),
     .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("resumen"), titulo = "Tablero de oportunidades"),
     .crm_tabla_ui(ns("detalle"), titulo = "Oportunidades y cumplimiento"),
     .crm_nota(c("El cumplimiento cruza contacto, línea, categoría y producto entre creación y fecha objetivo.",
@@ -124,8 +126,8 @@ OportunidadesGestion <- function(id, usuario, es_admin, hechos, cargar = racafeB
     })
     datos <- shiny::reactive({
       x <- .op_preparar(fuente(), contactos(), hechos(), usuario(), es_admin())
-      if (identical(input$estado, "Descartadas")) x <- x[x$Descartada, ]
-      if (is.null(input$estado) || identical(input$estado, "Activas")) x <- x[!x$Descartada, ]
+      estados <- ifelse(x$Descartada, "Descartadas", "Activas")
+      x <- x[estados %in% input$estado, , drop = FALSE]
       x
     })
     .gc_tarjetas_server(c(total = "Oportunidades activas", vencidas = "Vencidas",

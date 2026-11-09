@@ -32,8 +32,8 @@ EvolucionNegocioUI <- function(id, cierre = Sys.Date()) {
     shiny::conditionalPanel("['Linea','Segmento','Asesor'].includes(input.vista)", ns = ns,
       racafeForms::racafeFormRow(columns = 2,
         racafeForms::racafeInputSelect("negocio", "Línea del desglose",
-          choices = c("Todas", "A la medida", "Coproductos"),
-          empty = FALSE, ns = ns),
+          choices = c("A la medida", "Coproductos"),
+          selected = c("A la medida", "Coproductos"), multiple = TRUE, gender = "f", ns = ns),
         racafeForms::racafeInputSelect("base", "Año base para crecimiento",
           choices = as.character(2016:max(2016L, as.integer(format(Sys.Date(), "%Y")) - 1L)),
           selected = "2023", empty = FALSE, ns = ns)),
@@ -115,12 +115,10 @@ EvolucionNegocio <- function(id, hechos, clientes, filtros, cierre, es_admin,
       fechas <- fuente$FecMes[fuente$EstadoFinanciero == "CERRADO" & !is.na(fuente$FecMes)]
       inicio <- if (length(fechas)) min(as.integer(format(fechas, "%Y"))) else 2016L
       x <- mensual()
-      if (length(input$negocio) == 1L && input$negocio %in% c("A la medida", "Coproductos")) {
-        x <- x[x$Linea == input$negocio, ]
-      }
+      x <- x[x$Linea %in% input$negocio, , drop = FALSE]
       f <- filtros()
-      if (identical(input$negocio, "A la medida")) f$linneg <- intersect(f$linneg, "A LA MEDIDA")
-      if (identical(input$negocio, "Coproductos")) f$linneg <- intersect(f$linneg, "CONVENCIONALES")
+      codigos <- c("A la medida" = "A LA MEDIDA", Coproductos = "CONVENCIONALES")
+      f$linneg <- intersect(f$linneg, unname(codigos[input$negocio]))
       e <- .ev_anual(x, clientes(), f, corte(), dimension(), isTRUE(input$comparable), referencia$anual,
         permitir_referencia = isTRUE(es_admin()) && .ev_completo(fuente, filtros()), inicio_etl = inicio,
         presupuesto_disponible = .ev_completo(fuente, filtros(), c("categoria", "producto")))
@@ -135,7 +133,7 @@ EvolucionNegocio <- function(id, hechos, clientes, filtros, cierre, es_admin,
     })
     .gc_tarjetas_server(.EV_CAJAS, indicador, list(sacos = "numero", margen = "dinero",
       cumpl_sacos = "porcentaje", cumpl_margen = "porcentaje"))
-    output$alcance <- shiny::renderUI(.crm_nota(c(
+    output$alcance <- .crm_render_ui(.crm_nota(c(
       paste("Corte efectivo:", format(corte(), "%Y-%m"), "·", if (isTRUE(input$abiertos)) {
         "Incluye facturación provisional; su margen puede ser estimado."
       } else "Solo meses cerrados financieramente."),
@@ -153,15 +151,15 @@ EvolucionNegocio <- function(id, hechos, clientes, filtros, cierre, es_admin,
       .ev_crecimiento(anual(), base, as.integer(format(corte(), "%Y")))
     })
     .crm_vancouver_server("crecimiento", data = crecimiento, col_specs = .EV_PCT)
-    output$margen <- shiny::renderPlot({
+    output$margen <- .crm_render_plot({
       x <- anual(); shiny::validate(shiny::need(nrow(x), "No hay historia para el alcance seleccionado."))
       .ev_grafico(x, "Margen", isTRUE(input$proyectar))
     })
-    output$sacos <- shiny::renderPlot({
+    output$sacos <- .crm_render_plot({
       x <- anual(); shiny::validate(shiny::need(nrow(x), "No hay historia para el alcance seleccionado."))
       .ev_grafico(x, "Sacos", isTRUE(input$proyectar))
     })
-    output$total <- shiny::renderPlot({
+    output$total <- .crm_render_plot({
       x <- anual() %>% dplyr::group_by(Anho) %>% dplyr::summarise(Margen = .com_suma(Margen),
         Sacos = .com_suma(Sacos), .groups = "drop")
       shiny::validate(shiny::need(nrow(x), "No hay historia para el alcance seleccionado."))
@@ -170,7 +168,7 @@ EvolucionNegocio <- function(id, hechos, clientes, filtros, cierre, es_admin,
       ggplot2::ggplot(z, ggplot2::aes(x = factor(Anho), y = Valor)) +
         ggplot2::geom_col(fill = "#495057", na.rm = TRUE) + ggplot2::facet_wrap(~Metrica, scales = "free_y") +
         ggplot2::labs(x = NULL, y = NULL, title = "Industria Nacional · alcance consultado") +
-        ggplot2::theme_minimal(base_size = 11)
+        .crm_tema_grafico()
     })
     nuevos <- shiny::reactive(.ev_nuevos(mensual(), primera_compra(), as.integer(format(corte(), "%Y")), "Linea"))
     .gc_tarjetas_server(c(nuevos_clientes = "Clientes únicos con primera compra observada",
@@ -181,13 +179,13 @@ EvolucionNegocio <- function(id, hechos, clientes, filtros, cierre, es_admin,
         nuevos_ticket = .gc_ratio(.com_suma(x$Sacos), n))
     }), list(nuevos_sacos = "numero", nuevos_margen = "dinero", nuevos_ticket = "numero"))
     .crm_vancouver_server("nuevos", data = nuevos)
-    output$nuevos_grafico <- shiny::renderPlot({
+    output$nuevos_grafico <- .crm_render_plot({
       x <- nuevos(); shiny::validate(shiny::need(nrow(x), "Sin primeras compras observadas en este año."))
       ggplot2::ggplot(x, ggplot2::aes(x = Dimension, y = Clientes)) + ggplot2::geom_col(fill = "#DA291C") +
-        ggplot2::labs(x = NULL, y = "Clientes") + ggplot2::theme_minimal(base_size = 11)
+        ggplot2::labs(x = NULL, y = "Clientes") + .crm_tema_grafico()
     })
     plan <- shiny::reactive({ shiny::req(isTRUE(es_admin())); referencia$plan })
-    output$plan_ui <- shiny::renderUI({
+    output$plan_ui <- .crm_render_ui({
       if (!isTRUE(es_admin())) return(.crm_nota("El escenario corporativo está disponible para administradores."))
       .crm_nota("Plan original: escenario de la presentación, separado de la ejecución y del presupuesto vigente.")
     })
@@ -200,12 +198,12 @@ EvolucionNegocio <- function(id, hechos, clientes, filtros, cierre, es_admin,
     }))
     for (medida in c("Margen", "Sacos")) local({
       m <- medida
-      output[[paste0("plan_", tolower(m))]] <- shiny::renderPlot({
+      output[[paste0("plan_", tolower(m))]] <- .crm_render_plot({
         x <- plan(); x$Valor <- x[[paste0("Meta", m)]] / if (m == "Margen") 1e6 else 1
         ggplot2::ggplot(x, ggplot2::aes(x = factor(Anho), y = Valor, fill = Linea)) +
           ggplot2::geom_col() + ggplot2::scale_fill_manual(values = c("#DA291C", "#495057")) +
           ggplot2::labs(x = NULL, y = if (m == "Margen") "Meta margen · millones COP" else "Meta sacos 70 kg",
-            fill = NULL) + ggplot2::theme_minimal(base_size = 11) + ggplot2::theme(legend.position = "bottom")
+            fill = NULL) + .crm_tema_grafico() + ggplot2::theme(legend.position = "bottom")
       })
     })
     calidad <- shiny::reactive({

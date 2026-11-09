@@ -46,7 +46,7 @@
 }
 .GraficoDetalleEmbudo <- function(id, plot_reactive) {
   moduleServer(id, function(input, output, session) {
-    output$grafico <- plotly::renderPlotly({
+    output$grafico <- .crm_render_plotly({
       plot_reactive()
     })
   })
@@ -66,33 +66,33 @@ EmbudoConversionUI <- function(id) {
     ),
     
     fluidRow(
-      column(2, racafeModulos::CajaModalUI(ns("kpi_total_contactos"))),
-      column(2, racafeModulos::CajaModalUI(ns("kpi_total_leads"))),
-      column(2, racafeModulos::CajaModalUI(ns("kpi_total_prospectos"))),
-      column(3, racafeModulos::CajaModalUI(ns("kpi_total_clientes"))),
-      column(3, racafeModulos::CajaModalUI(ns("kpi_total_descartados")))
+      column(2, .crm_caja_modal_ui(ns("kpi_total_contactos"))),
+      column(2, .crm_caja_modal_ui(ns("kpi_total_leads"))),
+      column(2, .crm_caja_modal_ui(ns("kpi_total_prospectos"))),
+      column(3, .crm_caja_modal_ui(ns("kpi_total_clientes"))),
+      column(3, .crm_caja_modal_ui(ns("kpi_total_descartados")))
     ),
     
     box(
       title = "Conversión Histórica",
       width = 12, collapsible = FALSE,
       fluidRow(
-        column(3, racafeModulos::CajaModalUI(ns("kpi_tasa_contacto_lead"))),
-        column(3, racafeModulos::CajaModalUI(ns("kpi_tasa_prospecto_a_lead"))),
-        column(3, racafeModulos::CajaModalUI(ns("kpi_tasa_lead_cliente"))),
-        column(3, racafeModulos::CajaModalUI(ns("kpi_mejor_canal")))
+        column(3, .crm_caja_modal_ui(ns("kpi_tasa_contacto_lead"))),
+        column(3, .crm_caja_modal_ui(ns("kpi_tasa_prospecto_a_lead"))),
+        column(3, .crm_caja_modal_ui(ns("kpi_tasa_lead_cliente"))),
+        column(3, .crm_caja_modal_ui(ns("kpi_mejor_canal")))
       ),
       tags$hr(),
       tabsetPanel(
         tabPanel(
           "Usuario",
           Saltos(),
-          racafeModulos::TablaReactable2UI(ns("tabla_usuario"))
+          .crm_tabla_legacy_ui(ns("tabla_usuario"))
         ),
         tabPanel(
           "Origen",
           Saltos(),
-          racafeModulos::TablaReactable2UI(ns("tabla_origen")),
+          .crm_tabla_legacy_ui(ns("tabla_origen")),
           tags$hr(),
           shinyjs::hidden(
             tags$div(
@@ -102,24 +102,24 @@ EmbudoConversionUI <- function(id) {
                 tamano_pct = 0.8,
                 color = "#64748B"
               ),
-              racafeModulos::TablaReactable2UI(ns("tabla_det_origen"))
+              .crm_tabla_legacy_ui(ns("tabla_det_origen"))
             )
           )
         ),
         tabPanel(
           "Línea de Negocio",
           Saltos(),
-          racafeModulos::TablaReactable2UI(ns("tabla_lin_negocio"))
+          .crm_tabla_legacy_ui(ns("tabla_lin_negocio"))
         ),
         tabPanel(
           "Segmento",
           Saltos(),
-          racafeModulos::TablaReactable2UI(ns("tabla_segmento"))
+          .crm_tabla_legacy_ui(ns("tabla_segmento"))
         ),
         tabPanel(
           "Asesor",
           Saltos(),
-          racafeModulos::TablaReactable2UI(ns("tabla_asesor"))
+          .crm_tabla_legacy_ui(ns("tabla_asesor"))
         )
       ),
       tags$hr(),
@@ -138,9 +138,9 @@ EmbudoConversionUI <- function(id) {
       title = "Velocidad del Ciclo",
       width = 12, collapsible = FALSE,
       fluidRow(
-        column(4, racafeModulos::CajaModalUI(ns("kpi_tiempo_contacto_lead"))),
-        column(4, racafeModulos::CajaModalUI(ns("kpi_tiempo_lead_cliente"))),
-        column(4, racafeModulos::CajaModalUI(ns("kpi_tiempo_ciclo_total")))
+        column(4, .crm_caja_modal_ui(ns("kpi_tiempo_contacto_lead"))),
+        column(4, .crm_caja_modal_ui(ns("kpi_tiempo_lead_cliente"))),
+        column(4, .crm_caja_modal_ui(ns("kpi_tiempo_ciclo_total")))
       )
     ),
     
@@ -148,10 +148,10 @@ EmbudoConversionUI <- function(id) {
       title = "Pérdida y Calidad",
       width = 12, collapsible = FALSE,
       fluidRow(
-        column(3, racafeModulos::CajaModalUI(ns("kpi_tasa_descarte_contacto"))),
-        column(3, racafeModulos::CajaModalUI(ns("kpi_tasa_descarte_prospecto"))),
-        column(3, racafeModulos::CajaModalUI(ns("kpi_tasa_descarte_lead"))),
-        column(3, racafeModulos::CajaModalUI(ns("kpi_motivo_top")))
+        column(3, .crm_caja_modal_ui(ns("kpi_tasa_descarte_contacto"))),
+        column(3, .crm_caja_modal_ui(ns("kpi_tasa_descarte_prospecto"))),
+        column(3, .crm_caja_modal_ui(ns("kpi_tasa_descarte_lead"))),
+        column(3, .crm_caja_modal_ui(ns("kpi_motivo_top")))
       ),
       tags$hr(),
       plotly::plotlyOutput(ns("grafico_descartados"), height = "380px")
@@ -161,9 +161,9 @@ EmbudoConversionUI <- function(id) {
       title = "Actividad Reciente — 30 días",
       width = 12, collapsible = FALSE,
       fluidRow(
-        column(4, racafeModulos::CajaModalUI(ns("kpi_contactos_30d"))),
-        column(4, racafeModulos::CajaModalUI(ns("kpi_leads_30d"))),
-        column(4, racafeModulos::CajaModalUI(ns("kpi_clientes_30d")))
+        column(4, .crm_caja_modal_ui(ns("kpi_contactos_30d"))),
+        column(4, .crm_caja_modal_ui(ns("kpi_leads_30d"))),
+        column(4, .crm_caja_modal_ui(ns("kpi_clientes_30d")))
       )
     ),
     
@@ -285,12 +285,12 @@ EmbudoConversion <- function(id) {
     
     ### Graficos ----
     # Grafica el funnel principal de conversion.
-    output$grafico_embudo <- plotly::renderPlotly({
+    output$grafico_embudo <- .crm_render_plotly({
       grafico_embudo(metricas())
     })
     
     # Mantiene el treemap probado de descartes por etapa y motivo.
-    output$grafico_descartados <- plotly::renderPlotly({
+    output$grafico_descartados <- .crm_render_plotly({
       grafico_descartados(
         descartes_treemap_r()
       )
@@ -314,7 +314,7 @@ EmbudoConversion <- function(id) {
       datos_usuario_r, "Dim"
     )
     
-    racafeModulos::TablaReactable2(
+    .crm_tabla_legacy(
       id = "tabla_usuario", data = datos_usuario_r, columnas = NULL,
       col_specs = .col_specs_dimension_embudo(
         estilo_total_usuario, "Usuario"
@@ -334,7 +334,7 @@ EmbudoConversion <- function(id) {
       datos_origen_r, "Dim"
     )
     
-    modulo_tabla_origen <- racafeModulos::TablaReactable2(
+    modulo_tabla_origen <- .crm_tabla_legacy(
       id = "tabla_origen", data = datos_origen_r, columnas = NULL,
       col_specs = .col_specs_dimension_embudo(
         estilo_total_origen, "Origen"
@@ -376,7 +376,7 @@ EmbudoConversion <- function(id) {
       datos_det_origen_r, "Dim"
     )
     
-    racafeModulos::TablaReactable2(
+    .crm_tabla_legacy(
       id = "tabla_det_origen", data = datos_det_origen_r,
       columnas = NULL,
       col_specs = .col_specs_dimension_embudo(
@@ -397,7 +397,7 @@ EmbudoConversion <- function(id) {
       datos_lin_negocio_r, "Dim"
     )
     
-    racafeModulos::TablaReactable2(
+    .crm_tabla_legacy(
       id = "tabla_lin_negocio", data = datos_lin_negocio_r,
       columnas = NULL,
       col_specs = .col_specs_dimension_embudo(
@@ -418,7 +418,7 @@ EmbudoConversion <- function(id) {
       datos_segmento_r, "Dim"
     )
     
-    racafeModulos::TablaReactable2(
+    .crm_tabla_legacy(
       id = "tabla_segmento", data = datos_segmento_r,
       columnas = NULL,
       col_specs = .col_specs_dimension_embudo(
@@ -439,7 +439,7 @@ EmbudoConversion <- function(id) {
       datos_asesor_r, "Dim"
     )
     
-    racafeModulos::TablaReactable2(
+    .crm_tabla_legacy(
       id = "tabla_asesor", data = datos_asesor_r,
       columnas = NULL,
       col_specs = .col_specs_dimension_embudo(
@@ -515,18 +515,14 @@ EmbudoConversion <- function(id) {
     })
     
     # Informa la cobertura de coordenadas disponibles.
-    output$nota_geo <- renderUI({
-      paste0(
-        geo()$total_con_coordenadas,
-        " de ",
-        geo()$total_con_ubicacion,
-        " contactos con ubicación tienen coordenadas validadas (lat/lng)."
-      )
+    output$nota_geo <- .crm_render_ui({
+      .crm_nota(paste0(geo()$total_con_coordenadas, " de ", geo()$total_con_ubicacion,
+        " contactos con ubicación tienen coordenadas validadas (lat/lng)."))
     })
     
     ### Volumen ----
     # Muestra el numero vigente de contactos.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_total_contactos",
       valor = reactive(metricas()$total_contactos),
       texto = "Contactos", icono = "address-book",
@@ -535,7 +531,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra el numero vigente de leads.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_total_leads",
       valor = reactive(metricas()$total_leads),
       texto = "Leads", icono = "bullseye",
@@ -544,7 +540,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra el numero vigente de prospectos.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_total_prospectos",
       valor = reactive(metricas()$total_prospectos),
       texto = "Prospectos", icono = "handshake",
@@ -553,7 +549,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra el numero vigente de clientes.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_total_clientes",
       valor = reactive(metricas()$total_clientes),
       texto = "Clientes", icono = "user-check",
@@ -562,7 +558,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra el numero vigente de descartados.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_total_descartados",
       valor = reactive(metricas()$total_descartados),
       texto = "Descartados", icono = "ban",
@@ -572,7 +568,7 @@ EmbudoConversion <- function(id) {
     
     ### Conversion ----
     # Muestra la conversion historica de Contacto a Lead.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_tasa_contacto_lead",
       valor = reactive(metricas()$tasa_contacto_lead),
       formato = "porcentaje",
@@ -583,7 +579,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra la conversion historica de Prospecto a Lead.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_tasa_prospecto_a_lead",
       valor = reactive(metricas()$tasa_prospecto_a_lead),
       formato = "porcentaje",
@@ -594,7 +590,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra la conversion historica de Lead a Cliente.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_tasa_lead_cliente",
       valor = reactive(metricas()$tasa_lead_cliente),
       formato = "porcentaje",
@@ -605,7 +601,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Identifica el canal con mayor tasa de conversion.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_mejor_canal",
       valor = reactive({
         dat <- metricas()$conversion_por_canal %>%
@@ -643,7 +639,7 @@ EmbudoConversion <- function(id) {
     
     ### Velocidad ----
     # Muestra los dias promedio desde la creacion hasta Lead.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_tiempo_contacto_lead",
       valor = reactive(metricas()$tiempo_contacto_lead),
       formato = "numero",
@@ -654,7 +650,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra los dias promedio entre Lead y Cliente.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_tiempo_lead_cliente",
       valor = reactive(metricas()$tiempo_lead_cliente),
       formato = "numero",
@@ -665,7 +661,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra la duracion promedio del ciclo completo.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_tiempo_ciclo_total",
       valor = reactive(metricas()$tiempo_ciclo_total),
       formato = "numero",
@@ -677,7 +673,7 @@ EmbudoConversion <- function(id) {
     
     ### Perdida y Calidad ----
     # Muestra la tasa historica de descarte desde Contacto.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_tasa_descarte_contacto",
       valor = reactive(metricas()$tasa_descarte_contacto),
       formato = "porcentaje",
@@ -688,7 +684,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra la tasa historica de descarte desde Lead.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_tasa_descarte_lead",
       valor = reactive(metricas()$tasa_descarte_lead),
       formato = "porcentaje",
@@ -699,7 +695,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra la tasa historica de descarte desde Prospecto.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_tasa_descarte_prospecto",
       valor = reactive(metricas()$tasa_descarte_prospecto),
       formato = "porcentaje",
@@ -710,7 +706,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra el principal motivo de descarte sin abrir un detalle.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_motivo_top",
       valor = reactive({
         dat <- metricas()$motivos_descarte
@@ -727,7 +723,7 @@ EmbudoConversion <- function(id) {
     
     ### Actividad Reciente ----
     # Muestra los contactos creados durante los ultimos 30 dias.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_contactos_30d",
       valor = reactive(metricas()$contactos_30d),
       texto = "Contactos (últimos 30d)",
@@ -737,7 +733,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra las transiciones a Lead durante los ultimos 30 dias.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_leads_30d",
       valor = reactive(metricas()$leads_30d),
       texto = "Leads (últimos 30d)",
@@ -747,7 +743,7 @@ EmbudoConversion <- function(id) {
     )
     
     # Muestra las conversiones a Cliente durante los ultimos 30 dias.
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_clientes_30d",
       valor = reactive(metricas()$clientes_30d),
       texto = "Clientes (últimos 30d)",

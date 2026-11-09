@@ -7,7 +7,7 @@ DetalleCurvaConversionUI <- function(id) {
       style = "display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;",
       div(style = "width:220px;",
           racafeForms::racafeInputSelect(id = ns("agrupador"), label = h6("Desglosar por"),
-                                  choices = c("Ninguno (solo Total)" = "ninguno", "Origen" = "Origen",
+                                  choices = c("Solo total" = "ninguno", "Origen" = "Origen",
                                        "Detalle Origen" = "DetOrigen", "Cohorte de Creación" = "Cohorte"),
                                   selected = "ninguno", multiple = FALSE, size = 6, empty = FALSE)),
       div(style = "width:220px;",
@@ -19,9 +19,9 @@ DetalleCurvaConversionUI <- function(id) {
     fluidRow(
       column(9, plotly::plotlyOutput(ns("curva_km"), height = "450px")),
       column(3,
-             racafeModulos::CajaModalUI(ns("kpi_analizados")), br(),
-             racafeModulos::CajaModalUI(ns("kpi_convertidos")), br(),
-             racafeModulos::CajaModalUI(ns("kpi_censurados")))
+             .crm_caja_modal_ui(ns("kpi_analizados")), br(),
+             .crm_caja_modal_ui(ns("kpi_convertidos")), br(),
+             .crm_caja_modal_ui(ns("kpi_censurados")))
     )
   )
 }
@@ -63,7 +63,7 @@ DetalleCurvaConversion <- function(id, datos_filtrados) {
       req(nrow(dat) > 0, sum(dat$Evento) > 0)
       survival::survfit(survival::Surv(TiempoDias, Evento) ~ 1, data = dat)
     })
-    output$curva_km <- plotly::renderPlotly({
+    output$curva_km <- .crm_render_plotly({
       req(input$agrupador, input$unidad_tiempo)
       dat <- datos_supervivencia_r()
       curva_total <- .curva_km(dat, input$unidad_tiempo)
@@ -127,7 +127,7 @@ DetalleCurvaConversion <- function(id, datos_filtrados) {
       if (is.null(fit)) return(NULL)
       summary(fit)$table
     })
-    racafeModulos::CajaModal("kpi_analizados",
+    .crm_caja_modal("kpi_analizados",
               valor = reactive({
                 tabla <- tabla_surv_r()
                 if (is.null(tabla)) 0 else html_valor(tabla[["records"]], formato = "coma", color = "#404040")
@@ -137,7 +137,7 @@ DetalleCurvaConversion <- function(id, datos_filtrados) {
               mostrar_boton = FALSE,
               footer = paste0("Incluye todos los contactos del universo analizado, ",
                               "sin restringir por etapa o estado vigente."))
-    racafeModulos::CajaModal("kpi_convertidos",
+    .crm_caja_modal("kpi_convertidos",
               valor = reactive({
                 tabla <- tabla_surv_r()
                 if (is.null(tabla)) 0 else html_valor(tabla[["events"]], formato = "coma", color = "#198754")
@@ -147,7 +147,7 @@ DetalleCurvaConversion <- function(id, datos_filtrados) {
               mostrar_boton = FALSE,
               footer = paste0("Contactos que alcanzaron históricamente la etapa Lead, ",
                               "aunque actualmente estén en otra etapa o estado."))
-    racafeModulos::CajaModal("kpi_censurados",
+    .crm_caja_modal("kpi_censurados",
               valor = reactive({
                 tabla <- tabla_surv_r()
                 if (is.null(tabla)) {
@@ -187,7 +187,7 @@ DetalleAnalisisConversionUI <- function(id) {
         DetalleCurvaConversionUI(ns("mod_curva"))),
     br(),
     box(title = "Conversión por Cohorte de Creación", width = 12, collapsible = TRUE, collapsed = FALSE,
-        racafeModulos::TablaReactable2UI(ns("tabla_cohorte_conv")),
+        .crm_tabla_legacy_ui(ns("tabla_cohorte_conv")),
         FormatearTexto(
           paste0("La cohorte considera conversiones históricas a Lead. ",
                  "Los contactos convertidos pueden tener actualmente una etapa o estado diferente."),
@@ -196,7 +196,7 @@ DetalleAnalisisConversionUI <- function(id) {
         tags$hr(),
         FormatearTexto("Matriz Mes de Creación × Meses hasta Conversión", tamano_pct = 1, negrita = TRUE),
         div(style = "width:100%; overflow-x:auto;",
-            racafeModulos::TablaReactable2UI(ns("tabla_matriz_cohorte")),
+            .crm_tabla_legacy_ui(ns("tabla_matriz_cohorte")),
             FormatearTexto(
               paste0("Cada celda representa contactos convertidos históricamente a Lead ",
                      "según su mes de creación y el mes relativo de conversión. ",
@@ -207,7 +207,7 @@ DetalleAnalisisConversionUI <- function(id) {
         shinyjs::hidden(
           tags$div(id = ns("BloqueDetalleCohorte"),
                    FormatearTexto("Contactos de la celda seleccionada", tamano_pct = 0.9, color = "#64748B"),
-                   racafeModulos::TablaReactable2UI(ns("tabla_detalle_cohorte")))
+                   .crm_tabla_legacy_ui(ns("tabla_detalle_cohorte")))
         )),
     uiOutput(ns("ModalDetalle"))
   )
@@ -219,33 +219,24 @@ DetalleAnalisisConversion <- function(id, universo_contactos, usuario) {
     accion_detalle_seleccionada <- reactiveVal(NULL)
     titulo_modal_detalle <- reactiveVal(NULL)
     # Filtros ----
-    output$Origen_ui <- renderUI({
-      origenes <- universo_contactos()$Origen
-      origenes <- origenes[!is.na(origenes)] %>% unique() %>% sort()
-      racafeForms::racafeInputSelect(id = ns("Origen"), label = h6("Filtrar Origen"), choices = c("Todos", origenes),
-                              selected = "Todos", multiple = FALSE, size = 8, empty = FALSE)
+    output$Origen_ui <- .crm_render_ui({
+      opciones <- .crm_opciones(universo_contactos()$Origen)
+      racafeForms::racafeInputSelect(ns("Origen"), "Origen", choices = opciones,
+        selected = .crm_seleccion_opciones(input, session, "Origen", opciones), multiple = TRUE, size = 8)
     })
-    output$DetOrigen_ui <- renderUI({
-      req(input$Origen)
-      det <- if (identical(input$Origen, "Todos")) {
-        universo_contactos()$DetOrigen
-      } else {
-        universo_contactos() %>% filter(Origen == input$Origen) %>% pull(DetOrigen)
-      }
-      det <- det[!is.na(det)] %>% unique() %>% sort()
-      racafeForms::racafeInputSelect(id = ns("DetOrigen"), label = h6("Filtrar Detalle Origen"),
-                              choices = c("Todos", det), selected = "Todos", multiple = FALSE, size = 8, empty = FALSE)
+    output$DetOrigen_ui <- .crm_render_ui({
+      base <- .crm_filtrar_opciones(universo_contactos(), "Origen", input$Origen)
+      opciones <- .crm_opciones(base$DetOrigen)
+      racafeForms::racafeInputSelect(ns("DetOrigen"), "Detalle Origen", choices = opciones,
+        selected = .crm_seleccion_opciones(input, session, "DetOrigen", opciones), multiple = TRUE, size = 8)
     })
-    datos_filtrados_r <- reactive({
 
-      req(input$Origen, input$DetOrigen)
-      dat <- universo_contactos()
-      if (!identical(input$Origen, "Todos")) dat <- dat %>% filter(Origen == input$Origen)
-      if (!identical(input$DetOrigen, "Todos")) dat <- dat %>% filter(DetOrigen == input$DetOrigen)
-      dat
+    datos_filtrados_r <- reactive({
+      dat <- .crm_filtrar_opciones(universo_contactos(), "Origen", input$Origen)
+      .crm_filtrar_opciones(dat, "DetOrigen", input$DetOrigen)
     })
     # Tiempo de conversion ----
-    output$kpi_tiempo <- plotly::renderPlotly({
+    output$kpi_tiempo <- .crm_render_plotly({
       dat <- datos_filtrados_r() %>%
         filter(EsLead) %>%
         mutate(RangoConversion = .rangos_antiguedad(TiempoConversionDias)) %>%
@@ -255,7 +246,7 @@ DetalleAnalisisConversion <- function(id, universo_contactos, usuario) {
     tiempos_conversion_r <- reactive({
       datos_filtrados_r() %>% filter(EsLead) %>% pull(TiempoConversionDias) %>% na.omit()
     })
-    output$densidad_tiempo <- plotly::renderPlotly({
+    output$densidad_tiempo <- .crm_render_plotly({
       x <- tiempos_conversion_r()
       if (length(x) < 3) {
         return(plotly::config(plotly::plotly_empty(type = "scatter"), displayModeBar = FALSE))
@@ -280,22 +271,18 @@ DetalleAnalisisConversion <- function(id, universo_contactos, usuario) {
         ) %>%
         plotly::config(displayModeBar = FALSE)
     })
-    output$nota_densidad <- renderUI({
+    output$nota_densidad <- .crm_render_ui({
       x <- tiempos_conversion_r()
       if (length(x) < 3) return(NULL)
-      tags$p(style = "font-size:0.75rem; color:#64748B; margin-top:4px;",
-             tags$span(style = "color:#C11007;", "▬ "),
-             paste0("Media: ", round(mean(x), 1), " días"),
-             "   ",
-             tags$span(style = "color:#198754;", "··· "),
-             paste0("Mediana: ", round(median(x), 1), " días"))
+      .crm_nota(c(paste0("Media: ", round(mean(x), 1), " días (línea continua)."),
+        paste0("Mediana: ", round(median(x), 1), " días (línea punteada).")))
     })
     # Curva de conversion ----
     DetalleCurvaConversion("mod_curva", datos_filtrados = datos_filtrados_r)
     # Cohortes ----
     datos_cohorte_conv_r <- reactive(.resumen_cohorte_lead(datos_filtrados_r()))
     .estilo_cohorte_conv <- .estilo_fila_total(datos_cohorte_conv_r, "Cohorte")
-    racafeModulos::TablaReactable2(
+    .crm_tabla_legacy(
       id = "tabla_cohorte_conv", data = datos_cohorte_conv_r, columnas = NULL,
       col_specs = list(
         Cohorte = reactable::colDef(name = "Cohorte (Mes Creación)", minWidth = 130,
@@ -414,7 +401,7 @@ DetalleAnalisisConversion <- function(id, universo_contactos, usuario) {
         cols_matriz
       )
     )
-    racafeModulos::TablaReactable2(id = "tabla_matriz_cohorte", data = matriz_cohorte_r, columnas = NULL,
+    .crm_tabla_legacy(id = "tabla_matriz_cohorte", data = matriz_cohorte_r, columnas = NULL,
                     col_specs = col_specs_matriz, modo_seleccion = "ninguno", id_col = "Cohorte",
                     sortable = FALSE, searchable = FALSE, page_size = 24, compact = TRUE,
                     mostrar_badge = FALSE, mostrar_nota = FALSE)
@@ -463,7 +450,7 @@ DetalleAnalisisConversion <- function(id, universo_contactos, usuario) {
         etapa_actual
       )
     }
-    racafeModulos::TablaReactable2(
+    .crm_tabla_legacy(
       id = "tabla_detalle_cohorte", data = detalle_cohorte_r,
       columnas = c("Acciones", "EtapaActual", "PerCod", "PerRazSoc", "Asesor", "Origen", "DetOrigen",
                    "LinNegocio", "Segmento", "FechaConversion", "TiempoConversionDias",
@@ -535,7 +522,7 @@ DetalleAnalisisConversion <- function(id, universo_contactos, usuario) {
         footer = modalButton("Cerrar"))
       showModal(modal_construido)
     })
-    output$ModalContenidoDetalle <- renderUI({
+    output$ModalContenidoDetalle <- .crm_render_ui({
       req(accion_detalle_seleccionada())
       modulo <- .REGISTRO_MODULOS_DETALLE[[accion_detalle_seleccionada()]]
       req(modulo)
@@ -576,27 +563,27 @@ DetalleLeadsUI <- function(id) {
     fluidRow(
       column(4,
              box(title = "Indicadores de Leads", width = 12, collapsible = TRUE, collapsed = FALSE,
-                 racafeModulos::CajaModalUI(ns("kpi_total")), br(),
-                 racafeModulos::CajaModalUI(ns("kpi_conversion")))),
+                 .crm_caja_modal_ui(ns("kpi_total")), br(),
+                 .crm_caja_modal_ui(ns("kpi_conversion")))),
       column(8,
              box(title = "Resumen por Dimensión", width = 12, collapsible = TRUE, collapsed = FALSE,
                  tabsetPanel(
-                   tabPanel("Usuario", Saltos(), racafeModulos::TablaReactable2UI(ns("tabla_usuario"))),
-                   tabPanel("Origen", Saltos(), racafeModulos::TablaReactable2UI(ns("tabla_origen")),
+                   tabPanel("Usuario", Saltos(), .crm_tabla_legacy_ui(ns("tabla_usuario"))),
+                   tabPanel("Origen", Saltos(), .crm_tabla_legacy_ui(ns("tabla_origen")),
                             tags$hr(),
                             shinyjs::hidden(
                               tags$div(id = ns("BloqueDetOrigen"),
                                        FormatearTexto("Detalle Origen (según fila seleccionada arriba)",
                                                       tamano_pct = 0.8, color = "#64748B"),
-                                       racafeModulos::TablaReactable2UI(ns("tabla_det_origen")))
+                                       .crm_tabla_legacy_ui(ns("tabla_det_origen")))
                             )),
-                   tabPanel("Asesor", Saltos(), racafeModulos::TablaReactable2UI(ns("tabla_asesor")),
+                   tabPanel("Asesor", Saltos(), .crm_tabla_legacy_ui(ns("tabla_asesor")),
                             FormatearTexto("Esta información solo está disponible desde la conversión a Lead.",
                                            tamano_pct = 0.75, color = "#64748B")),
-                   tabPanel("Línea de Negocio", Saltos(), racafeModulos::TablaReactable2UI(ns("tabla_linnegocio")),
+                   tabPanel("Línea de Negocio", Saltos(), .crm_tabla_legacy_ui(ns("tabla_linnegocio")),
                             FormatearTexto("Esta información solo está disponible desde la conversión a Lead.",
                                            tamano_pct = 0.75, color = "#64748B")),
-                   tabPanel("Segmento", Saltos(), racafeModulos::TablaReactable2UI(ns("tabla_segmento")),
+                   tabPanel("Segmento", Saltos(), .crm_tabla_legacy_ui(ns("tabla_segmento")),
                             FormatearTexto("Esta información solo está disponible desde la conversión a Lead.",
                                            tamano_pct = 0.75, color = "#64748B"))
                  ),
@@ -674,7 +661,7 @@ DetalleLeads <- function(id, usuario) {
       universo_contactos_r() %>% filter(CodContacto %in% cods_activos)
     })
     # KPIs ----
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_total",
       valor = reactive(html_valor(nrow(leads_activos_r()), formato = "coma", color = "#404040")),
       texto = html_texto("Total de Leads", color = "#404040"),
@@ -685,7 +672,7 @@ DetalleLeads <- function(id, usuario) {
                       "No incluye contactos que fueron Lead históricamente y hoy están en otra etapa.")
     )
     tasa_conversion_r <- reactive(mean(universo_contactos_r()$EsLead, na.rm = TRUE))
-    racafeModulos::CajaModal(
+    .crm_caja_modal(
       "kpi_conversion",
       valor = reactive(html_valor(tasa_conversion_r(), formato = "porcentaje", color = "#404040")),
       texto = html_texto("Tasa de Conversión Contacto → Lead", color = "#404040"),
@@ -703,13 +690,13 @@ DetalleLeads <- function(id, usuario) {
     # Resumen por dimension ----
     datos_usuario_r <- reactive(.resumen_dimension_lead(universo_contactos_r(), "Usuario"))
     .estilo_total_usuario <- .estilo_fila_total(datos_usuario_r, "Usuario")
-    racafeModulos::TablaReactable2(id = "tabla_usuario", data = datos_usuario_r, columnas = NULL,
+    .crm_tabla_legacy(id = "tabla_usuario", data = datos_usuario_r, columnas = NULL,
                     col_specs = .col_specs_resumen_lead("Usuario", "Usuario", .estilo_total_usuario),
                     modo_seleccion = "ninguno", id_col = "Usuario", sortable = TRUE, searchable = TRUE,
                     page_size = 10, compact = TRUE, mostrar_badge = FALSE, mostrar_nota = FALSE)
     datos_origen_r <- reactive(.resumen_dimension_lead(universo_contactos_r(), "Origen"))
     .estilo_total_origen <- .estilo_fila_total(datos_origen_r, "Origen")
-    modulo_tabla_origen <- racafeModulos::TablaReactable2(
+    modulo_tabla_origen <- .crm_tabla_legacy(
       id = "tabla_origen", data = datos_origen_r, columnas = NULL,
       col_specs = .col_specs_resumen_lead("Origen", "Origen", .estilo_total_origen),
       modo_seleccion = "fila", id_col = "Origen", sortable = TRUE, searchable = TRUE,
@@ -739,19 +726,19 @@ DetalleLeads <- function(id, usuario) {
       .resumen_dimension_lead(base, "DetOrigen")
     })
     .estilo_total_det_origen <- .estilo_fila_total(datos_det_origen_r, "DetOrigen")
-    racafeModulos::TablaReactable2(id = "tabla_det_origen", data = datos_det_origen_r, columnas = NULL,
+    .crm_tabla_legacy(id = "tabla_det_origen", data = datos_det_origen_r, columnas = NULL,
                     col_specs = .col_specs_resumen_lead("DetOrigen", "Detalle Origen", .estilo_total_det_origen),
                     modo_seleccion = "ninguno", id_col = "DetOrigen", sortable = TRUE, searchable = TRUE,
                     page_size = 10, compact = TRUE, mostrar_badge = FALSE, mostrar_nota = FALSE)
     datos_asesor_r <- reactive(.resumen_dimension_lead_convertido(universo_contactos_r(), "Asesor"))
     .estilo_total_asesor <- .estilo_fila_total(datos_asesor_r, "Asesor")
-    racafeModulos::TablaReactable2(id = "tabla_asesor", data = datos_asesor_r, columnas = NULL,
+    .crm_tabla_legacy(id = "tabla_asesor", data = datos_asesor_r, columnas = NULL,
                     col_specs = .col_specs_resumen_lead_convertido("Asesor", "Asesor", .estilo_total_asesor),
                     modo_seleccion = "ninguno", id_col = "Asesor", sortable = TRUE, searchable = TRUE,
                     page_size = 10, compact = TRUE, mostrar_badge = FALSE, mostrar_nota = FALSE)
     datos_linnegocio_r <- reactive(.resumen_dimension_lead_convertido(universo_contactos_r(), "LinNegocio"))
     .estilo_total_linnegocio <- .estilo_fila_total(datos_linnegocio_r, "LinNegocio")
-    racafeModulos::TablaReactable2(
+    .crm_tabla_legacy(
       id = "tabla_linnegocio", data = datos_linnegocio_r, columnas = NULL,
       col_specs = .col_specs_resumen_lead_convertido("LinNegocio", "Línea de Negocio", .estilo_total_linnegocio),
       modo_seleccion = "ninguno", id_col = "LinNegocio", sortable = TRUE, searchable = TRUE,
@@ -759,7 +746,7 @@ DetalleLeads <- function(id, usuario) {
     )
     datos_segmento_r <- reactive(.resumen_dimension_lead_convertido(universo_contactos_r(), "Segmento"))
     .estilo_total_segmento <- .estilo_fila_total(datos_segmento_r, "Segmento")
-    racafeModulos::TablaReactable2(id = "tabla_segmento", data = datos_segmento_r, columnas = NULL,
+    .crm_tabla_legacy(id = "tabla_segmento", data = datos_segmento_r, columnas = NULL,
                     col_specs = .col_specs_resumen_lead_convertido("Segmento", "Segmento", .estilo_total_segmento),
                     modo_seleccion = "ninguno", id_col = "Segmento", sortable = TRUE, searchable = TRUE,
                     page_size = 10, compact = TRUE, mostrar_badge = FALSE, mostrar_nota = FALSE)

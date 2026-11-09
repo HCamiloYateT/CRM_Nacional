@@ -17,35 +17,27 @@ DetalleCreacionMensualUI <- function(id) {
     ),
     plotly::plotlyOutput(ns("serie"), height = "280px"),
     br(),
-    racafeModulos::TablaReactable2UI(ns("tabla"))
+    .crm_tabla_legacy_ui(ns("tabla"))
   )
 }
 DetalleCreacionMensual <- function(id, datos) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    output$Origen_ui <- renderUI({
-      origenes <- datos()$Origen %>% unique() %>% sort()
-      racafeForms::racafeInputSelect(id = ns("Origen"), label = h6("Origen"), choices = c("Todos", origenes),
-                              selected = "Todos", multiple = FALSE, size = 8, empty = FALSE)
+    output$Origen_ui <- .crm_render_ui({
+      opciones <- .crm_opciones(datos()$Origen)
+      racafeForms::racafeInputSelect(ns("Origen"), "Origen", choices = opciones,
+        selected = .crm_seleccion_opciones(input, session, "Origen", opciones), multiple = TRUE, size = 8)
     })
-    output$DetOrigen_ui <- renderUI({
-      req(input$Origen)
-      det <- if (identical(input$Origen, "Todos")) {
-        datos()$DetOrigen
-      } else {
-        datos() %>% filter(Origen == input$Origen) %>% pull(DetOrigen)
-      }
-      det <- det[!is.na(det)] %>% unique() %>% sort()
-      racafeForms::racafeInputSelect(id = ns("DetOrigen"), label = h6("Detalle Origen"), choices = c("Todos", det),
-                              selected = "Todos", multiple = FALSE, size = 8, empty = FALSE)
+    output$DetOrigen_ui <- .crm_render_ui({
+      base <- .crm_filtrar_opciones(datos(), "Origen", input$Origen)
+      opciones <- .crm_opciones(base$DetOrigen)
+      racafeForms::racafeInputSelect(ns("DetOrigen"), "Detalle Origen", choices = opciones,
+        selected = .crm_seleccion_opciones(input, session, "DetOrigen", opciones), multiple = TRUE, size = 8)
     })
-    
+
     datos_filtrados <- reactive({
-      req(input$Origen, input$DetOrigen)
-      dat <- datos()
-      if (!identical(input$Origen, "Todos"))    dat <- dat %>% filter(Origen == input$Origen)
-      if (!identical(input$DetOrigen, "Todos")) dat <- dat %>% filter(DetOrigen == input$DetOrigen)
-      dat
+      dat <- .crm_filtrar_opciones(datos(), "Origen", input$Origen)
+      .crm_filtrar_opciones(dat, "DetOrigen", input$DetOrigen)
     })
     
     serie_periodo <- reactive({
@@ -59,7 +51,7 @@ DetalleCreacionMensual <- function(id, datos) {
         arrange(Periodo)
     })
     
-    output$serie <- plotly::renderPlotly({
+    output$serie <- .crm_render_plotly({
       dat <- serie_periodo()
       if (nrow(dat) == 0) return(plotly::config(plotly::plotly_empty(type = "scatter"), displayModeBar = FALSE))
       dat <- dat %>%
@@ -96,7 +88,7 @@ DetalleCreacionMensual <- function(id, datos) {
       } else list()
     }
     
-    racafeModulos::TablaReactable2(id = "tabla", data = datos_tabla_r, columnas = NULL,
+    .crm_tabla_legacy(id = "tabla", data = datos_tabla_r, columnas = NULL,
                     col_specs = list(Periodo      = reactable::colDef(name = "Periodo", minWidth = 100, style = .estilo_total_periodo),
                                      NumContactos = reactable::colDef(name = "N° Contactos", minWidth = 100, style = .estilo_total_periodo),
                                      Pct          = reactable::colDef(name = "% del Total", minWidth = 90,
@@ -131,9 +123,9 @@ DetalleContactoUI <- function(id) {
       column(4,
              box(title = "Indicadores de Contactos", width = 12,
                  collapsible = TRUE, collapsed = FALSE,
-                 racafeModulos::CajaModalUI(ns("kpi_total")), br(),
-                 racafeModulos::CajaModalUI(ns("kpi_creacion_prom")), br(),
-                 racafeModulos::CajaModalUI(ns("kpi_30"))
+                 .crm_caja_modal_ui(ns("kpi_total")), br(),
+                 .crm_caja_modal_ui(ns("kpi_creacion_prom")), br(),
+                 .crm_caja_modal_ui(ns("kpi_30"))
              )
       ),
       column(8,
@@ -142,17 +134,17 @@ DetalleContactoUI <- function(id) {
                  tabsetPanel(
                    tabPanel("Usuario",
                             Saltos(),
-                            racafeModulos::TablaReactable2UI(ns("tabla_usuario"))
+                            .crm_tabla_legacy_ui(ns("tabla_usuario"))
                    ),
                    tabPanel("Origen",
                             Saltos(),
-                            racafeModulos::TablaReactable2UI(ns("tabla_origen")),
+                            .crm_tabla_legacy_ui(ns("tabla_origen")),
                             tags$hr(),
                             shinyjs::hidden(
                               tags$div(id = ns("BloqueDetOrigen"),
                                        FormatearTexto("Detalle Origen (según fila seleccionada arriba)",
                                                       tamano_pct = 0.8, color = "#64748B"),
-                                       racafeModulos::TablaReactable2UI(ns("tabla_det_origen"))
+                                       .crm_tabla_legacy_ui(ns("tabla_det_origen"))
                               )
                             )
                    )
@@ -193,7 +185,7 @@ DetalleContacto <- function(id, usuario) {
     })
     
     # KPIs ----
-    racafeModulos::CajaModal("kpi_total",
+    .crm_caja_modal("kpi_total",
               valor  = reactive(html_valor(nrow(contactos_enriquecidos()), formato = "coma", color = "#404040")),
               texto  = html_texto("Total de Contactos", color = "#404040"), icono = "user-group",
               colores = c(fondo = "white"), mostrar_boton = FALSE)
@@ -209,7 +201,7 @@ DetalleContacto <- function(id, usuario) {
         mutate(MesCrea = format(FechaHoraCrea, "%Y-%m")) %>%
         count(MesCrea, name = "NumContactos")
     })
-    racafeModulos::CajaModal("kpi_creacion_prom",
+    .crm_caja_modal("kpi_creacion_prom",
               valor  = reactive({html_valor(
                 round(mean(creacion_mensual_todos()$NumContactos, na.rm = TRUE), 1),
                 formato = "coma", color = "#404040")}),
@@ -221,7 +213,7 @@ DetalleContacto <- function(id, usuario) {
     DetalleCreacionMensual("modal_creacion_mensual", datos = contactos_creacion_todos)
     
     # Contactos con 30+ días sin registro de relacionamiento
-    racafeModulos::CajaModal("kpi_30",
+    .crm_caja_modal("kpi_30",
               valor  = reactive({html_valor(
                 mean(contactos_enriquecidos()$DiasSinRelacionamiento >= 30, na.rm = TRUE),
                 formato = "porcentaje", color = "#404040")}),
@@ -238,7 +230,7 @@ DetalleContacto <- function(id, usuario) {
     datos_usuario_r <- reactive(.resumen_dimension(contactos_enriquecidos(), "UsuarioCrea"))
     .estilo_total_usuario <- .estilo_fila_total(datos_usuario_r, "UsuarioCrea")
     
-    racafeModulos::TablaReactable2(id = "tabla_usuario",  data = datos_usuario_r,  columnas = NULL,
+    .crm_tabla_legacy(id = "tabla_usuario",  data = datos_usuario_r,  columnas = NULL,
                     col_specs = .col_specs_resumen_contacto("UsuarioCrea", "Usuario (Creación)", .estilo_total_usuario),
                     modo_seleccion = "ninguno", id_col = "UsuarioCrea",
                     sortable = TRUE, searchable = TRUE, page_size = 10, compact = TRUE,
@@ -248,7 +240,7 @@ DetalleContacto <- function(id, usuario) {
     datos_origen_r <- reactive(.resumen_dimension(contactos_enriquecidos(), "Origen"))
     .estilo_total_origen <- .estilo_fila_total(datos_origen_r, "Origen")
     
-    modulo_tabla_origen <- racafeModulos::TablaReactable2(id = "tabla_origen", data = datos_origen_r, columnas = NULL,
+    modulo_tabla_origen <- .crm_tabla_legacy(id = "tabla_origen", data = datos_origen_r, columnas = NULL,
                                            col_specs = .col_specs_resumen_contacto("Origen", "Origen", .estilo_total_origen),
                                            modo_seleccion = "fila", id_col = "Origen",
                                            sortable = TRUE, searchable = TRUE, page_size = 10, compact = TRUE,
@@ -278,7 +270,7 @@ DetalleContacto <- function(id, usuario) {
     })
     .estilo_total_det_origen <- .estilo_fila_total(datos_det_origen_r, "DetOrigen")
     
-    racafeModulos::TablaReactable2(id = "tabla_det_origen", data = datos_det_origen_r, columnas = NULL,
+    .crm_tabla_legacy(id = "tabla_det_origen", data = datos_det_origen_r, columnas = NULL,
                     col_specs = .col_specs_resumen_contacto("DetOrigen", "Detalle Origen", .estilo_total_det_origen),
                     modo_seleccion = "ninguno", id_col = "DetOrigen",
                     sortable = TRUE, searchable = TRUE, page_size = 10, compact = TRUE,
