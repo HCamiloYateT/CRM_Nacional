@@ -116,7 +116,7 @@ library("racafeShiny")
 library("racafeForms")
 library("racafeModulos")
 racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", "tidyverse", "scales", "rlang",
-                      "waiter", "glue", "lubridate", "stringr", "purrr", "gt", "plotly"))
+                      "waiter", "glue", "lubridate", "stringr", "purrr", "gt", "plotly", "writexl"))
 
 # Versiones de componentes y recursos compartidos ----
 stopifnot(utils::packageVersion("racafeForms") >= "0.7.3",

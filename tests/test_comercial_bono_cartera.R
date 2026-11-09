@@ -2,6 +2,7 @@ library(dplyr)
 source("APP/misc/compartido/01_analitica_comercial.R")
 source("APP/misc/datos/02_fuentes_comerciales.R")
 source("APP/misc/modules/gestion_comercial/variables_bono/01_modulo.R")
+source("APP/misc/modules/gestion_comercial/cartera/00_datos.R")
 source("APP/misc/modules/gestion_comercial/cartera/01_modulo.R")
 source("APP/misc/modules/gestion_comercial/fidelidad_riesgo/01_modulo.R")
 

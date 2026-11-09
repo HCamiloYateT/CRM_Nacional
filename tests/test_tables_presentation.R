@@ -9,7 +9,7 @@ sys.source("APP/misc/compartido/04_interaccion.R", envir = environment())
   Porcentaje = list(format = list(cell = list(percent = TRUE, digits = 1))))
 .html_prueba <- htmltools::renderTags(.crm_tabla_datos(.datos_prueba, col_specs = .specs_prueba))$html
 stopifnot(grepl("gt_table", .html_prueba, fixed = TRUE), !grepl(".clave", .html_prueba, fixed = TRUE),
-  grepl("$20", .html_prueba, fixed = TRUE), grepl("20.0%", .html_prueba, fixed = TRUE),
+  grepl("$20</td>", .html_prueba, fixed = TRUE), grepl("20.0%", .html_prueba, fixed = TRUE),
   grepl("#495057", .html_prueba, fixed = TRUE), grepl("1.5px", .html_prueba, fixed = TRUE))
 .eventos_tabla <- list()
 servidor_tabla <- function(input, output, session) {
