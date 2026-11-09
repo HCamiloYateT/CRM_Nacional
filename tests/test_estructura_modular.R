@@ -7,7 +7,7 @@ rutas <- c("generalidades/resumen_ejecutivo", "generalidades/validacion_financie
   "gestion_comercial/alertas_notificaciones", "gestion_comercial/fidelidad_riesgo", "gestion_comercial/cartera",
   "prospeccion/kanban", "prospeccion/contactos", "prospeccion/prospectos", "prospeccion/leads",
   "prospeccion/clientes", "prospeccion/descartados", "prospeccion/conversion", "prospeccion/potencial_mercado",
-  "dinamica_clientes/nuevos", "dinamica_clientes/perdidos", "cohortes_clientes/retencion",
+  "cohortes_clientes/estados", "cohortes_clientes/retencion",
   "cohortes_clientes/ventas", "cohortes_clientes/margen", "cohortes_clientes/frecuencia",
   "herramientas/calculadoras", "herramientas/tablas_conversion", "herramientas/informes",
   "productos/ejecucion", "productos/market_basket", "consulta_individual", "admon/catalogos")
@@ -26,4 +26,4 @@ for (ruta in c(list.files("APP", "[.]R$", recursive = TRUE, full.names = TRUE),
   }
   recorrer(parse(ruta))
 }
-cat("OK: 35 opciones del sidebar con carpeta propia, misc sin scripts sueltos y fuentes válidas.\n")
+cat("OK:", length(rutas), "opciones con carpeta propia, misc sin scripts sueltos y fuentes válidas.\n")

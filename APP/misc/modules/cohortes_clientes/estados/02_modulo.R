@@ -446,7 +446,7 @@ CohortesEstadosUI <- function(id) {
   )
 }
 
-CohortesEstados <- function(id, bd, data_t) {
+CohortesEstados <- function(id, bd, data_t, fecha_limite = shiny::reactive(Sys.Date())) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     sel_matriz_estado <- reactiveVal(NULL)
@@ -496,17 +496,17 @@ CohortesEstados <- function(id, bd, data_t) {
     
     # Selectores de meses disponibles; conservar selección al refrescar el panel ----
     output$ui_fechas <- .crm_render_ui({
-      fechas <- sort(unique(bd()$FecProceso))
+      limite <- as.Date(format(as.Date(fecha_limite()), "%Y-%m-01"))
+      inicio_anho <- as.Date(format(limite, "%Y-01-01"))
+      fechas <- seq(inicio_anho, limite, by = "month")
       if (!length(fechas)) return(NULL)
       opciones <- stats::setNames(as.character(fechas), .coha_mes(fechas))
       anterior <- shiny::isolate(list(input$fecha_ini, input$fecha_fin))
       inicial <- if (length(anterior[[1]]) == 1L && anterior[[1]] %in% opciones) anterior[[1]] else opciones[[1]]
       final <- if (length(anterior[[2]]) == 1L && anterior[[2]] %in% opciones) anterior[[2]] else tail(opciones, 1)
       racafeForms::racafeFormRow(columns = 2,
-        racafeForms::racafeInputSelect("fecha_ini", "Mes inicial", choices = opciones,
-          selected = inicial, empty = FALSE, ns = ns),
-        racafeForms::racafeInputSelect("fecha_fin", "Mes final", choices = opciones,
-          selected = final, empty = FALSE, ns = ns))
+        .crm_input_mes("fecha_ini", "Mes inicial", value = as.Date(inicial), min = inicio_anho, max = limite, ns = ns),
+        .crm_input_mes("fecha_fin", "Mes final", value = as.Date(final), min = inicio_anho, max = limite, ns = ns))
     })
     output$sin_datos <- .crm_render_ui({
       if (!nrow(bd())) return(.crm_nota("No hay estados ni ventas disponibles para el año en curso."))
@@ -516,18 +516,18 @@ CohortesEstados <- function(id, bd, data_t) {
     observeEvent(list(input$fecha_ini, input$fecha_fin), {
       req(input$fecha_ini, input$fecha_fin)
       if (as.Date(input$fecha_ini) > as.Date(input$fecha_fin)) {
-        shinyWidgets::updatePickerInput(session, "fecha_fin", selected = input$fecha_ini)
+        racafeForms::racafeUpdateDate(session, "fecha_fin", value = as.Date(input$fecha_ini))
       }
     })
 
     # Mes vigente / mes inicial del panel — gobernados por el filtro de usuario
     mes_vigente <- reactive({
       req(input$fecha_fin)
-      lubridate::floor_date(as.Date(input$fecha_fin), "month")
+      .coha_acotar_mes(input$fecha_fin, fecha_limite())
     })
     mes_inicio <- reactive({
       req(input$fecha_ini)
-      lubridate::floor_date(as.Date(input$fecha_ini), "month")
+      .coha_acotar_mes(input$fecha_ini, fecha_limite())
     })
     
     # Universo de UCs activas según filtros dimensionales de data_t

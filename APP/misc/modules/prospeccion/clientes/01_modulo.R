@@ -196,17 +196,17 @@ DetalleConversionClienteUI <- function(id, tipo) {
   }
   tagList(
     fluidRow(
-      column(6, box(title = "Tiempo hasta Conversión", width = 12, collapsible = FALSE,
+      column(6, .pr_panel(title = "Tiempo hasta Conversión", width = 12, collapsible = FALSE,
                     plotly::plotlyOutput(ns("kpi_tiempo"), height = "260px"))),
-      column(6, box(title = "Distribución del Tiempo de Conversión", width = 12, collapsible = FALSE,
+      column(6, .pr_panel(title = "Distribución del Tiempo de Conversión", width = 12, collapsible = FALSE,
                     plotly::plotlyOutput(ns("densidad_tiempo"), height = "220px"),
                     uiOutput(ns("nota_densidad"))))
     ),
     br(),
-    box(title = titulo_curva, width = 12, collapsible = FALSE,
+    .pr_panel(title = titulo_curva, width = 12, collapsible = FALSE,
         DetalleCurvaConversionClienteUI(ns("mod_curva"), tipo = tipo)),
     br(),
-    box(title = titulo_cohorte, width = 12, collapsible = TRUE, collapsed = FALSE,
+    .pr_panel(title = titulo_cohorte, width = 12, collapsible = TRUE, collapsed = FALSE,
         .crm_tabla_legacy_ui(ns("tabla_cohorte")),
         tags$hr(),
         FormatearTexto(titulo_matriz, tamano_pct = 1, negrita = TRUE),
@@ -728,15 +728,15 @@ DetalleClientesUI <- function(id) {
     br(),
     fluidRow(
       column(4,
-             box(title = "Indicadores de Clientes", width = 12, collapsible = TRUE, collapsed = FALSE,
+             .pr_panel(title = "Indicadores de Clientes", width = 12, collapsible = TRUE, collapsed = FALSE,
                  .crm_caja_modal_ui(ns("kpi_total")),
                  br(),
                  .crm_caja_modal_ui(ns("kpi_conversion_contacto")),
                  br(),
                  .crm_caja_modal_ui(ns("kpi_conversion_lead")))),
       column(8,
-             box(title = "Resumen por Dimensión", width = 12, collapsible = TRUE, collapsed = FALSE,
-                 tabsetPanel(
+             .pr_panel(title = "Resumen por Dimensión", width = 12, collapsible = TRUE, collapsed = FALSE,
+                 .crm_tabs(
                    tabPanel("Usuario", Saltos(), .crm_tabla_legacy_ui(ns("tabla_usuario"))),
                    tabPanel("Origen", Saltos(), .crm_tabla_legacy_ui(ns("tabla_origen")),
                             tags$hr(),
@@ -762,7 +762,7 @@ DetalleClientesUI <- function(id) {
                    tamano_pct = 0.75, color = "#64748B"
                  )))
     ),
-    box(title = "Detalle de Clientes", width = 12, collapsible = TRUE, collapsed = TRUE,
+    .pr_panel(title = "Detalle de Clientes", width = 12, collapsible = TRUE, collapsed = TRUE,
         PanelEtapaUI(ns("Listado")),
         FormatearTexto(
           "Se muestran únicamente los clientes cuya etapa vigente es CLIENTE y cuyo estado actual es ACTIVO.",
@@ -991,7 +991,7 @@ DemoProspeccionDetalleCliente <- function() {
       includeCSS(
         paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/", "refs/heads/main/Styles/style.css")
       ),
-      box(title = "Detalle Clientes (prueba)", width = 12, DetalleClientesUI("AccionDetalleClientes"))
+      .pr_panel(title = "Detalle Clientes (prueba)", width = 12, DetalleClientesUI("AccionDetalleClientes"))
     )
   )
   server <- function(input, output, session) {

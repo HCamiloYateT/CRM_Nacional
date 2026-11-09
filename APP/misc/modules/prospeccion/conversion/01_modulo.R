@@ -59,7 +59,7 @@ EmbudoConversionUI <- function(id) {
   ns <- NS(id)
   
   tagList(
-    box(
+    .pr_panel(
       title = "Embudo de Conversión",
       width = 12, collapsible = FALSE,
       plotly::plotlyOutput(ns("grafico_embudo"), height = "340px")
@@ -73,7 +73,7 @@ EmbudoConversionUI <- function(id) {
       column(3, .crm_caja_modal_ui(ns("kpi_total_descartados")))
     ),
     
-    box(
+    .pr_panel(
       title = "Conversión Histórica",
       width = 12, collapsible = FALSE,
       fluidRow(
@@ -83,7 +83,7 @@ EmbudoConversionUI <- function(id) {
         column(3, .crm_caja_modal_ui(ns("kpi_mejor_canal")))
       ),
       tags$hr(),
-      tabsetPanel(
+      .crm_tabs(
         tabPanel(
           "Usuario",
           Saltos(),
@@ -134,7 +134,7 @@ EmbudoConversionUI <- function(id) {
       )
     ),
     
-    box(
+    .pr_panel(
       title = "Velocidad del Ciclo",
       width = 12, collapsible = FALSE,
       fluidRow(
@@ -144,7 +144,7 @@ EmbudoConversionUI <- function(id) {
       )
     ),
     
-    box(
+    .pr_panel(
       title = "Pérdida y Calidad",
       width = 12, collapsible = FALSE,
       fluidRow(
@@ -157,7 +157,7 @@ EmbudoConversionUI <- function(id) {
       plotly::plotlyOutput(ns("grafico_descartados"), height = "380px")
     ),
     
-    box(
+    .pr_panel(
       title = "Actividad Reciente — 30 días",
       width = 12, collapsible = FALSE,
       fluidRow(
@@ -167,7 +167,7 @@ EmbudoConversionUI <- function(id) {
       )
     ),
     
-    box(
+    .pr_panel(
       title = "Ubicación de Contactos por Departamento y Municipio",
       width = 12, collapsible = FALSE,
       fluidRow(

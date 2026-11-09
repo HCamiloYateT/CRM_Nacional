@@ -176,17 +176,17 @@ DetalleAnalisisConversionUI <- function(id) {
     ),
     br(),
     fluidRow(
-      column(6, box(title = "Tiempo hasta Conversión", width = 12, collapsible = FALSE,
+      column(6, .pr_panel(title = "Tiempo hasta Conversión", width = 12, collapsible = FALSE,
                     plotly::plotlyOutput(ns("kpi_tiempo"), height = "260px"))),
-      column(6, box(title = "Distribución del Tiempo de Conversión", width = 12, collapsible = FALSE,
+      column(6, .pr_panel(title = "Distribución del Tiempo de Conversión", width = 12, collapsible = FALSE,
                     plotly::plotlyOutput(ns("densidad_tiempo"), height = "220px"),
                     uiOutput(ns("nota_densidad"))))
     ),
     br(),
-    box(title = "Conversión Contacto → Lead", width = 12, collapsible = FALSE,
+    .pr_panel(title = "Conversión Contacto → Lead", width = 12, collapsible = FALSE,
         DetalleCurvaConversionUI(ns("mod_curva"))),
     br(),
-    box(title = "Conversión por Cohorte de Creación", width = 12, collapsible = TRUE, collapsed = FALSE,
+    .pr_panel(title = "Conversión por Cohorte de Creación", width = 12, collapsible = TRUE, collapsed = FALSE,
         .crm_tabla_legacy_ui(ns("tabla_cohorte_conv")),
         FormatearTexto(
           paste0("La cohorte considera conversiones históricas a Lead. ",
@@ -562,12 +562,12 @@ DetalleLeadsUI <- function(id) {
     br(),
     fluidRow(
       column(4,
-             box(title = "Indicadores de Leads", width = 12, collapsible = TRUE, collapsed = FALSE,
+             .pr_panel(title = "Indicadores de Leads", width = 12, collapsible = TRUE, collapsed = FALSE,
                  .crm_caja_modal_ui(ns("kpi_total")), br(),
                  .crm_caja_modal_ui(ns("kpi_conversion")))),
       column(8,
-             box(title = "Resumen por Dimensión", width = 12, collapsible = TRUE, collapsed = FALSE,
-                 tabsetPanel(
+             .pr_panel(title = "Resumen por Dimensión", width = 12, collapsible = TRUE, collapsed = FALSE,
+                 .crm_tabs(
                    tabPanel("Usuario", Saltos(), .crm_tabla_legacy_ui(ns("tabla_usuario"))),
                    tabPanel("Origen", Saltos(), .crm_tabla_legacy_ui(ns("tabla_origen")),
                             tags$hr(),
@@ -594,7 +594,7 @@ DetalleLeadsUI <- function(id) {
                    tamano_pct = 0.75, color = "#64748B"
                  )))
     ),
-    box(title = "Detalle de Leads", width = 12, collapsible = TRUE, collapsed = TRUE,
+    .pr_panel(title = "Detalle de Leads", width = 12, collapsible = TRUE, collapsed = TRUE,
         PanelEtapaUI(ns("Listado")),
         FormatearTexto(
           paste0("Se muestran únicamente los contactos cuya etapa vigente es LEAD ",
@@ -773,7 +773,7 @@ DemoProspeccionDetalleLeads <- function() {
       use_waiter(),
       includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
                         "refs/heads/main/Styles/style.css")),
-      box(title = "Detalle Leads (prueba)", width = 12, DetalleLeadsUI("AccionDetalleLeads"))
+      .pr_panel(title = "Detalle Leads (prueba)", width = 12, DetalleLeadsUI("AccionDetalleLeads"))
     )
   )
   server <- function(input, output, session) {

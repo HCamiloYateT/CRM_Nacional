@@ -25,6 +25,8 @@
 }
 .FID_ESTADOS <- c("Revisar inactividad", "Sin compra observada", "Primera compra observada del año",
   "Primera compra observada en nueva línea", "Compra sin presupuesto", "Presupuesto no disponible", "Compra recurrente")
+.FID_CAJAS <- c(rfm_clientes = "Clientes/línea con compra", rfm_riesgo = "Leales en riesgo · RFM",
+  btyd_riesgo = "Riesgo alto · BG/NBD", clv_margen = "CLV total de margen · COP")
 FidelidadRiesgoUI <- function(id) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
@@ -32,8 +34,32 @@ FidelidadRiesgoUI <- function(id) {
       racafeForms::racafeInputDate("corte", "Fecha de análisis", value = Sys.Date(), ns = ns),
       racafeForms::racafeInputNumeric("umbral", "Umbral de revisión (días)", value = 90, min = 1,
         format = "number", ns = ns),
-      racafeForms::racafeInputSelect("estado", "Estado", choices = .FID_ESTADOS,
+      racafeForms::racafeInputSelect("estado", "Estado de las señales observadas", choices = .FID_ESTADOS,
         selected = .FID_ESTADOS, multiple = TRUE, ns = ns)),
+    racafeForms::racafeFormRow(columns = 2,
+      racafeForms::racafeInputNumeric("horizonte", "Horizonte CLV (meses)", value = 12, min = 1, max = 36,
+        decimals = 0, ns = ns),
+      racafeForms::racafeInputNumeric("descuento", "Descuento anual (%)", value = 12, min = 0, max = 100, ns = ns)),
+    racafeForms::racafeActionBar(left = racafeForms::racafeButton("modelar", "Calcular RFM, BG/NBD y CLV",
+      icon = "chart-line", ns = ns)),
+    .crm_disclosure("Cómo interpretar fidelidad, riesgo y valor del cliente",
+      .crm_nota(c("RFM compara recencia, días con compra y margen dentro de la población visible.",
+        "BG/NBD es un modelo de compras repetidas y abandono no contractual, no una certeza sobre cada cliente.",
+        "Probabilidad de actividad y compras futuras se ajustan sobre clientes/línea, agrupando compras del mismo día.",
+        "CLV estima margen descontado con el margen histórico por compra; no es facturación ni valor contable.",
+        "El margen abierto puede ser provisional. Sin margen conocido, el CLV se mantiene desconocido.",
+        "Riesgo orientativo: alto <40%, medio 40–70%, bajo >=70% de actividad estimada.",
+        "Las primeras compras solo son las observadas en el historial disponible."))),
+    .gc_tarjetas_ui(ns, .FID_CAJAS),
+    .crm_tabs(
+      shiny::tabPanel("RFM", .crm_tabla_ui(ns("rfm"))),
+      shiny::tabPanel("BTYD y CLV", shiny::uiOutput(ns("estado_modelo")),
+        shiny::conditionalPanel(sprintf("output['%s']", ns("modelo_disponible")),
+          plotly::plotlyOutput(ns("modelo_grafico"), height = "330px"), .crm_tabla_ui(ns("btyd")))),
+      shiny::tabPanel("Diagnóstico del modelo",
+        shiny::conditionalPanel(sprintf("output['%s']", ns("modelo_disponible")),
+          .crm_tabla_ui(ns("modelo_parametros")), .crm_tabla_ui(ns("validacion"))),
+        .crm_nota("Validación retrospectiva de 90 días sobre clientes con historia previa."))),
     .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("resumen")), .crm_tabla_ui(ns("clientes")),
     .crm_nota(c("La primera compra es la primera observada en la exportación: no equivale a la creación del cliente.",
       "Un cliente sin presupuesto no se clasifica automáticamente como recuperado.",
@@ -42,6 +68,74 @@ FidelidadRiesgoUI <- function(id) {
 }
 FidelidadRiesgo <- function(id, hechos, clientes, filtros) {
   shiny::moduleServer(id, function(input, output, session) {
+    firma <- shiny::reactive(list(corte = input$corte, meses = input$horizonte, descuento = input$descuento,
+      hechos = hechos()[intersect(c("CliNitPpal", "LinNegCod", "FecFact", "SacosFact", "Margen"), names(hechos()))]))
+    modelo_ajustado <- shiny::eventReactive(input$modelar, {
+      tryCatch({
+        shiny::req(input$corte, input$horizonte, is.finite(input$descuento))
+        if (input$horizonte < 1 || input$horizonte > 36 || input$descuento < 0 || input$descuento > 100) {
+          stop("Revise horizonte y descuento.")
+        }
+        m <- .fid_analizar_modelos(hechos(), as.Date(input$corte), as.integer(input$horizonte), input$descuento / 100)
+        m$validacion <- .fid_validar_btyd(hechos(), as.Date(input$corte)); m$firma <- firma(); m
+      }, error = function(e) list(error = conditionMessage(e)))
+    })
+    modelo <- shiny::reactive({
+      m <- modelo_ajustado()
+      if (!is.null(m$error)) return(m)
+      if (!identical(m$firma, firma())) return(list(error = "Los filtros o parámetros cambiaron. Vuelva a Calcular."))
+      m
+    })
+    output$modelo_disponible <- shiny::reactive({
+      !is.null(input$modelar) && input$modelar > 0 && is.null(modelo()$error)
+    })
+    shiny::outputOptions(output, "modelo_disponible", suspendWhenHidden = FALSE)
+    .crm_vancouver_server("validacion", shiny::reactive({
+      m <- modelo(); shiny::validate(shiny::need(is.null(m$error), m$error)); m$validacion
+    }))
+    rfm <- shiny::reactive(.fid_rfm(hechos(), as.Date(input$corte)))
+    .gc_tarjetas_server(.FID_CAJAS, shiny::reactive({
+      r <- rfm()
+      m <- if (isTRUE(input$modelar > 0)) modelo() else NULL
+      valido <- !is.null(m$clientes) && is.null(m$error)
+      list(rfm_clientes = nrow(r), rfm_riesgo = sum(r$SegmentoRFM == "Leales en riesgo"),
+        btyd_riesgo = if (valido) sum(m$clientes$RiesgoModelo == "Alto") else NA_real_,
+        clv_margen = if (valido) .com_suma(m$clientes$CLVMargen) else NA_real_)
+    }), list(clv_margen = "dinero"))
+    .crm_vancouver_server("rfm", rfm,
+      columnas = c("CliNitPpal", "Cliente", "LinNegCod", "RecenciaDias", "Compras", "Sacos", "Margen",
+        "R", "F", "M", "SegmentoRFM"), col_labels = c(CliNitPpal = "NIT principal", LinNegCod = "Línea",
+      RecenciaDias = "Días sin compra", Frecuencia = "Recompras observadas", SegmentoRFM = "Segmento RFM"))
+    .crm_vancouver_server("btyd", shiny::reactive({
+      m <- modelo(); shiny::validate(shiny::need(is.null(m$error), m$error)); m$clientes
+    }), columnas = c("CliNitPpal", "Cliente", "LinNegCod", "ProbActivo", "RiesgoModelo", "ComprasEsperadas",
+      "CLVMargen", "HorizonteMeses", "SegmentoRFM"),
+      col_labels = c(CliNitPpal = "NIT principal", ProbActivo = "Probabilidad de actividad",
+      CLVMargen = "CLV de margen COP", ComprasEsperadas = "Compras futuras esperadas"),
+      col_specs = list(ProbActivo = list(format = list(percent = TRUE, digits = 1))))
+    .crm_vancouver_server("modelo_parametros", shiny::reactive({
+      m <- modelo(); shiny::validate(shiny::need(is.null(m$error), m$error)); m$parametros
+    }))
+    output$estado_modelo <- .crm_render_ui({
+      if (is.null(input$modelar) || input$modelar < 1) {
+        return(.crm_nota("Pulse Calcular para ajustar BG/NBD y estimar CLV."))
+      }
+      m <- modelo()
+      if (!is.null(m$error)) return(.crm_nota(m$error))
+      .crm_nota(c(paste("Modelo ajustado al", m$corte, "con", m$parametros$Clientes, "clientes/línea."),
+        if (isTRUE(as.logical(m$parametros$EnLimite))) {
+          "Parámetros en un límite: interprete las predicciones con cautela."
+        }))
+    })
+    output$modelo_grafico <- .crm_render_plotly({
+      m <- modelo(); shiny::validate(shiny::need(is.null(m$error), m$error)); x <- m$clientes
+      plotly::plot_ly(x, x = ~ProbActivo, y = ~CLVMargen, type = "scatter", mode = "markers",
+        text = ~paste(htmltools::htmlEscape(Cliente), "<br>NIT:", CliNitPpal, "<br>Línea:", LinNegCod,
+          "<br>Compras esperadas:",
+          round(ComprasEsperadas, 2)),
+        hovertemplate = "%{text}<br>Actividad: %{x:.1%}<br>CLV: $%{y:,.0f}<extra></extra>") %>%
+        plotly::layout(xaxis = list(title = "Probabilidad de actividad"), yaxis = list(title = "CLV de margen COP"))
+    })
     datos <- shiny::reactive({
       shiny::req(input$corte, is.finite(input$umbral), input$umbral > 0)
       x <- .fid_preparar(hechos(), .com_clientes(clientes(), as.Date(input$corte), filtros()),
@@ -58,6 +152,14 @@ FidelidadRiesgo <- function(id, hechos, clientes, filtros) {
       PrimeraObservada = "Primera compra observada", UltimaCompra = "Última compra",
       DiasSinCompra = "Días sin compra", SacosAnho = "Sacos del año", MargenAnho = "Margen del año",
       ClasificacionPresupuesto = "Presupuesto", TeniaOtraLinea = "Con historia previa"))
-    .gc_descarga(output, datos, "Fidelidad_riesgo")
+    output$descargar <- shiny::downloadHandler(filename = function() "Fidelidad_riesgo.xlsx",
+      content = function(file) {
+        hojas <- list(Senales = .crm_nits_tabla(datos()), RFM = .crm_nits_tabla(rfm()))
+        if (isTRUE(shiny::isolate(input$modelar) > 0) && is.null(modelo()$error)) {
+          hojas$BTYD_CLV <- .crm_nits_tabla(modelo()$clientes)
+          hojas$Parametros <- modelo()$parametros; hojas$Validacion <- modelo()$validacion
+        }
+        writexl::write_xlsx(hojas, file)
+      })
   })
 }

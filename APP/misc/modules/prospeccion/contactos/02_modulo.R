@@ -121,7 +121,7 @@ DetalleContactoUI <- function(id) {
     br(),
     fluidRow(
       column(4,
-             box(title = "Indicadores de Contactos", width = 12,
+             .pr_panel(title = "Indicadores de Contactos", width = 12,
                  collapsible = TRUE, collapsed = FALSE,
                  .crm_caja_modal_ui(ns("kpi_total")), br(),
                  .crm_caja_modal_ui(ns("kpi_creacion_prom")), br(),
@@ -129,9 +129,9 @@ DetalleContactoUI <- function(id) {
              )
       ),
       column(8,
-             box(title = "Resumen por Dimensión", width = 12,
+             .pr_panel(title = "Resumen por Dimensión", width = 12,
                  collapsible = TRUE, collapsed = FALSE,
-                 tabsetPanel(
+                 .crm_tabs(
                    tabPanel("Usuario",
                             Saltos(),
                             .crm_tabla_legacy_ui(ns("tabla_usuario"))
@@ -152,7 +152,7 @@ DetalleContactoUI <- function(id) {
              )
       )
     ),
-    box(title = "Detalle de Contactos", width = 12,
+    .pr_panel(title = "Detalle de Contactos", width = 12,
         collapsible = TRUE, collapsed = TRUE,
         PanelEtapaUI(ns("Listado"))
     )
@@ -319,7 +319,7 @@ DemoProspeccionDetalleContacto <- function() {
       use_waiter(),
       includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
                         "refs/heads/main/Styles/style.css")),
-      box(title = "Detalle Contacto (prueba)", width = 12, DetalleContactoUI("AccionDetalleContacto"))
+      .pr_panel(title = "Detalle Contacto (prueba)", width = 12, DetalleContactoUI("AccionDetalleContacto"))
     )
   )
   server <- function(input, output, session) {

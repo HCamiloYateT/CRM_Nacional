@@ -75,3 +75,10 @@
     dinero = scales::label_dollar(accuracy = 0.01, big.mark = ",", decimal.mark = "."),
     porcentaje = scales::label_percent(accuracy = 0.01, decimal.mark = "."))
 }
+
+# Acotar meses al año de la fecha final aplicada en el controlbar ----
+.coha_acotar_mes <- function(fecha, limite) {
+  fin <- as.Date(format(as.Date(limite), "%Y-%m-01"))
+  inicio <- as.Date(format(fin, "%Y-01-01"))
+  max(inicio, min(as.Date(format(as.Date(fecha), "%Y-%m-01")), fin))
+}

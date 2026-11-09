@@ -79,3 +79,5 @@ if(nrow(recomendaciones))for(i in seq_len(nrow(recomendaciones))) {
   stopifnot(!recomendaciones$Falta[[i]] %in% comprados)
 }
 stopifnot(identical(.prod_identificador(c(1000000000, NA_real_)), c("1000000000", NA_character_)))
+
+stopifnot(identical(.prod_div(c(1, 3), 4), c(0.25, 0.75)))

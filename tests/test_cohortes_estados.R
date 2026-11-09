@@ -3,6 +3,7 @@ library(dplyr)
 library(shiny)
 library(lubridate)
 source("APP/misc/compartido/04_interaccion.R")
+source("APP/misc/compartido/05_componentes_forms.R")
 source("APP/misc/modules/cohortes_clientes/estados/00_datos.R")
 source("APP/misc/modules/cohortes_clientes/estados/02_modulo.R")
 

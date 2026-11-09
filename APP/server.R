@@ -82,8 +82,14 @@ server <- function(input, output, session) {
       req(identical(input$menu_principal, tab_name))
       if (isTRUE(modulos_cargados[[tab_name]])) return()
       
-      output[[ui_id]] <- renderUI(ui_fun())
-      if (!is.null(server_fun)) server_fun()
+      output[[ui_id]] <- renderUI(shiny::tagList(ui_fun(), if (!is.null(server_fun)) {
+        shiny::tags$script(shiny::HTML(paste0("setTimeout(function(){Shiny.setInputValue(",
+          jsonlite::toJSON(paste0(ui_id, "_ready"), auto_unbox = TRUE),
+          ",Date.now(),{priority:'event'});},0);")))
+      }))
+      if (!is.null(server_fun)) {
+        observeEvent(input[[paste0(ui_id, "_ready")]], server_fun(), once = TRUE, ignoreInit = FALSE)
+      }
       
       modulos_cargados[[tab_name]] <- TRUE
     }, ignoreInit = FALSE)
@@ -253,7 +259,8 @@ server <- function(input, output, session) {
   })
   CargarTabUnaVez("GC_Alertas", "ui_GC_Alertas", function() AlertasNotificacionesUI("AlertasNotificaciones"))
   CargarTabUnaVez("GC_Fidelidad", "ui_GC_Fidelidad", function() FidelidadRiesgoUI("FidelidadRiesgo"),
-    function() FidelidadRiesgo("FidelidadRiesgo", hechos_analisis_comercial, clientes_raw_cache, filtros))
+    function() FidelidadRiesgo("FidelidadRiesgo",
+      reactive(.gc_filtrar_dimensiones(maestro_base_comercial(), filtros())), clientes_raw_cache, filtros))
   CargarTabUnaVez("GC_Cartera", "ui_GC_Cartera", function() CarteraComercialUI("CarteraComercial"),
     function() CarteraComercial("CarteraComercial", cartera_financiera_r, clientes_raw_cache, nit_ppal,
       filtros, es_admin))
@@ -280,20 +287,21 @@ server <- function(input, output, session) {
   CargarTabUnaVez("PR_Conversion", "ui_PR_Conversion", function() EmbudoConversionUI("EmbudoConversion"),
                   function() EmbudoConversion("EmbudoConversion"))
   
-  CargarTabUnaVez("PR_Potencial", "ui_PR_Potencial", function() PotencialMercadoUI("PotencialMercado"))
-  
-  ### Dinámica de Clientes ----
-  CargarTabUnaVez("DC_Nuevos", "ui_DC_Nuevos", function() ClientesNuevosUI("ClientesNuevos"))
-  
-  CargarTabUnaVez("DC_Perdidos", "ui_DC_Perdidos", function() ClientesPerdidosUI("ClientesPerdidos"))
+  CargarTabUnaVez("PR_Potencial", "ui_PR_Potencial", function() PotencialMercadoUI("PotencialMercado"),
+    function() PotencialMercado("PotencialMercado", usuario, es_admin, maestro_comercial))
   
   ### Cohortes de Clientes ----
   segmentos_cohortes <- eventReactive(input$FT_Actualizar, {
     racafeBD::CargarDatos("CRMNALSEGR")
   }, ignoreNULL = FALSE)
-  data_cohortes <- reactive(.coha_preparar(segmentos_cohortes(), clientes_raw_cache(), maestro_base_comercial()))
+  data_cohortes <- reactive({
+    req(length(filtros()$fecha) == 2L)
+    .coha_preparar(segmentos_cohortes(), clientes_raw_cache(), maestro_base_comercial(),
+      hoy = as.Date(filtros()$fecha[[2]]))
+  })
   CargarTabUnaVez("CO_Estados", "ui_CO_Estados", function() CohortesEstadosUI("CohortesEstados"),
-    function() CohortesEstados("CohortesEstados", bd = data_cohortes, data_t = maestro_comercial))
+    function() CohortesEstados("CohortesEstados", bd = data_cohortes, data_t = maestro_comercial,
+      fecha_limite = reactive(as.Date(filtros()$fecha[[2]]))))
 
   CargarTabUnaVez("CO_Retencion", "ui_CO_Retencion", function() CohorteRetencionUI("CohorteRetencion"),
     function() CohorteRetencion("CohorteRetencion", maestro_comercial))

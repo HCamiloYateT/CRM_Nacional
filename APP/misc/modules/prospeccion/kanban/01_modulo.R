@@ -1,7 +1,7 @@
 # Kanban 
 KanbanEmbudoUI <- function(id) {
   ns <- NS(id)
-  tagList(
+  racafeForms::racafeForm(variant = "plain",
     tags$head(tags$script(HTML(JS_KANBAN_EMBUDO))),
     useShinyjs(),
     # Filtros — Origen y Detalle Origen anidados (Detalle depende del
@@ -10,15 +10,9 @@ KanbanEmbudoUI <- function(id) {
     # ListaDesplegable (pickerInput) por homogeneidad; en fluidRow/column
     # en vez de flex con anchos fijos, para que no se solapen al reducir
     # el viewport
-    div(
-      class = "kpb-filtros",
-      style = "display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap;",
-      
-      div(style = "width:250px;", uiOutput(ns("Origen_ui"))),
-      div(style = "width:250px;", uiOutput(ns("DetOrigen_ui"))),
-      div(style = "width:250px;", uiOutput(ns("Asesor_ui")))
-    ),
-    uiOutput(ns("kanban_board")),
+    racafeForms::racafeFormRow(columns = 3, responsive = "auto",
+      uiOutput(ns("Origen_ui")), uiOutput(ns("DetOrigen_ui")), uiOutput(ns("Asesor_ui"))),
+    racafeForms::racafePanel(title = NULL, uiOutput(ns("kanban_board"))),
     tags$script(HTML(
       "document.addEventListener('click', function(e){
     document.querySelectorAll('.rc-panel-acciones').forEach(function(p){
