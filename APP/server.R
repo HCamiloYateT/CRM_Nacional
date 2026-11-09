@@ -276,6 +276,13 @@ server <- function(input, output, session) {
   CargarTabUnaVez("DC_Perdidos", "ui_DC_Perdidos", function() ClientesPerdidosUI("ClientesPerdidos"))
   
   ### Cohortes de Clientes ----
+  segmentos_cohortes <- eventReactive(input$FT_Actualizar, {
+    racafeBD::CargarDatos("CRMNALSEGR")
+  }, ignoreNULL = FALSE)
+  data_cohortes <- reactive(.coha_preparar(segmentos_cohortes(), clientes_raw_cache(), maestro_base_comercial()))
+  CargarTabUnaVez("CO_Estados", "ui_CO_Estados", function() CohortesEstadosUI("CohortesEstados"),
+    function() CohortesEstados("CohortesEstados", bd = data_cohortes, data_t = maestro_comercial))
+
   CargarTabUnaVez("CO_Retencion", "ui_CO_Retencion", function() CohorteRetencionUI("CohorteRetencion"),
     function() CohorteRetencion("CohorteRetencion", maestro_comercial))
   

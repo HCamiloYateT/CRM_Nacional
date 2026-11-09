@@ -41,6 +41,8 @@ sidebar <- bs4DashSidebar(
     ),
     # Cohortes de Clientes ----
     bs4SidebarMenuItem("Cohortes de Clientes", icon = icon("chart-gantt"), selected = FALSE,
+                       bs4SidebarMenuSubItem("Estados y Transiciones", tabName = "CO_Estados",
+                                             icon = icon("people-arrows")),
                        bs4SidebarMenuSubItem("Retención", tabName = "CO_Retencion", icon = icon("people-group")),
                        bs4SidebarMenuSubItem("Ventas", tabName = "CO_Ventas", icon = icon("chart-line")),
                        bs4SidebarMenuSubItem("Margen", tabName = "CO_Margen", icon = icon("dollar-sign")),

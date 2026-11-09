@@ -39,6 +39,7 @@ body <- bs4DashBody(
     bs4TabItem(tabName = "DC_Perdidos", uiOutput("ui_DC_Perdidos")),
     
     # Cohortes de Clientes ----
+    bs4TabItem(tabName = "CO_Estados", uiOutput("ui_CO_Estados")),
     bs4TabItem(tabName = "CO_Retencion", uiOutput("ui_CO_Retencion")),
     bs4TabItem(tabName = "CO_Ventas", uiOutput("ui_CO_Ventas")),
     bs4TabItem(tabName = "CO_Margen", uiOutput("ui_CO_Margen")),
