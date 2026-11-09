@@ -1,6 +1,14 @@
 # RFM y BG/NBD: compras observadas por cliente/línea/día, sin confundir líneas de factura con recurrencia ----
+.fid_rfm_vacio <- function() {
+  data.frame(CliNitPpal = character(), LinNegCod = numeric(), Cliente = character(),
+    Primera = as.Date(character()), Ultima = as.Date(character()), Compras = integer(),
+    Sacos = numeric(), Margen = numeric(), MargenPorCompra = numeric(), RecenciaDias = integer(),
+    Frecuencia = integer(), tx = numeric(), T = numeric(), R = integer(), F = integer(), M = integer(),
+    SegmentoRFM = character())
+}
 .fid_rfm <- function(hechos, corte) {
   x <- .com_hechos(hechos, corte, cerrados = FALSE)
+  if (!nrow(x)) return(.fid_rfm_vacio())
   monetario <- x %>% dplyr::group_by(CliNitPpal, LinNegCod) %>%
     dplyr::summarise(MargenNeto = .com_suma(Margen), SacosNetos = sum(SacosFact, na.rm = TRUE), .groups = "drop")
   x$Cliente <- as.character(.gc_columna(x, "PerRazSoc", "Sin nombre"))
@@ -9,6 +17,7 @@
     dplyr::summarise(Cliente = dplyr::first(Cliente), Sacos = sum(SacosFact, na.rm = TRUE),
       Margen = .com_suma(Margen), .groups = "drop") %>%
     dplyr::filter(Sacos > 0)
+  if (!nrow(x)) return(.fid_rfm_vacio())
   x <- x %>% dplyr::group_by(CliNitPpal, LinNegCod) %>%
     dplyr::summarise(Cliente = dplyr::first(Cliente), Primera = min(FecFact), Ultima = max(FecFact),
       Compras = dplyr::n(),

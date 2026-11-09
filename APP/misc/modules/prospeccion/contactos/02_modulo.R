@@ -123,9 +123,9 @@ DetalleContactoUI <- function(id) {
       column(4,
              .pr_panel(title = "Indicadores de Contactos", width = 12,
                  collapsible = TRUE, collapsed = FALSE,
-                 .crm_caja_modal_ui(ns("kpi_total")), br(),
-                 .crm_caja_modal_ui(ns("kpi_creacion_prom")), br(),
-                 .crm_caja_modal_ui(ns("kpi_30"))
+                 .crm_caja_output(ns("kpi_total")), br(),
+                 .crm_caja_output(ns("kpi_creacion_prom")), br(),
+                 .crm_caja_output(ns("kpi_30"))
              )
       ),
       column(8,
@@ -185,7 +185,7 @@ DetalleContacto <- function(id, usuario) {
     })
     
     # KPIs ----
-    .crm_caja_modal("kpi_total",
+    .pr_caja("kpi_total",
               valor  = reactive(html_valor(nrow(contactos_enriquecidos()), formato = "coma", color = "#404040")),
               texto  = html_texto("Total de Contactos", color = "#404040"), icono = "user-group",
               colores = c(fondo = "white"), mostrar_boton = FALSE)
@@ -201,7 +201,7 @@ DetalleContacto <- function(id, usuario) {
         mutate(MesCrea = format(FechaHoraCrea, "%Y-%m")) %>%
         count(MesCrea, name = "NumContactos")
     })
-    .crm_caja_modal("kpi_creacion_prom",
+    .pr_caja("kpi_creacion_prom",
               valor  = reactive({html_valor(
                 round(mean(creacion_mensual_todos()$NumContactos, na.rm = TRUE), 1),
                 formato = "coma", color = "#404040")}),
@@ -213,7 +213,7 @@ DetalleContacto <- function(id, usuario) {
     DetalleCreacionMensual("modal_creacion_mensual", datos = contactos_creacion_todos)
     
     # Contactos con 30+ días sin registro de relacionamiento
-    .crm_caja_modal("kpi_30",
+    .pr_caja("kpi_30",
               valor  = reactive({html_valor(
                 mean(contactos_enriquecidos()$DiasSinRelacionamiento >= 30, na.rm = TRUE),
                 formato = "porcentaje", color = "#404040")}),

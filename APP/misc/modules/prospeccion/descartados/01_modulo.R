@@ -7,10 +7,10 @@ DetalleDescartadosUI <- function(id) {
   
   tagList(
     fluidRow(
-      column(3, .crm_caja_modal_ui(ns("kpi_contacto"))),
-      column(3, .crm_caja_modal_ui(ns("kpi_prospecto"))),
-      column(3, .crm_caja_modal_ui(ns("kpi_lead"))),
-      column(3, .crm_caja_modal_ui(ns("kpi_cliente")))
+      column(3, .crm_caja_output(ns("kpi_contacto"))),
+      column(3, .crm_caja_output(ns("kpi_prospecto"))),
+      column(3, .crm_caja_output(ns("kpi_lead"))),
+      column(3, .crm_caja_output(ns("kpi_cliente")))
     ),
     div(style = "width:220px;",
         racafeForms::racafeInputSelect(id = ns("FiltroEtapa"), label = h6("Filtrar por Etapa de Descarte"),
@@ -88,7 +88,7 @@ DetalleDescartados <- function(id, usuario) {
     })
     
     # Cuenta y calcula el porcentaje de descartados vigentes desde CONTACTO.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_contacto",
       valor = reactive({
         n_etapa <- sum(
@@ -119,7 +119,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Cuenta y calcula el porcentaje de descartados vigentes desde PROSPECTO.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_prospecto",
       valor = reactive({
         n_etapa <- sum(
@@ -150,7 +150,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Cuenta y calcula el porcentaje de descartados vigentes desde LEAD.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_lead",
       valor = reactive({
         n_etapa <- sum(
@@ -181,7 +181,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Cuenta y calcula el porcentaje de descartados vigentes desde CLIENTE.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_cliente",
       valor = reactive({
         n_etapa <- sum(
@@ -381,10 +381,10 @@ DetalleDescartados <- function(id, usuario) {
       contenido_razon2 <- if (es_numerico) {
         tagList(
           fluidRow(
-            column(3, .crm_caja_modal_ui(ns("kpi_precio_min"))),
-            column(3, .crm_caja_modal_ui(ns("kpi_precio_prom"))),
-            column(3, .crm_caja_modal_ui(ns("kpi_precio_mediana"))),
-            column(3, .crm_caja_modal_ui(ns("kpi_precio_max")))
+            column(3, .crm_caja_output(ns("kpi_precio_min"))),
+            column(3, .crm_caja_output(ns("kpi_precio_prom"))),
+            column(3, .crm_caja_output(ns("kpi_precio_mediana"))),
+            column(3, .crm_caja_output(ns("kpi_precio_max")))
           ),
           plotly::plotlyOutput(ns("histograma_precio"), height = "260px")
         )
@@ -422,7 +422,7 @@ DetalleDescartados <- function(id, usuario) {
     })
     
     # Muestra el precio minimo.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_precio_min",
       valor = reactive({
         p <- precios_modal_r()
@@ -433,7 +433,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Muestra el precio promedio.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_precio_prom",
       valor = reactive({
         p <- precios_modal_r()
@@ -444,7 +444,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Muestra la mediana del precio.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_precio_mediana",
       valor = reactive({
         p <- precios_modal_r()
@@ -455,7 +455,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Muestra el precio maximo.
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_precio_max",
       valor = reactive({
         p <- precios_modal_r()

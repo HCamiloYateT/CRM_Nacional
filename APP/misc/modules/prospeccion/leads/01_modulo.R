@@ -3,6 +3,12 @@
 DetalleCurvaConversionUI <- function(id) {
   ns <- NS(id)
   tagList(
+    .crm_disclosure("Cómo leer esta curva",
+      .crm_nota(c("La curva estima qué porcentaje ya avanzó a la siguiente etapa con el paso del tiempo.",
+        "El eje horizontal muestra el tiempo. Una curva que sube antes indica un avance más rápido.",
+        "Por ejemplo, 40% a los 30 días significa que el modelo estima ese avance para el grupo, no para cada entidad.",
+        "Las entidades que siguen en seguimiento aún no tienen un tiempo final: no se cuentan como fracasos.",
+        "Sirve para comparar grupos. No promete cuándo avanzará una entidad concreta."))),
     fluidRow(
       style = "display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;",
       div(style = "width:220px;",
@@ -19,9 +25,9 @@ DetalleCurvaConversionUI <- function(id) {
     fluidRow(
       column(9, plotly::plotlyOutput(ns("curva_km"), height = "450px")),
       column(3,
-             .crm_caja_modal_ui(ns("kpi_analizados")), br(),
-             .crm_caja_modal_ui(ns("kpi_convertidos")), br(),
-             .crm_caja_modal_ui(ns("kpi_censurados")))
+             .crm_caja_output(ns("kpi_analizados")), br(),
+             .crm_caja_output(ns("kpi_convertidos")), br(),
+             .crm_caja_output(ns("kpi_censurados")))
     )
   )
 }
@@ -127,7 +133,7 @@ DetalleCurvaConversion <- function(id, datos_filtrados) {
       if (is.null(fit)) return(NULL)
       summary(fit)$table
     })
-    .crm_caja_modal("kpi_analizados",
+    .pr_caja("kpi_analizados",
               valor = reactive({
                 tabla <- tabla_surv_r()
                 if (is.null(tabla)) 0 else html_valor(tabla[["records"]], formato = "coma", color = "#404040")
@@ -137,7 +143,7 @@ DetalleCurvaConversion <- function(id, datos_filtrados) {
               mostrar_boton = FALSE,
               footer = paste0("Incluye todos los contactos del universo analizado, ",
                               "sin restringir por etapa o estado vigente."))
-    .crm_caja_modal("kpi_convertidos",
+    .pr_caja("kpi_convertidos",
               valor = reactive({
                 tabla <- tabla_surv_r()
                 if (is.null(tabla)) 0 else html_valor(tabla[["events"]], formato = "coma", color = "#198754")
@@ -147,7 +153,7 @@ DetalleCurvaConversion <- function(id, datos_filtrados) {
               mostrar_boton = FALSE,
               footer = paste0("Contactos que alcanzaron históricamente la etapa Lead, ",
                               "aunque actualmente estén en otra etapa o estado."))
-    .crm_caja_modal("kpi_censurados",
+    .pr_caja("kpi_censurados",
               valor = reactive({
                 tabla <- tabla_surv_r()
                 if (is.null(tabla)) {
@@ -563,8 +569,8 @@ DetalleLeadsUI <- function(id) {
     fluidRow(
       column(4,
              .pr_panel(title = "Indicadores de Leads", width = 12, collapsible = TRUE, collapsed = FALSE,
-                 .crm_caja_modal_ui(ns("kpi_total")), br(),
-                 .crm_caja_modal_ui(ns("kpi_conversion")))),
+                 .crm_caja_output(ns("kpi_total")), br(),
+                 .crm_caja_output(ns("kpi_conversion")))),
       column(8,
              .pr_panel(title = "Resumen por Dimensión", width = 12, collapsible = TRUE, collapsed = FALSE,
                  .crm_tabs(
@@ -661,7 +667,7 @@ DetalleLeads <- function(id, usuario) {
       universo_contactos_r() %>% filter(CodContacto %in% cods_activos)
     })
     # KPIs ----
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_total",
       valor = reactive(html_valor(nrow(leads_activos_r()), formato = "coma", color = "#404040")),
       texto = html_texto("Total de Leads", color = "#404040"),
@@ -672,7 +678,7 @@ DetalleLeads <- function(id, usuario) {
                       "No incluye contactos que fueron Lead históricamente y hoy están en otra etapa.")
     )
     tasa_conversion_r <- reactive(mean(universo_contactos_r()$EsLead, na.rm = TRUE))
-    .crm_caja_modal(
+    .pr_caja(
       "kpi_conversion",
       valor = reactive(html_valor(tasa_conversion_r(), formato = "porcentaje", color = "#404040")),
       texto = html_texto("Tasa de Conversión Contacto → Lead", color = "#404040"),

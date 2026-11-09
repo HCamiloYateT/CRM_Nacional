@@ -37,27 +37,30 @@ MarketBasketUI <- function(id) {
   racafeForms::racafeForm(variant = "plain",
     .crm_disclosure("Qué es Market Basket y cómo usar este tablero",
       .crm_nota(c("Market Basket identifica productos o categorías que aparecen juntos en las compras observadas.",
-        "1. Elija el periodo, la unidad de cesta y el nivel de producto o categoría.",
-        "2. Ajuste soporte (frecuencia conjunta), confianza (probabilidad condicional) y lift (afinidad relativa).",
+        "1. El periodo y los clientes se eligen en el controlbar. Aquí elija si agrupa compras por pedido o cliente.",
+        "2. Soporte: de cada 100 compras, en cuántas aparecen los dos productos juntos.",
+        "Confianza: entre quienes compran A, cuántos también compran B. Lift: cuánto más habitual es esa combinación.",
+        "Lift mayor que 1: se compran juntos más de lo habitual. Menor que 1: menos de lo habitual.",
+        "Por ejemplo, A → B sugiere revisar si conviene ofrecer B a quien compra A.",
+        "El inicio permite combinaciones vistas una sola vez. Revise cuántas compras las respaldan antes de decidir.",
         "3. Pulse Analizar y revise cuántas cestas respaldan cada regla antes de proponer venta cruzada.",
         "4. Use validación temporal para comprobar si la asociación se mantiene en compras posteriores.",
-        "Un lift alto con pocas cestas es una hipótesis débil. Una asociación no demuestra causalidad ni demanda futura.",
+        "Un lift alto con pocas compras puede ser casualidad. Ver productos juntos no asegura ventas futuras.",
         "Venta cruzada prioriza clientes que compran el antecedente y aún no tienen el consecuente observado."))),
     racafeForms::racafeFormRow(columns = 3,
-      racafeForms::racafeInputDateRange("periodo", "Periodo de compras facturadas",
-        start = as.Date(format(Sys.Date(), "%Y-01-01")), end = Sys.Date(), ns = ns),
       racafeForms::racafeInputSelect("cesta", "Unidad de cesta", choices = c("Pedido facturado" = "pedido",
-        "Cliente principal y mes" = "cliente_mes", "Cliente principal en el periodo" = "cliente"), ns = ns),
+        "Cliente principal y mes" = "cliente_mes", "Cliente principal en el periodo" = "cliente"),
+        selected = "cliente", ns = ns),
       racafeForms::racafeInputSelect("nivel", "Ítem",
         choices = c("Producto" = "producto", "Categoría" = "categoria"), ns = ns)),
     racafeForms::racafeFormRow(columns = 3,
-      racafeForms::racafeInputNumeric("soporte", "Soporte mínimo (%)", value = 3, min = 0.1, max = 100, ns = ns),
-      racafeForms::racafeInputNumeric("confianza", "Confianza mínima (%)", value = 50, min = 0, max = 100, ns = ns),
-      racafeForms::racafeInputNumeric("lift", "Lift mínimo", value = 1, min = 0, ns = ns)),
+      racafeForms::racafeInputNumeric("soporte", "Soporte mínimo (%)", value = 0, min = 0, max = 100, ns = ns),
+      racafeForms::racafeInputNumeric("confianza", "Confianza mínima (%)", value = 0, min = 0, max = 100, ns = ns),
+      racafeForms::racafeInputNumeric("lift", "Lift mínimo", value = 0, min = 0, ns = ns)),
     racafeForms::racafeFormRow(columns = 3,
-      racafeForms::racafeInputNumeric("minimo", "Mínimo de cestas conjuntas", value = 3, min = 1,
+      racafeForms::racafeInputNumeric("minimo", "Mínimo de cestas conjuntas", value = 1, min = 1,
         decimals = 0, ns = ns),
-      racafeForms::racafeInputNumeric("longitud", "Máximo de ítems por conjunto", value = 3, min = 2, max = 5,
+      racafeForms::racafeInputNumeric("longitud", "Máximo de ítems por conjunto", value = 2, min = 2, max = 5,
         decimals = 0, ns = ns),
       racafeForms::racafeInputSelect("vista", "Tabla", choices = c("Reglas", "Métricas detalladas", "Ítems frecuentes",
         "Conjuntos frecuentes",
@@ -65,7 +68,8 @@ MarketBasketUI <- function(id) {
     racafeForms::racafeFormRow(columns = 3,
       racafeForms::racafeInputSwitch("cerrados", "Solo meses cerrados", value = FALSE, ns = ns),
       racafeForms::racafeInputSwitch("validacion", "Validación temporal 70/30 por fechas", value = FALSE, ns = ns),
-      racafeForms::racafeInputSwitch("estadistica", "Fisher y ajuste BH exploratorios", value = TRUE, ns = ns)),
+      racafeForms::racafeInputSwitch("estadistica", "Comprobación estadística avanzada (Fisher/BH)",
+        value = FALSE, ns = ns)),
     racafeForms::racafeActionBar(left = racafeForms::racafeButton("analizar", "Analizar",
       icon = "magnifying-glass", ns = ns)),
     shiny::uiOutput(ns("estado")), .gc_tarjetas_ui(ns, .MBA_CAJAS),
@@ -73,7 +77,8 @@ MarketBasketUI <- function(id) {
       shiny::column(6, shiny::plotOutput(ns("pares"), height = "300px"))),
     .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("tabla")),
     .crm_tabla_ui(ns("parametros"), titulo = "Alcance y parámetros del último análisis"),
-    .crm_nota(c("Pedido significa pedido observado facturado en el periodo, no factura individual.",
+    .crm_disclosure("Detalle técnico del análisis",
+      .crm_nota(c("Pedido significa pedido observado facturado en el periodo, no factura individual.",
       "Cliente-mes y cliente-periodo miden mezcla de compras, no simultaneidad ni causalidad.",
       "La cantidad neta por cesta/ítem debe ser positiva; las compras anuladas por devoluciones quedan fuera.",
       "Se requiere categoría/producto válido. Las compras observadas no equivalen al inventario actual del cliente.",
@@ -84,13 +89,14 @@ MarketBasketUI <- function(id) {
       "Las cestas de un mismo cliente pueden depender entre sí; p/q no garantizan validez comercial ni efecto causal.",
       "Convicción infinita indica confianza 100% con consecuente no universal; un caso indeterminado queda vacío.",
       "Venta cruzada muestra hasta 200 hipótesis priorizadas por lift/confianza/evidencia, no demanda garantizada.",
-      "Cambiar filtros requiere volver a Analizar. La descarga conserva el último resultado y sus parámetros.")))
+      "Cambiar filtros requiere volver a Analizar. La descarga conserva el último resultado y sus parámetros."))))
 }
 MarketBasket <- function(id, hechos, filtros, on_result = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     calculo <- shiny::eventReactive(input$analizar, {
       tryCatch({
-        if (length(input$periodo) != 2L || anyNA(input$periodo)) stop("Seleccione un periodo válido.")
+        periodo <- as.Date(filtros()$fecha)
+        if (length(periodo) != 2L || anyNA(periodo)) stop("Seleccione un periodo válido en el controlbar.")
         parametros <- c(input$soporte, input$confianza, input$lift, input$minimo, input$longitud)
         if (length(parametros) != 5L || any(!is.finite(parametros)) || input$confianza < 0 ||
             input$confianza > 100 || input$lift < 0) stop("Revise los parámetros del análisis.")
@@ -102,11 +108,11 @@ MarketBasket <- function(id, hechos, filtros, on_result = NULL) {
         alcance$categoria <- unique(fuente$Categoria)
         alcance$producto <- unique(fuente$Producto)
         fuente <- .gc_filtrar_dimensiones(fuente, alcance)
-        fuente <- .prod_preparar(fuente, as.Date(input$periodo), isTRUE(input$cerrados))
+        fuente <- .prod_preparar(fuente, periodo, isTRUE(input$cerrados))
         cestas <- .mba_cestas(fuente, tipo, nivel, f)
         resultado <- .mba_analizar(cestas, input$soporte / 100, input$minimo, as.integer(input$longitud),
           input$confianza / 100, input$lift, isTRUE(input$validacion), isTRUE(input$estadistica))
-        resultado$parametros <- data.frame(Desde = as.Date(input$periodo[[1]]), Hasta = as.Date(input$periodo[[2]]),
+        resultado$parametros <- data.frame(Desde = periodo[[1]], Hasta = periodo[[2]],
           Cesta = tipo, Item = nivel, SoporteMinimo = input$soporte / 100, ConfianzaMinima = input$confianza / 100,
           LiftMinimo = input$lift, MinimoCestas = input$minimo, LongitudMaxima = as.integer(input$longitud),
           SoloCerrados = isTRUE(input$cerrados), ValidacionTemporal = isTRUE(input$validacion),

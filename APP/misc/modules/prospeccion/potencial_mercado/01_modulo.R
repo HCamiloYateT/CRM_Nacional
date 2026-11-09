@@ -32,13 +32,13 @@
   x[c("CodContacto", "NIT", "PerRazSoc", "ConsumoEsperado", "UnidadConsumo", "PotencialKgMes",
     "SacosFacturados70", "KgFacturados", "MargenCOP", "Penetracion", "BrechaKg", "Revision")]
 }
-PotencialMercadoUI <- function(id) {
+PotencialMercadoUI <- function(id, periodo_local = FALSE) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
     racafeForms::racafeActionBar(left = racafeForms::racafeButton("actualizar", "Actualizar", ns = ns,
       variant = "secondary", icon = "arrows-rotate")),
     racafeForms::racafeFormRow(columns = 2,
-      .crm_input_mes("mes", "Año y mes de facturación", value = Sys.Date(), ns = ns),
+      if (periodo_local) .crm_input_mes("mes", "Año y mes de facturación", value = Sys.Date(), ns = ns),
       racafeForms::racafeInputNumeric("kg_saco", "Kg por saco declarado en el potencial", value = 70, min = 1,
         ns = ns)),
     .gc_tarjetas_ui(ns, c(entidades = "Entidades comerciales", comparable = "Con potencial comparable",
@@ -50,19 +50,29 @@ PotencialMercadoUI <- function(id) {
       "El peso del saco declarado es configurable porque el formulario de potencial no conserva ese dato.",
       "La penetración compara volumen mensual, no COP. Margen COP se presenta por separado.",
       "Se mantienen entidades sin ventas y sin potencial para identificar oportunidades y datos faltantes.",
-      "El mes vigente puede estar incompleto; los filtros del controlbar restringen la ejecución visible.")))
+      "Se compara el último mes del periodo del controlbar. La ejecución puede cubrir solo parte de ese mes.")))
 }
-PotencialMercado <- function(id, usuario, es_admin, hechos, cargar = racafeBD::CargarDatos) {
+PotencialMercado <- function(id, usuario, es_admin, hechos, cargar = racafeBD::CargarDatos, filtros = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     fuentes <- shiny::eventReactive(input$actualizar, {
       list(potencial = cargar("CRMNALPOTENCIAL"),
         contactos = cargar("CRMNALCONTACTO"))
     }, ignoreNULL = FALSE)
     datos <- shiny::reactive({
-      shiny::req(input$mes, input$kg_saco)
+      mes <- if (is.null(filtros)) input$mes else tail(as.Date(filtros()$fecha), 1L)
+      shiny::req(mes, input$kg_saco)
       h <- fuentes()
       contactos <- .op_contactos_visibles(h$contactos, usuario(), es_admin())
-      .pot_comparar(h$potencial, contactos, hechos(), as.Date(input$mes), input$kg_saco)
+      ejecucion <- hechos()
+      if (!is.null(filtros)) {
+        f <- filtros()
+        contactos <- contactos[contactos$Asesor %in% f$asesor, , drop = FALSE]
+        fechas <- as.Date(f$fecha)
+        shiny::req(length(fechas) == 2L, !anyNA(fechas))
+        ejecucion <- ejecucion[!is.na(ejecucion$FecFact) & ejecucion$FecFact >= fechas[[1]] &
+          ejecucion$FecFact <= fechas[[2]], , drop = FALSE]
+      }
+      .pot_comparar(h$potencial, contactos, ejecucion, as.Date(mes), input$kg_saco)
     })
     .gc_tarjetas_server(c(entidades = "Entidades comerciales", comparable = "Con potencial comparable",
       facturados = "Kg facturados en el mes", brecha = "Brecha positiva de potencial · kg"), shiny::reactive({
