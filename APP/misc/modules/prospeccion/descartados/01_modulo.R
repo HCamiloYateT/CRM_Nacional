@@ -30,7 +30,7 @@ DetalleDescartadosUI <- function(id) {
     fluidRow(
       column(
         8,
-        box(title = "Motivos de Descarte", width = 12,
+        .pr_panel(title = "Motivos de Descarte", width = 12,
             collapsible = TRUE, collapsed = FALSE,
             .crm_tabla_legacy_ui(ns("tabla_razon1")),
             shinyjs::hidden(
@@ -44,7 +44,7 @@ DetalleDescartadosUI <- function(id) {
       ),
       column(
         4,
-        box(title = "Nube de Palabras", width = 12,
+        .pr_panel(title = "Nube de Palabras", width = 12,
             collapsible = TRUE, collapsed = FALSE,
             plotly::plotlyOutput(ns("nube_palabras"), height = "400px"))
       )

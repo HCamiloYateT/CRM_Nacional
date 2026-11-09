@@ -647,22 +647,22 @@ DemoProspeccionPanel <- function() {
         )
       ),
       useShinyjs(),
-      box(
+      .pr_panel(
         title = "Etapa CONTACTO — sin filtro",
         width = 12,
         PanelEtapaUI("PanelContacto")
       ),
-      box(
+      .pr_panel(
         title = "Etapa CONTACTO — solo 30+ dias (filtro_extra)",
         width = 12,
         PanelEtapaUI("PanelContacto30")
       ),
-      box(
+      .pr_panel(
         title = "Etapa LEAD (sin cambios)",
         width = 12,
         PanelEtapaUI("PanelLead")
       ),
-      box(
+      .pr_panel(
         title = "Etapa DESCARTADO (nueva)",
         width = 12,
         PanelEtapaUI("PanelDescartado")

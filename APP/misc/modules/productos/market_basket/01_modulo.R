@@ -35,6 +35,14 @@
 MarketBasketUI <- function(id) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
+    .crm_disclosure("Qué es Market Basket y cómo usar este tablero",
+      .crm_nota(c("Market Basket identifica productos o categorías que aparecen juntos en las compras observadas.",
+        "1. Elija el periodo, la unidad de cesta y el nivel de producto o categoría.",
+        "2. Ajuste soporte (frecuencia conjunta), confianza (probabilidad condicional) y lift (afinidad relativa).",
+        "3. Pulse Analizar y revise cuántas cestas respaldan cada regla antes de proponer venta cruzada.",
+        "4. Use validación temporal para comprobar si la asociación se mantiene en compras posteriores.",
+        "Un lift alto con pocas cestas es una hipótesis débil. Una asociación no demuestra causalidad ni demanda futura.",
+        "Venta cruzada prioriza clientes que compran el antecedente y aún no tienen el consecuente observado."))),
     racafeForms::racafeFormRow(columns = 3,
       racafeForms::racafeInputDateRange("periodo", "Periodo de compras facturadas",
         start = as.Date(format(Sys.Date(), "%Y-01-01")), end = Sys.Date(), ns = ns),

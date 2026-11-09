@@ -119,16 +119,16 @@ DetalleProspectosUI <- function(id) {
     br(),
     fluidRow(
       column(4,
-             box(title = "Indicadores de Prospectos", width = 12,
+             .pr_panel(title = "Indicadores de Prospectos", width = 12,
                  collapsible = TRUE, collapsed = FALSE,
                  .crm_caja_modal_ui(ns("kpi_total")), br(),
                  .crm_caja_modal_ui(ns("kpi_alianzas"))
              )
       ),
       column(8,
-             box(title = "Resumen por Dimensión", width = 12,
+             .pr_panel(title = "Resumen por Dimensión", width = 12,
                  collapsible = TRUE, collapsed = FALSE,
-                 tabsetPanel(
+                 .crm_tabs(
                    tabPanel("Usuario",
                             Saltos(),
                             .crm_tabla_legacy_ui(ns("tabla_usuario"))
@@ -155,7 +155,7 @@ DetalleProspectosUI <- function(id) {
              )
       )
     ),
-    box(title = "Detalle de Prospectos", width = 12,
+    .pr_panel(title = "Detalle de Prospectos", width = 12,
         collapsible = TRUE, collapsed = TRUE,
         PanelEtapaUI(ns("Listado"))
     )
@@ -440,7 +440,7 @@ DemoProspeccionDetalleProspecto <- function() {
       use_waiter(),
       includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
                         "refs/heads/main/Styles/style.css")),
-      box(title = "Detalle Prospectos (prueba)", width = 12,
+      .pr_panel(title = "Detalle Prospectos (prueba)", width = 12,
           DetalleProspectosUI("AccionDetalleProspectos"))
     )
   )

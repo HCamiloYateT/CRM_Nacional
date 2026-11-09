@@ -53,12 +53,6 @@
     list(id = "pr_potencial", texto = "Potencial de Mercado", icono = "map-location-dot",
          formato = "entero", valor = 215L, tab = "PR_Potencial")
   )),
-  list(seccion = "Dinámica de Clientes", icono = "people-arrows", cajas = list(
-    list(id = "dc_nuevos", texto = "Clientes Nuevos", icono = "user-plus",
-         formato = "entero", valor = 14L, tab = "DC_Nuevos"),
-    list(id = "dc_perdidos", texto = "Clientes Perdidos", icono = "user-minus",
-         formato = "entero", valor = 5L, tab = "DC_Perdidos")
-  )),
   list(seccion = "Cohortes de Clientes", icono = "chart-gantt", cajas = list(
     list(id = "co_retencion", texto = "Retención", icono = "people-group",
          formato = "porcentaje", valor = 0.86, tab = "CO_Retencion"),

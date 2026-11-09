@@ -81,3 +81,9 @@
 /* Compartido oculta esta clase; también contiene las validaciones de selección vacía. */
 .shiny-output-error,.shiny-output-error::before {visibility:visible!important;}
 .shiny-output-error-validation::before {content:none;}
+
+/* Pestañas corporativas con la versión anterior de racafeForms. */
+.rf-tabs>.tabbable>.nav .nav-link{color:#495057;}
+.rf-tabs>.tabbable>.nav .nav-link.active{color:#DA291C;border-bottom:2px solid #DA291C;}
+.rf-tabs>.tabbable>.tab-content{padding-top:14px;}
+.crm-prospeccion{margin-bottom:14px;}

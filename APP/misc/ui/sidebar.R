@@ -34,11 +34,6 @@ sidebar <- bs4DashSidebar(
                        bs4SidebarMenuSubItem("Conversión", tabName = "PR_Conversion", icon = icon("funnel-dollar")),
                        bs4SidebarMenuSubItem("Potencial de Mercado", tabName = "PR_Potencial", icon = icon("map-location-dot"))
     ),
-    # Dinámica de Clientes ----
-    bs4SidebarMenuItem("Dinámica de Clientes", icon = icon("people-arrows"), selected = FALSE,
-                       bs4SidebarMenuSubItem("Clientes Nuevos", tabName = "DC_Nuevos", icon = icon("user-plus")),
-                       bs4SidebarMenuSubItem("Clientes Perdidos", tabName = "DC_Perdidos", icon = icon("user-minus"))
-    ),
     # Cohortes de Clientes ----
     bs4SidebarMenuItem("Cohortes de Clientes", icon = icon("chart-gantt"), selected = FALSE,
                        bs4SidebarMenuSubItem("Estados y Transiciones", tabName = "CO_Estados",

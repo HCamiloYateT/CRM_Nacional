@@ -8,6 +8,9 @@
       placement: "auto", container: "body",
       trigger: "hover", animation: false
     });
+    // El cierre exterior de bs4Dash está en window: el mismo clic no debe cerrar el controlbar recién abierto.
+    $(document).on("click.crmControlbar", '#controlbar-toggle,[data-widget="control-sidebar"],#controlbarPin',
+      function (event) { event.stopPropagation(); });
     // Mostrar el componente corporativo antes del envío, sin temporizadores que oculten trabajo todavía pendiente.
     var loaderSequence = 0, loaderInputs = Object.create(null);
     $(document).on("shiny:inputchanged.crmLoader", function (event) {
@@ -20,6 +23,8 @@
       loaderInputs[event.name] = signature;
       var trigger = document.getElementById("crm_recalcular");
       if (trigger) {
+        // El clic sintético del preloader no debe llegar al cierre exterior de Bootstrap/bs4Dash.
+        trigger.addEventListener("click", function (event) { event.stopPropagation(); }, {once: true});
         trigger.click();
         // Garantiza un ciclo confirmado por R incluso para acciones que solo abren UI en el cliente.
         Shiny.setInputValue("crm_recalcular", ++loaderSequence, {priority: "deferred"});

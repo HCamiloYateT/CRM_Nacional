@@ -1,6 +1,10 @@
 # Hechos de producto: movimientos facturados, sin proyecciones ni multiplicación por lotes ----
 .prod_suma <- function(x) if (anyNA(x)) NA_real_ else sum(x)
-.prod_div <- function(a, b) ifelse(is.finite(b) & b > 0, a / b, NA_real_)
+.prod_div <- function(a, b) {
+  if (!length(a) || !length(b)) return(numeric())
+  b <- rep_len(b, max(length(a), length(b)))
+  ifelse(is.finite(b) & b > 0, a / b, NA_real_)
+}
 .prod_identificador <- function(x) {
   valor <- if (is.numeric(x)) {
     format(x, scientific = FALSE, trim = TRUE, digits = 22, big.mark = "")
@@ -276,4 +280,9 @@
     }
   }
   if (length(filas)) dplyr::bind_rows(filas) else vacio
+}
+
+.prod_medida_label <- function(x) {
+  unname(c(Sacos = "Sacos netos de 70 kg", Margen = "Margen FCC · COP",
+    MargenKg = "Margen por kilo · COP", Clientes = "Clientes con compra")[[x]])
 }

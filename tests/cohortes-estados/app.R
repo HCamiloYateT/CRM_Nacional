@@ -4,6 +4,7 @@ library(dplyr)
 library(lubridate)
 source("APP/misc/compartido/00_presentacion.R")
 source("APP/misc/compartido/04_interaccion.R")
+source("APP/misc/compartido/05_componentes_forms.R")
 source("APP/misc/modules/cohortes_clientes/estados/00_datos.R")
 source("APP/misc/modules/cohortes_clientes/estados/01_componentes.R")
 source("APP/misc/modules/cohortes_clientes/estados/02_modulo.R")
@@ -24,7 +25,8 @@ ui <- shiny::fluidPage(racafeForms::racafeFormsDependencies(),
   shiny::includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/refs/heads/main/",
     "Styles/style.css")), CohortesEstadosUI("cohortes"))
 server <- function(input, output, session) {
-  CohortesEstados("cohortes", bd = reactive(panel), data_t = reactive(hechos))
+  CohortesEstados("cohortes", bd = reactive(panel), data_t = reactive(hechos),
+    fecha_limite = reactive(meses[3] + 20))
 }
 shinyApp(ui, server)
 
