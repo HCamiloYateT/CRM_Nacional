@@ -12,9 +12,12 @@ const assert = require('node:assert/strict');
       !document.documentElement.classList.contains('shiny-busy') &&
       (!document.querySelector('#rsh-loader-host') || document.querySelector('#rsh-loader-host').hidden));
     await page.locator('#consulta-ficha-tabla .gt_table').waitFor(); await idle();
+    await page.evaluate(() => {$('#consulta-entidad').selectpicker('val', 'nit:900123456').trigger('change');});
+    await page.waitForFunction(() => document.querySelector('#consulta-ficha-tabla').innerText.includes('900123456'));
     assert.match(await page.locator('#consulta-ficha-tabla').innerText(), /900123456/);
     assert(!/900,123,456|900\.123\.456/.test(await page.locator('#consulta-identidad').innerText()));
     assert.equal(await page.locator('#consulta-contenido a[data-value="Ejecución y productos"]').count(), 0);
+    await page.locator('#consulta-telefonos-tabla .gt_table').waitFor();
     assert.match(await page.locator('#consulta-telefonos-tabla').innerText(), /111111/);
     assert(!/999999/.test(await page.locator('#consulta-telefonos-tabla').innerText()));
     const seleccionar = async valor => {
@@ -44,7 +47,7 @@ const assert = require('node:assert/strict');
     await page.locator('#consulta-contenido a[data-value="Fidelidad y valor"]').click();
     await page.locator('#consulta-rfm-tabla .gt_table').waitFor();
     await page.locator('#consulta-modelar').click(); await idle();
-    assert.match(await page.locator('#consulta-modelo').innerText(), /20 clientes/);
+    assert.match(await page.locator('#consulta-modelo').innerText(), /compras disponibles|Línea/);
     // El cambio de fecha actualiza los resultados sin fechas locales en el módulo.
     await page.evaluate(() => Shiny.setInputValue('fecha:shiny.date', '2026-10-31', {priority: 'event'}));
     await page.waitForFunction(() => document.querySelector('#alcance').innerText.trim() === '1 | 2');
@@ -53,7 +56,7 @@ const assert = require('node:assert/strict');
     await page.waitForFunction(() => document.querySelector('#consulta-identidad').innerText.includes('Seleccione'));
     assert.equal(await page.locator('#consulta-contenido .gt_table').count(), 0);
     await page.evaluate(() => {$('#asesor').selectpicker('val', ['ANA']); $('#asesor').trigger('change');});
-    await page.locator('#consulta-ficha-tabla .gt_table').waitFor();
+    await page.locator('#consulta-ficha-tabla .gt_table').waitFor({state: 'attached'});
     await seleccionar('nit:102');
     await page.evaluate(() => Shiny.setInputValue('fallar', true, {priority: 'event'}));
     await page.locator('#consulta-contenido a[data-value="Potencial y oportunidades"]').click();

@@ -9,7 +9,8 @@ for (ruta in c("compartido/00_presentacion.R", "compartido/01_analitica_comercia
   "modules/gestion_comercial/oportunidades/01_modulo.R", "modules/gestion_comercial/pendientes_gestion/01_modulo.R",
   "modules/gestion_comercial/fidelidad_riesgo/00_modelos.R", "modules/gestion_comercial/cartera/00_datos.R",
   "modules/encabezado/02_notificaciones_tareas.R", "modules/consulta_individual/00_datos.R",
-  "modules/consulta_individual/01_modulo.R", "modules/productos/compartido/00_funciones.R",
+  "modules/consulta_individual/01_modulo.R", "modules/consulta_individual/02_perfil_analitico.R",
+  "modules/productos/compartido/00_funciones.R",
   "modules/productos/market_basket/01_modulo.R", "modules/prospeccion/compartido/00_estilo.R",
   "modules/prospeccion/compartido/00_constantes.R", "modules/prospeccion/compartido/00_funciones.R",
   "datos/01_contrato.R", "modules/productos/sin_clasificar/00_datos.R",
@@ -17,6 +18,7 @@ for (ruta in c("compartido/00_presentacion.R", "compartido/01_analitica_comercia
   sys.source(file.path(root, "APP/misc", ruta), contexto)
 }
 sys.source(file.path(root, "tests/fixtures/consulta_individual.R"), contexto)
+sys.source(file.path(root, "tests/fixtures/consulta360.R"), contexto)
 sys.source(file.path(root, "tests/fixtures/cartera.R"), contexto)
 shiny::addResourcePath("individual-assets", file.path(root, "APP/www"))
 ui <- with(contexto, shiny::tagList(racafeForms::racafeFormsDependencies(), shinyjs::useShinyjs(),
@@ -51,7 +53,12 @@ server <- function(input, output, session) {
     })
     cargar <- function(tabla) {
       if (tabla == "CRMNALCONTACTO") return(contactos_individual)
-      if (tabla == "CRMNALHISTORIALETAPA") return(etapas_individual)
+      if (tabla == "CRMNALHISTORIALETAPA") return(data.frame(CodContacto = "C2",
+        FechaHora = as.POSIXct(c("2018-06-01", "2024-01-01", "2025-01-01"), tz = "America/Bogota"),
+        EtapaAnterior = c("INICIO", "CONTACTO", "LEAD"),
+        EtapaNueva = c("CONTACTO", "LEAD", "CLIENTE"), Usuario = "ANA"))
+      if (tabla == "CONTACTOLEAD") return(data.frame(CodContacto = "C2", FechaConversion = as.Date("2024-01-01")))
+      if (tabla == "CRMNALLEADCLIENTE") return(data.frame(CodContacto = "C2", FechaConversion = as.Date("2025-01-01")))
       if (tabla == "CRMNALVINCULONIT") return(vinculos_individual)
       if (tabla == "CRMNALPOTENCIAL") {
         if (isTRUE(input$fallar)) stop("Fuente temporalmente fuera de servicio")
@@ -59,14 +66,16 @@ server <- function(input, output, session) {
       }
       if (tabla == "CRMNALDIRECTORIOTELEFONO") return(data.frame(CodContacto = c("C1", "C3"),
         Telefono = c("111111", "999999")))
-      if (tabla == "CRMNALCLOPT") return(data.frame(CodContacto = "C2", Producto = "B", SacosOP = 5))
+      if (tabla == "CRMNALCLOPT") return(data.frame(CodContacto = "C2", Producto = "C", Categoria = "Café",
+        LinNegCod = 21000, IdOportunidad = "OP-2024", FechaHoraCrea = as.Date("2024-06-01"),
+        FechaCumpOP = as.Date("2025-12-01"), SacosOP = 5, MargenOP = 100, Descartado = "NO"))
       data.frame(CodContacto = character())
     }
     cartera <- fuente_prueba
     cartera$cartera$PerCod <- c(101, 102, 303, 303)
     mapa <- data.frame(PerCod = c(101, 102, 303), CliNitPpal = c(101, 101, 303))
-    consulta <- ConsultaIndividual("consulta", reactive(hechos_individual), reactive(clientes_individual), f,
-      reactive("ANA"), reactive(FALSE), mapa, reactive(cartera), cargar = cargar)
+    consulta <- ConsultaIndividual("consulta", reactive(hechos360), reactive(clientes_individual), f,
+      reactive("ANA"), reactive(FALSE), mapa, reactive(cartera), cargar = cargar, directorio = reactive(directorio360))
     output$alcance <- renderText({
       x <- consulta$ejecucion()
       paste(nrow(x), sum(x$SacosFact), sep = " | ")

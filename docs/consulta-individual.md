@@ -51,3 +51,31 @@ que incluía escrituras y una app de demostración independientes.
   `tests/test_estructura_modular.R` y `tests/test-crm-analitico.cjs`.
 
 El arnés requiere las dependencias de la app; no consulta bases de datos de producción.
+
+## Perfil e historia comercial completa
+
+La ficha indica presupuesto del año consultado, parentesco y número de cuentas hijas visibles para el usuario.
+Contacto, teléfono, dirección y ciudad pertenecen al NIT seleccionado. La antigüedad distingue la fecha de
+creación del cliente en el directorio, el registro del contacto CRM y la primera compra observada.
+
+**Histórico completo** reúne los años disponibles hasta la fecha final del controlbar. Las tarjetas del periodo
+conservan sus fechas inicial y final. Las preferencias incluyen categoría, producto, marca y nombre comercial.
+Las cuentas hijas mantienen sus propias ventas y modelos; la vista consolidada agrupa la cuenta principal.
+Si una hija solo tiene seguimiento CRM a través del padre, se informa ese origen sin atribuirle ventas del padre.
+
+RFM describe las compras disponibles. CLV y BG/NBD se calculan automáticamente al abrir fidelidad, con horizonte
+de doce meses y descuento anual del 12 %. Si falta población o repetición suficiente se indica la limitación.
+Son estimaciones, no promesas de compra. La comparación respeta el alcance comercial autorizado.
+
+El recorrido reúne contactos, conversiones, relaciones, alianzas, descartes y oportunidades con sus fechas
+registradas. Los registros antiguos de conversión se deduplican frente a la historia de etapas. Una preferencia
+u oportunidad sobrescrita conserva únicamente su última versión disponible: no se reconstruye una auditoría
+inexistente. Las fuentes no disponibles se señalan en la interfaz.
+
+Venta cruzada propone productos aún no observados en la cuenta, comprados junto a sus productos por al menos
+dos cuentas comparables y con afinidad superior a la habitual. Identifica oportunidades ya registradas para
+consultar su seguimiento. No infiere vínculos por nombre ni amplía los permisos del usuario.
+
+Verificación adicional: `tests/test_consulta360.R` y `node tests/test-consulta360.cjs`, con datos ficticios,
+modelos reales, años anteriores, presupuesto, padre/hija, geografía, conversiones y propuestas de venta cruzada.
+La interfaz se comprueba en escritorio y a 390 px; no se accedió a datos de producción.
