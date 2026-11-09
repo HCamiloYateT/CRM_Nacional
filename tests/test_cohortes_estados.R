@@ -54,7 +54,8 @@ local({
   env$.coha_detalle <- function(...) invisible(NULL)
   env$.coha_tabla <- function(...) invisible(NULL)
   env$.crm_nota <- function(...) NULL
-  testServer(env$CohortesEstados, args = list(bd = reactive(panel), data_t = reactive(hechos)), {
+  panel_r <- reactiveVal(panel)
+  testServer(env$CohortesEstados, args = list(bd = panel_r, data_t = reactive(hechos)), {
     session$setInputs(fecha_ini = "2026-01-01", fecha_fin = "2026-03-01", fil_ppto = "todos",
       sel_tipo_matriz = "pct_fila")
     ind <- indicadores_trans()
@@ -65,9 +66,24 @@ local({
     stopifnot(mensual$n_transiciones == 8L, mensual$aa == 2, mensual$ai == 1,
       mensual$ia == 1, mensual$ii == 4)
     session$setInputs(fil_ppto = "sin")
-    stopifnot(nrow(bd_f()) == 0L)
+    stopifnot(nrow(bd_f()) == 0L, nrow(alertas_inactivar()) == 0L, n_en_riesgo() == 0L)
     session$setInputs(fil_ppto = "con")
     stopifnot(nrow(bd_f()) == nrow(panel))
+
+    # Sin activos, ifelse devolvía logical(0) y months() detenía las alertas.
+    panel_r(panel %>% mutate(EstadoPanel = "INACTIVO"))
+    stopifnot(nrow(alertas_inactivar()) == 0L, n_en_riesgo() == 0L)
+
+    # El umbral faltante conserva los cuatro meses, incluso si la columna NA es lógica.
+    panel_r(panel %>% mutate(EstadoPanel = "ACTIVO", NumMesesRecuperar = NA,
+      UltFecFact = as.Date("2025-11-30")))
+    stopifnot(n_en_riesgo() == 5L)
+
+    # Un umbral explícito sigue sumando meses calendario y ajusta el fin de mes.
+    panel_r(panel %>% mutate(EstadoPanel = "ACTIVO", NumMesesRecuperar = 1L,
+      UltFecFact = as.Date("2026-01-31")))
+    session$setInputs(fecha_fin = "2026-02-01")
+    stopifnot(n_en_riesgo() == 4L)
   })
 })
 cat("OK: estados aprobados, presupuesto, transiciones, NUEVO anual, filtros y margen abierto.\n")
