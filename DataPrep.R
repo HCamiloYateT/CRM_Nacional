@@ -2568,6 +2568,13 @@ if (file.exists(ruta_comercial_historica)) {
   homologaciones$comercial_historico <- .com_leer_historico(ruta_comercial_historica)
 }
 
+# Cartera nacional: extracción independiente; un fallo no oculta el estado de la fuente.
+sys.source("APP/misc/datos/04_cartera.R", envir = environment())
+homologaciones$cartera_financiera <- tryCatch(.car_extraer_fuentes(), error = function(e) {
+  message("No se actualizó cartera: ", conditionMessage(e))
+  list(error = "No fue posible actualizar cartera en el último ETL.", importado_en = Sys.time())
+})
+
 # Histórico de evolución opcional: se conserva separado del maestro operativo.
 sys.source("APP/misc/datos/03_evolucion_historica.R", envir = environment())
 ruta_evolucion <- Sys.getenv("CRM_EVOLUCION_HISTORICA", unset = "APP/data/evolucion_historica.rds")

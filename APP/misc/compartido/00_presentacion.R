@@ -156,11 +156,11 @@
     if (is.numeric(datos[[nombre]])) {
       digitos <- if (is.null(formato$digits)) 2 else formato$digits
       if (isTRUE(formato$percent)) {
-        tabla <- gt::fmt_percent(tabla, columns = tidyselect::all_of(nombre), decimals = digitos)
+        tabla <- do.call(gt::fmt_percent, list(data = tabla, columns = nombre, decimals = digitos))
       } else {
-        tabla <- gt::fmt_number(tabla, columns = tidyselect::all_of(nombre), decimals = digitos,
+        tabla <- do.call(gt::fmt_number, list(data = tabla, columns = nombre, decimals = digitos,
           use_seps = is.null(formato$separators) || isTRUE(formato$separators),
-          pattern = paste0(if (!is.null(formato$prefix)) formato$prefix, "{x}", formato$suffix))
+          pattern = paste0(if (!is.null(formato$prefix)) formato$prefix, "{x}", formato$suffix)))
       }
     }
     if (is.function(spec$cell) && !grepl("nit", paste(nombre, etiquetas[[nombre]]), ignore.case = TRUE)) {

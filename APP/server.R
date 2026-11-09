@@ -176,6 +176,17 @@ server <- function(input, output, session) {
     ruta <- Sys.getenv("CRM_DATOS_COMERCIALES", unset = file.path(.ruta_app, "data", "comercial_historico.rds"))
     if (file.exists(ruta)) .com_leer_historico(ruta) else NULL
   })
+  cartera_financiera_r <- reactive({
+    vigente <- homologaciones$cartera_financiera
+    if (!is.null(vigente$cartera)) return(vigente)
+    anterior <- comercial_historico_r()
+    if (!is.null(anterior$cartera)) {
+      anterior$origen <- "Archivo histórico de cartera"
+      anterior$aviso <- if (!is.null(vigente$error)) vigente$error else "Fuente pendiente de actualizar mediante ETL."
+      return(anterior)
+    }
+    vigente
+  })
   hechos_analisis_comercial <- reactive(.com_enriquecer_geografia(maestro_comercial(),
     .com_clientes(clientes_raw_cache(), Sys.Date(), filtros())))
 
@@ -244,7 +255,7 @@ server <- function(input, output, session) {
   CargarTabUnaVez("GC_Fidelidad", "ui_GC_Fidelidad", function() FidelidadRiesgoUI("FidelidadRiesgo"),
     function() FidelidadRiesgo("FidelidadRiesgo", hechos_analisis_comercial, clientes_raw_cache, filtros))
   CargarTabUnaVez("GC_Cartera", "ui_GC_Cartera", function() CarteraComercialUI("CarteraComercial"),
-    function() CarteraComercial("CarteraComercial", comercial_historico_r, clientes_raw_cache, nit_ppal,
+    function() CarteraComercial("CarteraComercial", cartera_financiera_r, clientes_raw_cache, nit_ppal,
       filtros, es_admin))
   
   ### Prospección ----
