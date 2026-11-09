@@ -101,3 +101,14 @@ node tests/test-cartera.cjs
 El arnés usa únicamente datos ficticios y no habilita escrituras. Cubre selección completa/parcial/vacía,
 tramos, detalle por TOTAL, búsqueda, exportación numérica, cambio de alcance, proyección diciembre/enero,
 históricos y vista móvil. `CRM_CARTERA_URL` y `CHROMIUM` permiten cambiar URL y navegador.
+
+## Cortes disponibles y filtros sin coincidencias
+
+Los selectores de corte y negocio usan los metadatos del archivo, antes de aplicar los filtros comerciales.
+Una selección de asesor, segmento o línea sin coincidencias no elimina las fechas que sí contiene la fuente.
+Los importes, clientes, detalles y descargas continúan restringidos mediante el catálogo autorizado del CRM.
+
+La interfaz distingue fuente ausente, archivo sin cortes válidos, filtros sin coincidencias y selección vacía.
+Muestra el motivo una sola vez y oculta las KPI y el detalle que no puedan calcularse. Las consultas históricas
+mantienen su independencia del selector de negocios del saldo. Al corregir los filtros se recuperan las salidas
+sin reiniciar la app. El arnés de navegador incluye estas regresiones.

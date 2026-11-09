@@ -36,9 +36,14 @@ const assert = require('node:assert/strict');
     await page.locator('[data-id="cartera-negocio"]').click();
     await page.locator('.bootstrap-select.show .bs-deselect-all').click();
     await page.keyboard.press('Escape');
-    await page.waitForFunction(() => document.querySelector('#cartera-tabla-tabla').innerText.includes('Sin registros'));
+    await page.waitForFunction(() => document.querySelector('#cartera-fuente').innerText.includes('No hay negocios seleccionados'));
     await page.locator('#cartera-actualizar').click(); await idle();
-    assert.match(await table.innerText(), /Sin registros/);
+    assert.match(await page.locator('#cartera-fuente').innerText(), /No hay negocios seleccionados/);
+    await set('cartera-vista', 'Recaudos');
+    await table.locator('.gt_table').waitFor();
+    assert.match(await table.innerText(), /F4/);
+    await set('cartera-vista', 'Resumen');
+    await page.waitForFunction(() => document.querySelector('#cartera-fuente').innerText.includes('No hay negocios'));
     await page.locator('[data-id="cartera-negocio"]').click();
     await page.locator('.bootstrap-select.show .bs-select-all').click();
     await page.keyboard.press('Escape'); await table.locator('.gt_table').waitFor();
@@ -72,7 +77,7 @@ const assert = require('node:assert/strict');
     await page.waitForFunction(() => document.querySelector('#cartera-tabla-tabla').innerText.includes('Pago oportuno'));
     for (const c of ['Valor', 'Facturas', 'Sacos']) {await set('cartera-concepto', c); await idle();}
     await set('cartera-cliente', []);
-    await page.waitForFunction(() => document.querySelector('#cartera-tabla-tabla').innerText.includes('Sin registros'));
+    await page.waitForFunction(() => document.querySelector('#cartera-fuente').innerText.includes('No hay clientes seleccionados'));
     // Cambiar el alcance elimina a Beta tanto de la consulta como de las opciones de clientes.
     await set('alcance', 'Propio'); await set('cartera-vista', 'Resumen'); await idle();
     assert(!await page.locator('#cartera-cliente').innerText().then(t => t.includes('Cliente Beta')));
@@ -85,6 +90,24 @@ const assert = require('node:assert/strict');
     await page.setViewportSize({width: 390, height: 844}); await idle();
     await page.screenshot({path: '/tmp/cartera-movil.png', fullPage: true, animations: 'disabled'});
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+    // Una selección comercial sin coincidencias no elimina las fechas existentes ni repite errores.
+    await set('alcance', 'Sin coincidencias');
+    await page.waitForFunction(() => document.querySelector('#cartera-fuente').innerText.includes('filtros actuales'));
+    assert.equal(await page.locator('#cartera-corte').inputValue(), '2026-11-05');
+    assert.equal(await page.locator('#cartera-saldo_tarjeta:visible').count(), 0);
+    assert.equal(await page.locator('.shiny-output-error:visible').count(), 0);
+    await set('alcance', 'Administrador');
+    await table.locator('.gt_table').waitFor();
+    assert.match(await table.innerText(), /\$1,000/);
+    // Fuente vacía y fuente ausente reciben un solo aviso, sin KPI ni descarga activa de importes.
+    await set('modo_fuente', 'Vacía');
+    await page.waitForFunction(() => document.querySelector('#cartera-fuente').innerText.includes('no contiene cortes'));
+    assert.equal(await page.locator('.shiny-output-error:visible').count(), 0);
+    await set('modo_fuente', 'Ausente');
+    await page.waitForFunction(() => document.querySelector('#cartera-fuente').innerText.includes('No hay una fuente'));
+    assert.equal(await page.locator('.shiny-output-error:visible').count(), 0);
+    await set('modo_fuente', 'Completa');
+    await table.locator('.gt_table').waitFor();
     assert.deepEqual(errors, []);
     console.log('OK: saldos, tramos, detalle, búsqueda, Excel, filtros nativos, proyección, históricos, permisos y móvil.');
   } finally {await browser.close();}

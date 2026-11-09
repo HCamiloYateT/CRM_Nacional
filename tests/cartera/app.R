@@ -14,16 +14,25 @@ contexto$shared_css <- getOption("crm.test.shared_css",
 ui <- with(contexto, fluidPage(theme = bslib::bs_theme(version = 4), racafeForms::racafeFormsDependencies(),
   tags$head(includeCSS(shared_css), tags$link(rel = "stylesheet", href = "crm-cartera-assets/crm-presentacion.css"),
     tags$script(src = "crm-cartera-assets/crm-presentacion.js")), .crm_loader_ui(show_logo = FALSE),
-  racafeForms::racafeInputSelect("alcance", "Alcance de prueba", c("Administrador", "Propio"), empty = FALSE),
-  CarteraComercialUI("cartera")))
+  racafeForms::racafeInputSelect("alcance", "Alcance de prueba",
+    c("Administrador", "Propio", "Sin coincidencias"), empty = FALSE),
+  racafeForms::racafeInputSelect("modo_fuente", "Fuente de prueba", c("Completa", "Vacía", "Ausente"),
+    empty = FALSE), CarteraComercialUI("cartera")))
 server <- function(input, output, session) {
   local <- new.env(parent = contexto)
   local$input <- input; local$output <- output; local$session <- session
   eval(quote({
     .crm_iniciar_loader(input)
     filtro <- reactive(list(asesor = if (input$alcance == "Propio") "ANA" else c("ANA", "LUIS"),
-      segmento = "MEDIANO", linneg = c("A LA MEDIDA", "CONVENCIONALES")))
-    CarteraComercial("cartera", reactive(fuente_prueba), reactive(clientes_prueba), mapa_prueba,
+      segmento = if (input$alcance == "Sin coincidencias") "INEXISTENTE" else "MEDIANO",
+      linneg = c("A LA MEDIDA", "CONVENCIONALES")))
+    fuente <- reactive({
+      if (input$modo_fuente == "Ausente") return(NULL)
+      h <- fuente_prueba
+      if (input$modo_fuente == "Vacía") h$cartera <- h$cartera[0, ]
+      h
+    })
+    CarteraComercial("cartera", fuente, reactive(clientes_prueba), mapa_prueba,
       filtro, reactive(input$alcance == "Administrador"))
   }), local)
 }
