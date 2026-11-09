@@ -161,14 +161,19 @@
   personas = list(tabla = "CRMNALDIRECTORIOPERSONA", campos = c("Nombre", "Cargo", "Correo", "Telefono")),
   ubicaciones = list(tabla = "CRMNALUBICACION", campos = c("Departamento", "Municipio", "Depto", "Mpio", "Direccion")),
   potencial = list(tabla = "CRMNALPOTENCIAL", campos = c("ConsumoEsperado", "UnidadConsumo", "FrecuenciaCompra",
-    "TipoCompra", "CalidadesPreferidas", "EsTostador", "Maquila", "Observaciones")),
+    "TipoCompra", "CalidadesPreferidas", "EsTostador", "Maquila", "Observaciones", "FechaHoraModi", "UsuarioMod")),
   oportunidades = list(tabla = "CRMNALCLOPT", campos = c("IdOportunidad", "Categoria", "Producto", "LineaNegocio",
-    "SacosOP", "Sacos", "MargenOP", "Margen", "FechaCumpOP", "Descartado", "UsuarioCrea")),
+    "SacosOP", "Sacos", "MargenOP", "Margen", "FechaCumpOP", "Descartado", "UsuarioCrea", "LinNegCod",
+    "FechaHoraCrea", "FechaHoraModi", "FrecuenciaDias", "Descripcion")),
   gestiones = list(tabla = "CRMNALRELACIONAMIENTO", campos = c("FechaHoraCrea", "TipoGestion", "TipoRelacionamiento",
     "Descripcion", "Observacion", "Comentario", "UsuarioCrea")),
   recordatorios = list(tabla = "CRMNALRECORDATORIO", campos = c("FechaRecordatorio", "FechaCumplimiento",
     "Descripcion", "Cumplido", "Canal", "Mensaje", "Enviado", "UsuarioCrea")),
-  etapas = list(tabla = "CRMNALHISTORIALETAPA", campos = c("FechaHora", "EtapaAnterior", "EtapaNueva", "Usuario")))
+  etapas = list(tabla = "CRMNALHISTORIALETAPA", campos = c("FechaHora", "EtapaAnterior", "EtapaNueva", "Usuario")),
+  conversion_lead = list(tabla = "CONTACTOLEAD", campos = c("FechaConversion", "Segmento", "LinNegocio", "Asesor")),
+  conversion_cliente = list(tabla = "CRMNALLEADCLIENTE", campos = c("FechaConversion", "NitFacturacion")),
+  alianzas = list(tabla = "CRMNALPROSPECTOALIANZA", campos = c("FechaHoraCrea", "CodClienteAliado", "Observacion")),
+  descartes = list(tabla = "CRMNALDESCARTE", campos = c("FechaHoraModi", "Etapa", "Razon1", "Razon2", "Razon3")))
 .in_detalle_crm <- function(fuente, entidad, campos) {
   if (!is.null(fuente$error)) {
     message("[Consulta individual] ", fuente$error)
