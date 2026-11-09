@@ -1,0 +1,69 @@
+Ambito,Linea,Dimension,Anho,PptoSacos,Sacos,PptoMargen,Margen,Diapositiva,Estado
+Linea,Industria Nacional,Industria Nacional,2017,12000.0,24854.0,805560840.0,1086000000.0,5,Histórico de la presentación
+Linea,Industria Nacional,Industria Nacional,2018,22801.0,26827.0,1583413164.9,799000000.0,5,Histórico de la presentación
+Linea,Industria Nacional,Industria Nacional,2019,22300.0,27895.0,1093894253.6,1003000000.0,5,Histórico de la presentación
+Linea,Industria Nacional,Industria Nacional,2020,26083.84,39260.0,1116394603.0,881000000.0,5,Histórico de la presentación
+Linea,Industria Nacional,Industria Nacional,2021,47041.0,63216.0,3115000000.0,1452000000.0,5,Histórico de la presentación
+Linea,Industria Nacional,Industria Nacional,2022,47694.77,44158.0,1631752419.6,2259000000.0,5,Histórico de la presentación
+Linea,Industria Nacional,Industria Nacional,2023,47353.0,31199.0,1498310962.0,1814000000.0,5,Histórico de la presentación
+Linea,Industria Nacional,Industria Nacional,2024,31444.0,60343.0,2521840800.0,2654000000.0,5,Histórico de la presentación
+Linea,Industria Nacional,Industria Nacional,2025,65387.0,67208.0,3220748160.0,6053000000.0,5,Histórico de la presentación
+Linea,Industria Nacional,Industria Nacional,2026,79324.0,53797.0,4268600000.0000005,3406000000.0,5,Proyección de cierre de la presentación
+Linea,A la medida,A la medida,2017,2275.0,990.0,152720909.25,209000000.0,6,Histórico de la presentación
+Linea,A la medida,A la medida,2018,1325.0,895.0,92014492.5,197000000.0,6,Histórico de la presentación
+Linea,A la medida,A la medida,2019,2500.0,2962.0,122633884.9,373000000.0,6,Histórico de la presentación
+Linea,A la medida,A la medida,2020,4945.0,2287.0,211647190.87,336000000.0,6,Histórico de la presentación
+Linea,A la medida,A la medida,2021,5310.0,3301.0,710000000.0,467000000.0,6,Histórico de la presentación
+Linea,A la medida,A la medida,2022,5592.0,4714.0,481000000.0,545000000.0,6,Histórico de la presentación
+Linea,A la medida,A la medida,2023,5268.0,6236.0,461000000.0,1301000000.0,6,Histórico de la presentación
+Linea,A la medida,A la medida,2024,7300.0,7061.0,1620000000.0,1366000000.0,6,Histórico de la presentación
+Linea,A la medida,A la medida,2025,8795.0,9557.0,1700697600.0,2532000000.0,6,Histórico de la presentación
+Linea,A la medida,A la medida,2026,10000.0,9013.0,2220000000.0,2804000000.0,6,Proyección de cierre de la presentación
+Linea,Coproductos,Coproductos,2017,9725.0,23864.0,652839930.75,877000000.0,7,Histórico de la presentación
+Linea,Coproductos,Coproductos,2018,21476.0,25932.0,1491398672.4,602000000.0,7,Histórico de la presentación
+Linea,Coproductos,Coproductos,2019,19800.0,24933.0,971260368.68,630000000.0,7,Histórico de la presentación
+Linea,Coproductos,Coproductos,2020,21138.84,36973.0,904747412.17,545000000.0,7,Histórico de la presentación
+Linea,Coproductos,Coproductos,2021,41731.0,59915.0,2405000000.0,985000000.0,7,Histórico de la presentación
+Linea,Coproductos,Coproductos,2022,42102.77,39444.0,1150752419.6,1714000000.0,7,Histórico de la presentación
+Linea,Coproductos,Coproductos,2023,42085.0,24963.0,1037310962.0,513000000.0,7,Histórico de la presentación
+Linea,Coproductos,Coproductos,2024,24144.0,53282.0,901840800.0,1288000000.0,7,Histórico de la presentación
+Linea,Coproductos,Coproductos,2025,56592.0,57651.0,1520050560.0,3521000000.0,7,Histórico de la presentación
+Linea,Coproductos,Coproductos,2026,69324.0,44784.0,2048600000.0,602000000.0,7,Proyección de cierre de la presentación
+Segmento,A la medida,GRANDE,2024,3720.0,4549.0,688200000.0,721255698.0,8,Histórico de la presentación
+Segmento,A la medida,GRANDE,2025,4560.0,5228.0,766080000.0,1040484511.0000001,8,Histórico de la presentación
+Segmento,A la medida,GRANDE,2026,4800.0,4542.0,940800000.0,1275000000.0,8,Proyección de cierre de la presentación
+Segmento,A la medida,GRANDE,2027,4560.0,,1117000000.0,,8,Presupuesto de la presentación
+Segmento,A la medida,MEDIANO,2024,2616.0,1991.0,677000000.0,492445176.0,8,Histórico de la presentación
+Segmento,A la medida,MEDIANO,2025,2760.0,2879.0,574000000.0,964300895.0,8,Histórico de la presentación
+Segmento,A la medida,MEDIANO,2026,3720.0,3290.0,917112000.0,1091000000.0,8,Proyección de cierre de la presentación
+Segmento,A la medida,MEDIANO,2027,4380.0,,1379000000.0,,8,Presupuesto de la presentación
+Segmento,A la medida,PEQUEÑO,2024,960.0,521.0,252000000.0,152587204.0,8,Histórico de la presentación
+Segmento,A la medida,PEQUEÑO,2025,1475.0,1450.0,360015600.0,527376246.00000006,8,Histórico de la presentación
+Segmento,A la medida,PEQUEÑO,2026,1476.0,1181.0,361620000.0,438000000.0,8,Proyección de cierre de la presentación
+Segmento,A la medida,PEQUEÑO,2027,2100.0,,800000000.0,,8,Presupuesto de la presentación
+Segmento,Coproductos,GRANDE,2024,,35000.0,,497958115.0,9,Histórico de la presentación
+Segmento,Coproductos,GRANDE,2025,36000.0,42500.0,630000000.0,2402384367.0,9,Histórico de la presentación
+Segmento,Coproductos,GRANDE,2026,48000.0,31680.0,991200000.0,115484000.0,9,Proyección de cierre de la presentación
+Segmento,Coproductos,GRANDE,2027,36000.0,,756000000.0,,9,Presupuesto de la presentación
+Segmento,Coproductos,MEDIANO,2024,21972.0,16703.0,649840800.0,509011880.0,9,Histórico de la presentación
+Segmento,Coproductos,MEDIANO,2025,17376.0,12361.0,529858560.0,490135368.0,9,Histórico de la presentación
+Segmento,Coproductos,MEDIANO,2026,15359.0,10030.0,482564000.0,63626000.0,9,Proyección de cierre de la presentación
+Segmento,Coproductos,MEDIANO,2027,20181.0,,706000000.0,,9,Presupuesto de la presentación
+Segmento,Coproductos,PEQUEÑO,2024,2172.0,1579.0,252000000.0,281301637.0,9,Histórico de la presentación
+Segmento,Coproductos,PEQUEÑO,2025,3216.0,2790.0,360192000.0,629097003.0,9,Histórico de la presentación
+Segmento,Coproductos,PEQUEÑO,2026,5965.0,3074.0,574812000.0,424000000.0,9,Proyección de cierre de la presentación
+Segmento,Coproductos,PEQUEÑO,2027,7125.0,,798000000.0,,9,Presupuesto de la presentación
+Asesor,Industria Nacional,JONATHAN,2024,6336.0,6540.0,1365780000.0,1213700804.0,10,Histórico de la presentación
+Asesor,Industria Nacional,JONATHAN,2025,7320.0,8107.0,1340682000.0,2004785406.0,10,Histórico de la presentación
+Asesor,Industria Nacional,JONATHAN,2026,57480.0,42683.0,2557800000.0,2245000000.0,10,Proyección de cierre de la presentación
+Asesor,Industria Nacional,JONATHAN,2027,46389.0,,2749000000.0,,10,Presupuesto de la presentación
+Asesor,Industria Nacional,CARLOS,2024,21972.0,55288.0,649840800.0,1026998182.0,10,Histórico de la presentación
+Asesor,Industria Nacional,CARLOS,2025,53376.0,62023.0,1159858560.0,3093438126.0,10,Histórico de la presentación
+Asesor,Industria Nacional,CARLOS,2026,17422.0,8325.0,880232000.0,380000000.0,10,Proyección de cierre de la presentación
+Asesor,Industria Nacional,CARLOS,2027,20468.0,,1037000000.0,,10,Presupuesto de la presentación
+Asesor,Industria Nacional,LUIS,2024,960.0,521.0,252000000.0,152587204.0,10,Histórico de la presentación
+Asesor,Industria Nacional,LUIS,2025,1475.0,1450.0,360015600.0,527376246.00000006,10,Histórico de la presentación
+Asesor,Industria Nacional,LUIS,2026,2546.0,1668.0,611370000.0,571000000.0,10,Proyección de cierre de la presentación
+Asesor,Industria Nacional,LUIS,2027,3205.0,,1034000000.0,,10,Presupuesto de la presentación
+Asesor,Industria Nacional,ANDREA,2026,1872.0,1122.0,218706000.0,210000000.0,10,Proyección de cierre de la presentación
+Asesor,Industria Nacional,ANDREA,2027,3354.0,,375000000.0,,10,Presupuesto de la presentación

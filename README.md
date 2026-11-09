@@ -145,3 +145,9 @@ Prueba aislada con UI reales: `shiny::runApp("tests/kpi-actions", port = 4104)` 
 Usar CRM_ACTIONS_URL/CHROMIUM_PATH/NODE_PATH como en las demás pruebas. El servidor financiero de prueba
 usa valores y contenido ficticios; no ejecuta el servidor comercial ni sus consultas.
 Actualizar racafeModulos, aplicar los cambios del CRM y reiniciar la aplicación para cargar el código nuevo.
+
+## Evolución del Negocio y organización modular
+
+El capítulo **Generalidades → Evolución del Negocio** incorpora la lectura histórica y el plan de crecimiento.
+Los scripts se organizan por opción del sidebar; configuración, contratos y utilidades tienen carpetas propias.
+Vea [fuentes, instalación del histórico Excel y estructura](docs/EVOLUCION_Y_ESTRUCTURA.md).

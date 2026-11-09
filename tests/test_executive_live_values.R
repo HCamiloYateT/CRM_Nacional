@@ -1,7 +1,7 @@
 # Tres cifras reales del resumen, sin porcentajes de ejemplo ----
 library(shiny)
-for (.archivo in c("APP/misc/modules/gestion_comercial/02_presupuesto.R",
-  "APP/misc/modules/generalidades/01_resumen_ejecutivo.R")) {
+for (.archivo in c("APP/misc/modules/gestion_comercial/presupuesto/01_modulo.R",
+  "APP/misc/modules/generalidades/resumen_ejecutivo/01_modulo.R")) {
   for (.expresion in parse(.archivo)) {
     if (is.call(.expresion) && identical(.expresion[[1]], as.name("<-"))) eval(.expresion)
   }

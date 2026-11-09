@@ -4,7 +4,7 @@ library(bs4Dash)
 root <- normalizePath("../..")
 source(file.path(root, "tests/helpers.R"))
 widgets <- .crm_ui_env(root)
-for (file in c("01_resumen_ejecutivo.R", "02_validacion_financiera.R")) {
+for (file in c("resumen_ejecutivo/01_modulo.R", "validacion_financiera/01_modulo.R")) {
   for (expression in parse(file.path(root, "APP/misc/modules/generalidades", file))) {
     if (is.call(expression) && identical(expression[[1]], as.name("<-")) && length(expression) == 3L &&
         ((is.call(expression[[3]]) && identical(expression[[3]][[1]], as.name("function"))) ||

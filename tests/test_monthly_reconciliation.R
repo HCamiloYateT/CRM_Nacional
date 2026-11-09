@@ -1,6 +1,6 @@
 # Regresión: las diferencias cero no deben ocultar el cuadre mensual ----
 library(shiny)
-sys.source("APP/misc/00_presentacion.R", envir = environment())
+sys.source("APP/misc/compartido/00_presentacion.R", envir = environment())
 .extraer_cuadre <- function(x, destino) {
   nombres <- c(".col_sacos_cuadre", ".col_diferencia_cuadre", ".col_pct_cuadre",
     ".registrar_tabla_cuadre", ".VF_CUADRE_MINIMO", ".VF_TOLERANCIA_SACOS")
@@ -13,7 +13,7 @@ sys.source("APP/misc/00_presentacion.R", envir = environment())
     }
   }
 }
-.extraer_cuadre(parse("APP/misc/modules/generalidades/02_validacion_financiera.R"), environment())
+.extraer_cuadre(parse("APP/misc/modules/generalidades/validacion_financiera/01_modulo.R"), environment())
 servidor_cuadre <- function(input, output, session) {
   datos <- reactive(data.frame(FecMes = seq(as.Date("2026-01-01"), by = "month", length.out = 12),
     Mes = month.name, SacosFacturados = c(rep(100, 10), 0, 0), SacosPYG = c(rep(100, 10), 0, 0),

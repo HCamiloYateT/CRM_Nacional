@@ -1,7 +1,7 @@
 library(dplyr)
-source("APP/misc/01_analitica_comercial.R")
-source("APP/misc/modules/productos/00_funciones.R")
-source("APP/misc/modules/productos/02_market_basket.R")
+source("APP/misc/compartido/01_analitica_comercial.R")
+source("APP/misc/modules/productos/compartido/00_funciones.R")
+source("APP/misc/modules/productos/market_basket/01_modulo.R")
 
 # Conjuntos conocidos: el denominador incluye las cestas de un solo ítem.
 m <- data.frame(Cesta = c(1,1,2,2,3,4,4,5), Item = c(1,2,1,2,1,2,3,3))

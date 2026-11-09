@@ -1,6 +1,6 @@
 library(shiny)
 library(dplyr)
-sys.source("APP/misc/modules/herramientas/01_calculadoras.R", envir = environment())
+sys.source("APP/misc/modules/herramientas/calculadoras/01_modulo.R", envir = environment())
 sys.source("tests/fixtures/formulas_calculadoras.R", envir = environment())
 .ind_prueba <- data.frame(Item = c("TRM (Hoja de trabajo)", "Precio NYC (HT)", "Diferencial de Compra (HT)",
   "Precio Carga (Promedio de últimas entradas del día)", "Precio Consumo (Compras)",

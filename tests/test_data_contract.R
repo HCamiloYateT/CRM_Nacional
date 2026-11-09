@@ -2,7 +2,7 @@
 args <- commandArgs(trailingOnly = TRUE)
 root <- normalizePath(if (length(args)) args[[1]] else ".")
 library(dplyr)
-source(file.path(root, "APP/misc/data_contract.R"))
+source(file.path(root, "APP/misc/datos/01_contrato.R"))
 
 .checks <- 0L
 .check <- function(condicion) {
@@ -98,7 +98,7 @@ operativo <- .crm_preparar_operaciones(operaciones, pedidos, facturas, productos
 
 # La conversión utiliza primera factura por NIT aunque data solo conserve el mes PyG ----
 env <- new.env(parent = globalenv())
-sys.source(file.path(root, "APP/misc/modules/prospeccion/00_Funciones.R"), envir = env)
+sys.source(file.path(root, "APP/misc/modules/prospeccion/compartido/00_funciones.R"), envir = env)
 env$derivar_etapa_actual <- function() data.frame(CodContacto = "LEAD1", PerCod = "10", Etapa = "LEAD")
 env$CargarDatos <- function(tabla) {
   if (tabla == "CRMNALLEADCLIENTE") return(data.frame(CodContacto = character()))

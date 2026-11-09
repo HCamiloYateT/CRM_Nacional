@@ -2,7 +2,7 @@
 library(shiny)
 library(dplyr)
 sys.source("APP/misc/modules/encabezado/02_notificaciones_tareas.R", envir = environment())
-sys.source("APP/misc/modules/gestion_comercial/05_tareas.R", envir = environment())
+sys.source("APP/misc/modules/gestion_comercial/notas_tareas/01_modulo.R", envir = environment())
 .TSK_PRIORIDADES <- c("URGENTE", "IMPORTANTE", "MEDIA", "BAJA")
 .notas_prueba <- data.frame(cons = 1:5, titulo = paste("Tarea", 1:5), Tipo = "list",
   Usuario = c("ANA", "LUIS", "ANABEL", "ANA", "ANA"), Responsable = c("ANA", "ANA|LUIS", "ANABEL", "ANA", "ANA"),

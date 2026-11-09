@@ -126,7 +126,7 @@ stopifnot(utils::packageVersion("racafeForms") >= "0.7.3",
 .crm_ruta_app <- function(inicio = getwd()) {
   candidatas <- c(inicio, file.path(inicio, "APP"))
   validas <- vapply(candidatas, function(ruta) {
-    file.exists(file.path(ruta, "global.R")) && file.exists(file.path(ruta, "misc", "data_contract.R"))
+    file.exists(file.path(ruta, "global.R")) && file.exists(file.path(ruta, "misc", "datos", "01_contrato.R"))
   }, logical(1))
   if (!any(validas)) stop("No se encontró APP. Inicie con shiny::runApp('APP') desde el repositorio.", call. = FALSE)
   normalizePath(candidatas[which(validas)[[1]]], winslash = "/", mustWork = TRUE)
@@ -150,14 +150,19 @@ tit_app <- "Análisis de Ofertas"
 badge_estado <- "staging"
 
 # Datos ----
-sys.source(file.path(.ruta_app, "misc", "data_contract.R"), envir = globalenv())
+sys.source(file.path(.ruta_app, "misc", "datos", "01_contrato.R"), envir = globalenv())
 .crm_cargar_exportacion(file.path(.ruta_app, "data", "data.RData"))
 
 # Constantes ----
 uid <- Sys.getenv("SYS_UID")
 pwd <- Sys.getenv("SYS_PWD")
 # Sources ----
-racafeCore::load_modules(path = file.path(.ruta_app, "misc"), verbose = verbose)
+# Configuración y utilidades antes de los módulos; las piezas de UI se construyen al final.
+for (.carpeta in c("config", "compartido", "datos", "modules", "ui")) {
+  .carga <- racafeCore::load_modules(path = file.path(.ruta_app, "misc", .carpeta), verbose = verbose)
+  if (length(.carga$fallidos)) stop(paste("No se pudieron cargar:", paste(.carga$fallidos, collapse = ", ")))
+}
+rm(.carpeta, .carga)
 
 
 

@@ -14,7 +14,7 @@ library(dplyr)
   }
   NULL
 }
-.cuerpo_fuente <- .buscar_fuente(parse("APP/misc/modules/gestion_comercial/02_presupuesto.R"))
+.cuerpo_fuente <- .buscar_fuente(parse("APP/misc/modules/gestion_comercial/presupuesto/01_modulo.R"))
 stopifnot(!is.null(.cuerpo_fuente))
 servidor_facturacion <- function(input, output, session) {
   dat <- data.frame(FecMes = as.Date(c("2026-09-01", "2026-10-01", "2026-11-01", "2026-12-01", NA)),

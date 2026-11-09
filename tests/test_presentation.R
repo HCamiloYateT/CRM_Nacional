@@ -2,7 +2,7 @@
 args <- commandArgs(trailingOnly = TRUE)
 root <- normalizePath(if (length(args)) args[[1]] else ".")
 library(shiny)
-sys.source(file.path(root, "APP/misc/00_presentacion.R"), envir = environment())
+sys.source(file.path(root, "APP/misc/compartido/00_presentacion.R"), envir = environment())
 for (expresion in parse(file.path(root, "APP/misc/modules/encabezado/00_header.R"))) {
   if (is.call(expresion) && identical(expresion[[1]], as.name("<-")) && is.symbol(expresion[[2]]) &&
       as.character(expresion[[2]]) %in% c(".header_tarjeta", ".header_kpis_server")) eval(expresion)

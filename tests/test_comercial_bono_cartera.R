@@ -1,9 +1,9 @@
 library(dplyr)
-source("APP/misc/01_analitica_comercial.R")
-source("APP/misc/02_fuentes_comerciales.R")
-source("APP/misc/modules/gestion_comercial/01_variables_bono.R")
-source("APP/misc/modules/gestion_comercial/08_cartera.R")
-source("APP/misc/modules/gestion_comercial/07_fidelidad_riesgo.R")
+source("APP/misc/compartido/01_analitica_comercial.R")
+source("APP/misc/datos/02_fuentes_comerciales.R")
+source("APP/misc/modules/gestion_comercial/variables_bono/01_modulo.R")
+source("APP/misc/modules/gestion_comercial/cartera/01_modulo.R")
+source("APP/misc/modules/gestion_comercial/fidelidad_riesgo/01_modulo.R")
 
 # Pesos, umbrales y bordes: cifras provisionales 2026 identificadas.
 stopifnot(identical(vapply(c(0.69, 0.7, 0.849, 0.85, 0.99, 1), .bon_factor, numeric(1)),

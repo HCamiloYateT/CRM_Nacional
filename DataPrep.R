@@ -2562,11 +2562,16 @@ homologaciones <- list(
 )
 
 # Fuente comercial histórica opcional: importar datos, nunca ejecutar los scripts antiguos.
-sys.source("APP/misc/02_fuentes_comerciales.R", envir = environment())
+sys.source("APP/misc/datos/02_fuentes_comerciales.R", envir = environment())
 ruta_comercial_historica <- Sys.getenv("CRM_DATOS_COMERCIALES", unset = "APP/data/comercial_historico.rds")
 if (file.exists(ruta_comercial_historica)) {
   homologaciones$comercial_historico <- .com_leer_historico(ruta_comercial_historica)
 }
+
+# Histórico de evolución opcional: se conserva separado del maestro operativo.
+sys.source("APP/misc/datos/03_evolucion_historica.R", envir = environment())
+ruta_evolucion <- Sys.getenv("CRM_EVOLUCION_HISTORICA", unset = "APP/data/evolucion_historica.rds")
+if (file.exists(ruta_evolucion)) homologaciones$evolucion_historica <- .ev_leer_historico(ruta_evolucion)
 
 # TRAZABILIDAD FACTURAS ----
 .facturas_referencia <- function() {
@@ -2802,7 +2807,7 @@ cat("\nCRM MAESTRO | Registros:", nrow(crm_maestro),
 if (!dir.exists("APP/data")) dir.create("APP/data", recursive = TRUE)
 
 # Validar el contrato compartido sin cambiar los dos objetos publicados.
-sys.source("APP/misc/data_contract.R", envir = environment())
+sys.source("APP/misc/datos/01_contrato.R", envir = environment())
 .crm_validar_maestro(crm_maestro, homologaciones)
 
 save(crm_maestro, homologaciones, file = "APP/data/data.RData",

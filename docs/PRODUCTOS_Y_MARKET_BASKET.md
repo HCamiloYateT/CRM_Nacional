@@ -9,7 +9,7 @@ No se crea ninguna oportunidad al abrir: se conserva la confirmación y persiste
 
 ## Organización
 
-`APP/misc/modules/productos/00_funciones.R`: transformaciones y motor de asociaciones.
+`APP/misc/modules/productos/compartido/00_funciones.R`: transformaciones y motor de asociaciones.
 `01_ejecucion.R`: Productos → Ejecución. `02_market_basket.R`: Productos → Market Basket.
 Se retira PD_Administracion de sidebar, body, servidor y Resumen Ejecutivo; Catálogos de Administración se conserva.
 El resumen muestra productos con movimiento y el número real de reglas del último análisis; antes de analizar no
