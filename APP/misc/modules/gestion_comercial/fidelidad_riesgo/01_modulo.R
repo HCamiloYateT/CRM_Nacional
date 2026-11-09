@@ -33,7 +33,7 @@ FidelidadRiesgoUI <- function(id) {
     racafeForms::racafeFormRow(columns = 3,
       racafeForms::racafeInputNumeric("umbral", "Umbral de revisión (días)", value = 90, min = 1,
         format = "number", ns = ns),
-      racafeForms::racafeInputSelect("estado", "Estado de las señales observadas", choices = .FID_ESTADOS,
+      .crm_select("estado", "Estado de las señales observadas", choices = .FID_ESTADOS,
         selected = .FID_ESTADOS, multiple = TRUE, ns = ns)),
     racafeForms::racafeFormRow(columns = 2,
       racafeForms::racafeInputNumeric("horizonte", "Horizonte CLV (meses)", value = 12, min = 1, max = 36,

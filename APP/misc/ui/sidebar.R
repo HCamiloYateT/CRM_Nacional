@@ -52,7 +52,9 @@ sidebar <- bs4DashSidebar(
     # Productos ----
     bs4SidebarMenuItem("Productos", icon = icon("boxes-stacked"), selected = FALSE,
                        bs4SidebarMenuSubItem("Ejecución", tabName = "PD_Ejecucion", icon = icon("chart-column")),
-                       bs4SidebarMenuSubItem("Market Basket", tabName = "PD_MarketBasket", icon = icon("basket-shopping"))
+                       bs4SidebarMenuSubItem("Market Basket", tabName = "PD_MarketBasket", icon = icon("basket-shopping")),
+                       bs4SidebarMenuSubItem("Productos sin clasificar", tabName = "PD_SinClasificar",
+                         icon = icon("tags"))
     ),
     # Consulta Individual ----
     bs4SidebarMenuItem("Consulta Individual", icon = icon("user"), tabName = "IN_Consulta"),

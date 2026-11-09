@@ -78,11 +78,11 @@ OportunidadesGestionUI <- function(id) {
       racafeForms::racafeButton("actualizar", "Actualizar", ns = ns,
         variant = "secondary", icon = "arrows-rotate"))),
     racafeForms::racafeFormRow(columns = 3, responsive = "auto",
-      racafeForms::racafeInputSelect("contacto", "Contacto para una nueva oportunidad",
+      .crm_select("contacto", "Contacto para una nueva oportunidad",
         choices = character(), ns = ns),
-      racafeForms::racafeInputSelect("estado", "Mostrar", choices = c("Activas", "Descartadas"),
+      .crm_select("estado", "Mostrar", choices = c("Activas", "Descartadas"),
         selected = "Activas", multiple = TRUE, gender = "f", ns = ns),
-      racafeForms::racafeInputSelect("dimension", "Agrupar tablero por", choices = c("Autor", "Categoria", "Producto"),
+      .crm_select("dimension", "Agrupar tablero por", choices = c("Autor", "Categoria", "Producto"),
         empty = FALSE, ns = ns)),
     .gc_tarjetas_ui(ns, c(total = "Oportunidades activas", vencidas = "Vencidas",
       sacos = "Objetivo de sacos 70 kg", margen = "Margen objetivo")),
@@ -121,7 +121,7 @@ OportunidadesGestion <- function(id, usuario, es_admin, hechos, cargar = racafeB
     shiny::observe({
       x <- .op_contactos_visibles(contactos(), usuario(), es_admin())
       etiquetas <- paste(x$PerCod, x$PerRazSoc, sep = " — ")
-      racafeForms::racafeUpdateSelect(session, "contacto", choices = stats::setNames(x$CodContacto, etiquetas),
+      .crm_update_select(session, "contacto", choices = stats::setNames(x$CodContacto, etiquetas),
         selected = shiny::isolate(input$contacto))
     })
     datos <- shiny::reactive({
@@ -156,7 +156,7 @@ OportunidadesGestion <- function(id, usuario, es_admin, hechos, cargar = racafeB
         return(invisible(FALSE))
       }
       contacto_seleccionado(as.character(codigo))
-      racafeForms::racafeUpdateSelect(session, "contacto", selected = as.character(codigo))
+      .crm_update_select(session, "contacto", selected = as.character(codigo))
       shiny::showModal(racafeForms::racafeModalDetail(title = "Crear oportunidad", size = "subventana2",
         CrearOportunidadUI(session$ns("crear_op")),
         footer = racafeForms::racafeModalFooter(right = shiny::modalButton("Cerrar"))))
@@ -176,7 +176,7 @@ OportunidadesGestion <- function(id, usuario, es_admin, hechos, cargar = racafeB
         etiquetas <- paste(permitidos$PerCod, permitidos$PerRazSoc, sep = " — ")
         shiny::showModal(racafeForms::racafeModalDetail(title = "Seleccionar contacto", size = "subventana1",
           racafeForms::racafeForm(variant = "plain",
-            racafeForms::racafeInputSelect("contacto_creacion", "Contacto de la oportunidad",
+            .crm_select("contacto_creacion", "Contacto de la oportunidad",
               choices = stats::setNames(as.character(permitidos$CodContacto), etiquetas), empty = FALSE,
               ns = session$ns),
             racafeForms::racafeButton("continuar_creacion", "Continuar", icon = "arrow-right", ns = session$ns)),

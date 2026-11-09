@@ -8,11 +8,11 @@ MigrarCarteraUI <- function(ns) {
     racafeForms::racafeForm(
       size = "compact", variant = "plain",
       racafeForms::racafeFormRow(
-        racafeForms::racafeInputSelect(
+        .crm_select(
           "frm_AsesorOrigen", "Asesor origen", choices = personas,
           required = TRUE, ns = ns
         ),
-        racafeForms::racafeInputSelect(
+        .crm_select(
           "frm_AsesorDestino", "Asesor destino", choices = personas,
           required = TRUE, ns = ns
         )

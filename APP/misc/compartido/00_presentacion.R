@@ -4,7 +4,7 @@
   if (inherits(texto, c("shiny.tag", "shiny.tag.list"))) texto <- list(texto)
   if (is.character(texto)) {
     html <- inherits(texto, "html")
-    texto <- unlist(strsplit(texto, "\n|(?<=[.]) +(?=[[:upper:]])", perl = TRUE))
+    texto <- unlist(strsplit(texto, "\n", perl = TRUE))
     if (html) texto <- lapply(texto, shiny::HTML)
   }
   if (!is.null(swatches)) texto <- lapply(seq_along(texto), function(i) shiny::tagList(
@@ -29,11 +29,14 @@
 # Identificadores tributarios sin formato numérico ----
 .crm_nits_tabla <- function(datos, etiquetas = NULL) {
   nombres <- names(datos)
-  son_nit <- grepl("nit", nombres, ignore.case = TRUE)
+  es_identificador <- function(x) grepl("nit", x, ignore.case = TRUE) |
+    grepl("^(Pedido|CLPdcCod|PdcCod|NumeroPedido|Número de pedido|Año|Ano|Anio|Anho|Year|Periodo)$",
+      x, ignore.case = TRUE)
+  son_nit <- es_identificador(nombres)
   if (!is.null(etiquetas)) {
     comunes <- intersect(names(etiquetas), nombres)
     son_nit[match(comunes, nombres)] <- son_nit[match(comunes, nombres)] |
-      grepl("nit", as.character(etiquetas[comunes]), ignore.case = TRUE)
+      es_identificador(as.character(etiquetas[comunes]))
   }
   for (nombre in nombres[son_nit]) {
     if (!is.numeric(datos[[nombre]])) next
@@ -118,8 +121,42 @@
 
 .crm_tabla_vancouver <- function(datos, ...) {
   argumentos <- list(...)
-  datos <- .crm_nits_tabla(datos, argumentos[["labels"]])
-  racafeShiny::racafeTableVancouver(datos, header_color = "#495057", header_width = 1.5, decimals = NULL, ...)
+  if (is.null(argumentos$labels)) argumentos$labels <- unlist(.crm_etiquetas(names(datos)), use.names = TRUE)
+  datos <- .crm_nits_tabla(datos, argumentos$labels)
+  do.call(racafeShiny::racafeTableVancouver,
+    c(list(data = datos, header_color = "#495057", header_width = 1.5, decimals = NULL), argumentos))
+}
+
+# Etiquetas orientadas al uso comercial, compartidas por tablas y modales ----
+.crm_etiquetas <- function(nombres) {
+  mapa <- c(Anho = "Año", Anio = "Año", Ano = "Año", Year = "Año", Categoria = "Categoría",
+    Sacos70kg = "Sacos facturados (70 kg)", SacosFact = "Sacos facturados (70 kg)",
+    MargenFCC = "Margen total FCC (COP)", Margen = "Margen FCC (COP)", FecFact = "Fecha de factura",
+    CLCliNit = "NIT de facturación", CliNitPpal = "NIT de la cuenta principal", CLPdcCod = "Pedido",
+    CLPdcLin = "Línea del pedido", CLLotCod = "Lote", CLLinNegNo = "Línea de negocio",
+    MNFCCPpto = "Margen presupuestado (COP)", SSPpto = "Sacos presupuestados (70 kg)",
+    MetaMensualSacos = "Meta mensual de sacos (70 kg)", MetaMensualMargen = "Meta mensual de margen (COP)",
+    SacosOP = "Sacos objetivo", MargenOP = "Margen objetivo por kg (COP)", FechaCumpOP = "Fecha objetivo",
+    ConsumoEsperado = "Consumo esperado", UnidadConsumo = "Unidad del consumo declarado",
+    RecenciaDias = "Días desde la última compra", SegmentoRFM = "Perfil de compra",
+    PerRazSoc = "Nombre del cliente", PerCod = "NIT", IdOportunidad = "Oportunidad",
+    LinNegCod = "Código de línea de negocio", FecProceso = "Fecha de actualización",
+    NombreComercial = "Nombre comercial", EstadoFinanciero = "Estado de la facturación",
+    FechaHoraCrea = "Fecha de creación", UsuarioCrea = "Creado por", TipoGestion = "Tipo de gestión",
+    CorreoGeneral = "Correo empresarial", PaginaWeb = "Página web", Telefono = "Teléfono",
+    TipoTelefono = "Tipo de teléfono", TipoRedSocial = "Red social", UsuarioRed = "Cuenta en la red social",
+    NombreSucursal = "Nombre de la sucursal", EsPrincipal = "Sucursal principal", Depto = "Departamento",
+    Mpio = "Municipio", Direccion = "Dirección", Descripcion = "Descripción", Observacion = "Observación",
+    FrecuenciaCompra = "Frecuencia de compra", CalidadesPreferidas = "Calidades preferidas",
+    TipoCompra = "Tipo de compra", EsTostador = "Tiene tostadora", TipoRelacionamiento = "Tipo de contacto",
+    FechaRecordatorio = "Fecha del recordatorio", FechaCumplimiento = "Fecha de cumplimiento",
+    FechaHora = "Fecha y hora", EtapaAnterior = "Etapa anterior", EtapaNueva = "Etapa alcanzada",
+    Antecedente = "Si compra estos productos", Consecuente = "También suele comprar",
+    CestasAmbos = "Compras que incluyen ambos", Soporte = "Participación de la combinación",
+    Confianza = "Compras de A que también incluyen B", Lift = "Afinidad entre los productos (lift)")
+  valores <- unname(mapa[nombres])
+  valores[is.na(valores)] <- nombres[is.na(valores)]
+  stats::setNames(as.list(valores), nombres)
 }
 
 # Tablas Vancouver con búsqueda, ordenamiento y selección estable ----
@@ -146,7 +183,7 @@
   visibles <- if (is.null(columnas)) names(datos) else intersect(columnas, names(datos))
   visibles <- visibles[!vapply(visibles, function(n) identical(col_specs[[n]]$show, FALSE), logical(1))]
   tabla <- .crm_tabla_vancouver(datos[visibles], font_size = 11, row_padding = 2)
-  etiquetas <- stats::setNames(as.list(visibles), visibles)
+  etiquetas <- .crm_etiquetas(visibles)
   for (nombre in visibles) {
     spec <- col_specs[[nombre]]
     if (!is.null(spec$name)) etiquetas[[nombre]] <- spec$name

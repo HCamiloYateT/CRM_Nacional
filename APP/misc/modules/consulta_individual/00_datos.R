@@ -12,7 +12,8 @@
     list(datos = datos, error = NULL)
   }, error = function(e) list(datos = data.frame(), error = paste(tabla, conditionMessage(e), sep = ": ")))
 }
-.in_catalogo <- function(contactos, clientes, historial, vinculos, usuario, admin, filtros, hechos = NULL) {
+.in_catalogo <- function(contactos, clientes, historial, vinculos, usuario, admin, filtros, hechos = NULL,
+                         directorio = NULL) {
   c <- .op_contactos_visibles(contactos, usuario, admin)
   asesor <- .in_id(.gc_columna(c, "Asesor"))
   # Una entidad aún sin asesor conserva su ficha; una selección global vacía no incluye ninguna.
@@ -47,34 +48,81 @@
       }
     }
   }
-  # La cuenta principal es otra vista: agrupa sucursales autorizadas, sin duplicar sus movimientos.
-  principales <- clientes %>% dplyr::group_by(CliNitPpal) %>%
-    dplyr::summarise(Nombre = dplyr::first(PerRazSoc), Asesor = paste(sort(unique(Asesor)), collapse = " | "),
-      .groups = "drop")
-  if (is.data.frame(hechos) && nrow(hechos)) {
-    cuentas <- data.frame(CliNitPpal = .in_id(hechos$CliNitPpal),
-      PerRazSoc = as.character(.gc_columna(hechos, "PerRazSoc")),
-      Asesor = as.character(.gc_columna(hechos, "Asesor")))
-    cuentas <- cuentas[!is.na(cuentas$CliNitPpal), , drop = FALSE] %>%
-      dplyr::group_by(CliNitPpal) %>% dplyr::summarise(Nombre = dplyr::first(PerRazSoc),
-        Asesor = paste(sort(unique(Asesor)), collapse = " | "), .groups = "drop")
-    principales$CliNitPpal <- .in_id(principales$CliNitPpal)
-    principales$Nombre <- dplyr::coalesce(principales$Nombre,
-      cuentas$Nombre[match(principales$CliNitPpal, cuentas$CliNitPpal)])
-    principales <- dplyr::bind_rows(principales,
-      cuentas[!cuentas$CliNitPpal %in% principales$CliNitPpal, , drop = FALSE])
+  # Una entrada por NIT de facturación: el contacto complementa la cuenta, no la duplica.
+  detalle <- attr(clientes, "presupuesto_detalle")
+  cuentas <- data.frame(NIT = character(), Principal = character(), Nombre = character(), Asesor = character())
+  agregar <- function(x, nit) {
+    if (!is.data.frame(x) || !nrow(x)) return(invisible(NULL))
+    cuentas <<- dplyr::bind_rows(cuentas, data.frame(NIT = .in_id(.gc_columna(x, nit)),
+      Principal = .in_id(.gc_columna(x, "CliNitPpal")),
+      Nombre = as.character(.gc_columna(x, c("RazonSocialFacturacion", "PerRazSoc"))),
+      Asesor = as.character(.gc_columna(x, "Asesor"))))
   }
-  p <- data.frame(Clave = if (nrow(principales)) paste0("principal:", .in_id(principales$CliNitPpal)) else character(),
-    Codigo = rep(NA_character_, nrow(principales)),
-    Nombre = principales$Nombre, NIT = .in_id(principales$CliNitPpal),
-    Principal = .in_id(principales$CliNitPpal), Tipo = rep("CLIENTE", nrow(principales)), Asesor = principales$Asesor,
-    Alcance = rep("Cuenta principal", nrow(principales)), NitFacturacion = .in_id(principales$CliNitPpal),
-    VinculoEnRevision = rep(FALSE, nrow(principales)))
-  base <- dplyr::bind_rows(base, p)
+  agregar(detalle, "CLCliNit")
+  agregar(hechos, "CLCliNit")
+  cuentas <- cuentas[!is.na(cuentas$NIT), , drop = FALSE] %>%
+    dplyr::group_by(NIT) %>% dplyr::summarise(Principal = .gc_unico(Principal),
+      Nombre = dplyr::first(Nombre), Asesor = paste(sort(unique(stats::na.omit(Asesor))), collapse = " | "),
+      .groups = "drop")
+  nombres_directorio <- character()
+  if (is.data.frame(directorio) && all(c("PerCod", "PerRazSoc") %in% names(directorio))) {
+    nombres <- directorio %>% dplyr::transmute(NIT = .in_id(PerCod), Nombre = as.character(PerRazSoc)) %>%
+      dplyr::group_by(NIT) %>% dplyr::summarise(Nombre = .gc_unico(Nombre), .groups = "drop")
+    nombres_directorio <- nombres$NIT[!is.na(nombres$Nombre)]
+    cuentas$Nombre <- dplyr::coalesce(nombres$Nombre[match(cuentas$NIT, nombres$NIT)], cuentas$Nombre)
+  }
+  cuentas$Clave <- if (nrow(cuentas)) paste0("nit:", cuentas$NIT) else character()
+  cuentas$Codigo <- rep(NA_character_, nrow(cuentas))
+  cuentas$Tipo <- rep("CLIENTE", nrow(cuentas))
+  cuentas$Alcance <- rep("Cuenta de facturación", nrow(cuentas))
+  cuentas$NitFacturacion <- cuentas$NIT
+  cuentas$VinculoEnRevision <- rep(FALSE, nrow(cuentas))
+  if (nrow(base)) {
+    base$Clave <- ifelse(!is.na(base$NitFacturacion), paste0("nit:", base$NitFacturacion), base$Clave)
+  }
+  for (i in seq_len(nrow(cuentas))) {
+    relacionados <- base[base$Clave == cuentas$Clave[[i]], , drop = FALSE]
+    if (!nrow(relacionados)) next
+    cuentas$Codigo[[i]] <- paste(unique(relacionados$Codigo), collapse = "|")
+    if (!cuentas$NIT[[i]] %in% nombres_directorio) cuentas$Nombre[[i]] <- relacionados$Nombre[[1]]
+    cuentas$VinculoEnRevision[[i]] <- any(relacionados$VinculoEnRevision)
+  }
+  base <- base[!base$Clave %in% cuentas$Clave, , drop = FALSE]
+  # Varias fichas con el mismo documento también se consultan juntas, sin perder sus directorios.
+  if (nrow(base)) {
+    base <- dplyr::bind_rows(lapply(split(base, base$Clave), function(x) {
+      fila <- x[1, , drop = FALSE]
+      fila$Codigo <- paste(unique(x$Codigo), collapse = "|")
+      fila$Asesor <- paste(unique(stats::na.omit(x$Asesor)), collapse = " | ")
+      fila$VinculoEnRevision <- any(x$VinculoEnRevision)
+      fila
+    }))
+  }
+  # Consolidar es una vista adicional solo cuando hay varios NIT hijos en el alcance actual.
+  padres <- cuentas %>% dplyr::filter(!is.na(Principal)) %>% dplyr::group_by(Principal) %>%
+    dplyr::filter(dplyr::n_distinct(NIT) > 1L) %>% dplyr::slice_head(n = 1L) %>% dplyr::ungroup()
+  if (nrow(padres)) {
+    padres$NIT <- padres$Principal
+    padres$NitFacturacion <- padres$Principal
+    padres$Clave <- paste0("principal:", padres$Principal)
+    padres$Codigo <- NA_character_
+    padres$Alcance <- "Cuenta principal"
+    padres$Nombre <- dplyr::coalesce(clientes$PerRazSoc[match(padres$Principal, .in_id(clientes$CliNitPpal))],
+      padres$Nombre)
+  }
+  base <- dplyr::bind_rows(cuentas, base, padres)
+  base$EsPrincipal <- base$Alcance == "Cuenta principal" |
+    (!is.na(base$Principal) & base$NIT == base$Principal & !base$Principal %in% padres$Principal)
   base$Nombre[is.na(base$Nombre) | !nzchar(base$Nombre)] <- "Sin nombre registrado"
-  base$Etiqueta <- paste(base$Nombre, dplyr::coalesce(base$NIT, "Sin NIT"), base$Tipo, base$Alcance, sep = " · ")
+  base$Etiqueta <- paste(base$Nombre, dplyr::coalesce(base$NIT, "Sin documento"),
+    ifelse(base$Alcance == "Cuenta principal", "TODAS LAS CUENTAS HIJAS", base$Tipo), sep = " · ")
   base[order(base$Nombre, base$Alcance), , drop = FALSE]
 }
+.in_codigos <- function(entidad) {
+  if (nrow(entidad) != 1L || is.na(entidad$Codigo)) return(character())
+  strsplit(entidad$Codigo, "|", fixed = TRUE)[[1]]
+}
+
 .in_elegida <- function(catalogo, clave) {
   if (length(clave) != 1L || is.na(clave)) return(catalogo[0, , drop = FALSE])
   catalogo[catalogo$Clave == clave, , drop = FALSE]
@@ -83,8 +131,10 @@
   if (nrow(entidad) != 1L) return(hechos[0, , drop = FALSE])
   if (entidad$Alcance == "Cuenta principal") {
     filas <- .in_id(.gc_columna(hechos, "CliNitPpal")) %in% entidad$Principal
+  } else if (entidad$Alcance == "Cuenta de facturación") {
+    filas <- .in_id(.gc_columna(hechos, "CLCliNit")) %in% entidad$NitFacturacion
   } else {
-    filas <- .in_id(.gc_columna(hechos, "CodContacto")) %in% entidad$Codigo
+    filas <- .in_id(.gc_columna(hechos, "CodContacto")) %in% .in_codigos(entidad)
     nit <- stats::na.omit(entidad$NitFacturacion)
     filas <- filas | .in_id(.gc_columna(hechos, "CLCliNit")) %in% nit
   }
@@ -128,7 +178,7 @@
   if (nrow(entidad) != 1L || is.na(entidad$Codigo)) return(data.frame())
   if (!nrow(x)) return(x)
   if (!"CodContacto" %in% names(x)) stop("La fuente no identifica la entidad comercial.")
-  x <- x[.in_id(x$CodContacto) %in% entidad$Codigo, , drop = FALSE]
+  x <- x[.in_id(x$CodContacto) %in% .in_codigos(entidad), , drop = FALSE]
   columnas <- intersect(campos, names(x))
   if (nrow(x) && !length(columnas)) stop("La fuente no contiene los campos de consulta esperados.")
   .crm_nits_tabla(x[columnas])
@@ -149,5 +199,5 @@
 .in_tiene_detalle <- function(fuente, codigo) {
   x <- fuente$datos
   !is.na(codigo) && is.data.frame(x) && "CodContacto" %in% names(x) &&
-    any(.in_id(x$CodContacto) %in% codigo)
+    any(.in_id(x$CodContacto) %in% strsplit(codigo, "|", fixed = TRUE)[[1]])
 }

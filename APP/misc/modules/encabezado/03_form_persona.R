@@ -26,11 +26,11 @@ IndFormularioUI <- function(id) {
       ),
       racafeForms::racafeFormGroup(title = "Clasificación comercial", divider = FALSE,
         racafeForms::racafeFormRow(
-          racafeForms::racafeInputSelect("frm_Asesor", "Asesor", choices = catalogos$personas, ns = ns),
-          racafeForms::racafeInputSelect("frm_Segmento", "Segmento", choices = catalogos$segmento, ns = ns)
+          .crm_select("frm_Asesor", "Asesor", choices = catalogos$personas, ns = ns),
+          .crm_select("frm_Segmento", "Segmento", choices = catalogos$segmento, ns = ns)
         ),
         racafeForms::racafeFormRow(
-          racafeForms::racafeInputSelect("frm_Excluir", "Excluir", choices = c("NO", "SI"),
+          .crm_select("frm_Excluir", "Excluir", choices = c("NO", "SI"),
                                         selected = "NO", empty = FALSE, ns = ns),
           racafeForms::racafeInputNumeric("frm_NumMesesRecuperar", "Meses para recuperar",
                                          value = 3L, format = "integer", min = 1, ns = ns)
@@ -84,7 +84,7 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
         dplyr::arrange(PerRazSoc) %>%
         {setNames(as.character(.$PerCod), paste0(.$PerCod, " - ", .$PerRazSoc))}
       
-      racafeForms::racafeInputSelect(
+      .crm_select(
         "frm_CuentaPadreNueva", "Cuenta principal", choices = choices_padre,
         selected = "", ns = ns, disabled = isTRUE(input$frm_ConvertirPrincipal)
       )
@@ -263,9 +263,9 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
       exc_val <- if (nrow(crm) > 0) crm$Excluir[1] %||% "NO" else "NO"
       meses_val <- if (nrow(crm) > 0) crm$NumMesesRecuperar[1] %||% 3L else 3L
       
-      racafeForms::racafeUpdateSelect(session, "frm_Asesor", selected = if (is.na(asesor_val) || asesor_val %in% c("Ninguna", "Ninguno")) "" else asesor_val)
-      racafeForms::racafeUpdateSelect(session, "frm_Segmento", selected = if (is.na(seg_val) || seg_val %in% c("Ninguna", "Ninguno")) "" else seg_val)
-      racafeForms::racafeUpdateSelect(session, "frm_Excluir", selected = exc_val)
+      .crm_update_select(session, "frm_Asesor", selected = if (is.na(asesor_val) || asesor_val %in% c("Ninguna", "Ninguno")) "" else asesor_val)
+      .crm_update_select(session, "frm_Segmento", selected = if (is.na(seg_val) || seg_val %in% c("Ninguna", "Ninguno")) "" else seg_val)
+      .crm_update_select(session, "frm_Excluir", selected = exc_val)
       racafeForms::racafeUpdateNumeric(session, "frm_NumMesesRecuperar", value = meses_val)
     })
     

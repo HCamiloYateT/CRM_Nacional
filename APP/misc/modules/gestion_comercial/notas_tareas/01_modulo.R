@@ -32,9 +32,9 @@ TableroTareasUI <- function(id) {
       racafeForms::racafeButton("actualizar", "Actualizar", icon = "arrows-rotate", variant = "secondary", ns = ns))),
     racafeForms::racafeFormRow(columns = 3, responsive = "auto",
       racafeForms::racafeInputText("buscar", "Buscar", placeholder = "Título, descripción o actividad", ns = ns),
-      racafeForms::racafeInputSelect("etiquetas", "Etiquetas", choices = c("Sin etiqueta" = "__sin__"),
+      .crm_select("etiquetas", "Etiquetas", choices = c("Sin etiqueta" = "__sin__"),
         selected = "__sin__", multiple = TRUE, gender = "f", ns = ns),
-      racafeForms::racafeInputSelect("prioridades", "Prioridad", choices = .TSK_PRIORIDADES,
+      .crm_select("prioridades", "Prioridad", choices = .TSK_PRIORIDADES,
         selected = .TSK_PRIORIDADES, multiple = TRUE, gender = "f", ns = ns)),
     shiny::tags$div(class = "crm-tareas-switches",
       racafeForms::racafeInputSwitch("archivadas", "Incluir archivadas", value = FALSE, ns = ns),
@@ -59,7 +59,7 @@ TableroTareas <- function(id, usuario, datos, abrir, refrescar, es_admin = funct
       actual <- shiny::isolate(input$etiquetas)
       seleccionar_todas <- !etiquetas_iniciadas() || setequal(actual, etiquetas_previas())
       seleccion <- if (seleccionar_todas) unname(choices) else intersect(actual, unname(choices))
-      racafeForms::racafeUpdateSelect(session, "etiquetas", choices = choices, selected = seleccion)
+      .crm_update_select(session, "etiquetas", choices = choices, selected = seleccion)
       etiquetas_previas(unname(choices))
       etiquetas_iniciadas(TRUE)
     }, ignoreNULL = TRUE)

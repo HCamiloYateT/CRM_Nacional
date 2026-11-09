@@ -3,6 +3,7 @@
   env <- new.env(parent = globalenv())
   sys.source(file.path(root, "APP/misc/compartido/00_presentacion.R"), env)
   sys.source(file.path(root, "APP/misc/compartido/04_interaccion.R"), env)
+  sys.source(file.path(root, "APP/misc/compartido/05_componentes_forms.R"), env)
   env$Choices <- function() list(personas = c("Ana", "Luis"), formapago = "PAGO ANTICIPADO")
   env$`%||%` <- function(x, y) if (is.null(x)) y else x
   env$.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/refs/heads/main"

@@ -25,13 +25,13 @@ DetalleCreacionMensual <- function(id, datos) {
     ns <- session$ns
     output$Origen_ui <- .crm_render_ui({
       opciones <- .crm_opciones(datos()$Origen)
-      racafeForms::racafeInputSelect(ns("Origen"), "Origen", choices = opciones,
+      .crm_select(ns("Origen"), "Origen", choices = opciones,
         selected = .crm_seleccion_opciones(input, session, "Origen", opciones), multiple = TRUE, size = 8)
     })
     output$DetOrigen_ui <- .crm_render_ui({
       base <- .crm_filtrar_opciones(datos(), "Origen", input$Origen)
       opciones <- .crm_opciones(base$DetOrigen)
-      racafeForms::racafeInputSelect(ns("DetOrigen"), "Detalle Origen", choices = opciones,
+      .crm_select(ns("DetOrigen"), "Detalle Origen", choices = opciones,
         selected = .crm_seleccion_opciones(input, session, "DetOrigen", opciones), multiple = TRUE, size = 8)
     })
 

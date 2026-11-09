@@ -4,10 +4,10 @@ CrearOportunidadUI <- function(id) {
   racafeForms::racafeForm(variant = "plain",
     shiny::uiOutput(ns("Titulo")), shiny::uiOutput(ns("EstadoActual")),
     racafeForms::racafeCard(title = "Producto",
-      racafeForms::racafeInputSelect("OP_LinNeg", "Línea de negocio", choices = c("", Choices()$linneg), ns = ns),
+      .crm_select("OP_LinNeg", "Línea de negocio", choices = c("", Choices()$linneg), ns = ns),
       racafeForms::racafeFormRow(columns = 2,
-        racafeForms::racafeInputSelect("OP_Categoria", "Categoría", choices = "", ns = ns),
-        racafeForms::racafeInputSelect("OP_Producto", "Producto", choices = "", ns = ns))),
+        .crm_select("OP_Categoria", "Categoría", choices = "", ns = ns),
+        .crm_select("OP_Producto", "Producto", choices = "", ns = ns))),
     racafeForms::racafeCard(title = "Objetivo de la oportunidad",
       racafeForms::racafeFormRow(columns = 2,
         racafeForms::racafeInputDate("OP_Fecha", "Fecha de cumplimiento", value = Sys.Date() + 7,
@@ -89,8 +89,8 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
       
       # selected = "" evita que el picker retenga una categoria de la
       # linea de negocio anterior que ya no existe en las nuevas choices
-      racafeForms::racafeUpdateSelect(session = session, choices = c("", cho_cat), selected = "", id = "OP_Categoria")
-      racafeForms::racafeUpdateSelect(session = session, choices = "", selected = "", id = "OP_Producto")
+      .crm_update_select(session = session, choices = c("", cho_cat), selected = "", id = "OP_Categoria")
+      .crm_update_select(session = session, choices = "", selected = "", id = "OP_Producto")
     })
     
     # Actualiza productos segun categoria ----
@@ -101,7 +101,7 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
         dplyr::pull(Producto) %>%
         Unicos()
       
-      racafeForms::racafeUpdateSelect(session = session, choices = c("", cho_prod), selected = "", id = "OP_Producto")
+      .crm_update_select(session = session, choices = c("", cho_prod), selected = "", id = "OP_Producto")
     })
     
     # Label dinamico de sacos segun linea de negocio ----

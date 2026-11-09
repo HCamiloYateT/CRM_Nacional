@@ -46,6 +46,7 @@ body <- bs4DashBody(
     # Productos ----
     bs4TabItem(tabName = "PD_Ejecucion", uiOutput("ui_PD_Ejecucion")),
     bs4TabItem(tabName = "PD_MarketBasket", uiOutput("ui_PD_MarketBasket")),
+    bs4TabItem(tabName = "PD_SinClasificar", uiOutput("ui_PD_SinClasificar")),
     
     # Administración ----
     bs4TabItem(tabName = "AD_Catalogos", uiOutput("ui_AD_Administrar")),

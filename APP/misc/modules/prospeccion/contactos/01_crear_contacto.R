@@ -5,7 +5,7 @@ CrearContactoUI <- function(id) {
     useShinyjs(),
     racafeForms::racafePanel(title = NULL, padding = "compact", bordered = FALSE,
                              racafeForms::racafeForm(size = "compact", variant = "plain",
-                                                     racafeForms::racafeInputSelect("CampoAutorizaDatos", label = "Autoriza Tratamiento de Datos", required = TRUE,
+                                                     .crm_select("CampoAutorizaDatos", label = "Autoriza Tratamiento de Datos", required = TRUE,
                                                                                     choices = c("SI", "NO"), selected = "SI", multiple = FALSE,
                                                                                     empty = FALSE, search = FALSE, ns = ns),
                                                      conditionalPanel(
@@ -15,12 +15,12 @@ CrearContactoUI <- function(id) {
                                                        uiOutput(ns("ValidacionNit")),
                                                        racafeForms::racafeInputText("CampoRazonSocial", label = "Razón Social", ns = ns),
                                                        uiOutput(ns("SimilitudRazonSocial")),
-                                                       racafeForms::racafeInputSelect("CampoOrigen", label = "Origen del Contacto", required = TRUE,
+                                                       .crm_select("CampoOrigen", label = "Origen del Contacto", required = TRUE,
                                                                                       choices = stats::setNames(Choices()$origen, toupper(Choices()$origen)),
                                                                                       selected = NULL, multiple = FALSE, ns = ns),
                                                        shinyjs::hidden(
                                                          div(id = ns("WrapDetalleOrigen"),
-                                                             racafeForms::racafeInputSelect("CampoDetalleOrigen", label = "Detalle del Origen", required = TRUE,
+                                                             .crm_select("CampoDetalleOrigen", label = "Detalle del Origen", required = TRUE,
                                                                                             choices = character(0), selected = "", multiple = FALSE, ns = ns))
                                                        ),
                                                        racafeForms::racafeFormFooter(align = "right",
@@ -139,9 +139,9 @@ CrearContacto <- function(id, usuario) {
     .LimpiarFormulario <- function() {
       updateTextInput(session = session, inputId = "CampoRazonSocial", value = "")
       updateTextInput(session = session, inputId = "CampoNit", value = "")
-      racafeForms::racafeUpdateSelect(session, "CampoAutorizaDatos", selected = "SI")
-      racafeForms::racafeUpdateSelect(session, "CampoOrigen", selected = "")
-      racafeForms::racafeUpdateSelect(session, "CampoDetalleOrigen", choices = character(0), selected = "")
+      .crm_update_select(session, "CampoAutorizaDatos", selected = "SI")
+      .crm_update_select(session, "CampoOrigen", selected = "")
+      .crm_update_select(session, "CampoDetalleOrigen", choices = character(0), selected = "")
     }
     
     # Reactivos ----
@@ -166,7 +166,7 @@ CrearContacto <- function(id, usuario) {
       cho <- if (tiene_detalle) Unicos(t1$Detalle) else ""
       
       detalle_es_requerido(tiene_detalle)
-      racafeForms::racafeUpdateSelect(session, "CampoDetalleOrigen",
+      .crm_update_select(session, "CampoDetalleOrigen",
                                       choices = stats::setNames(cho, toupper(cho)), selected = NULL)
       
       if (tiene_detalle) shinyjs::show("WrapDetalleOrigen") else shinyjs::hide("WrapDetalleOrigen")

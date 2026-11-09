@@ -94,8 +94,8 @@ VariablesBonoUI <- function(id, fecha = Sys.Date()) {
   racafeForms::racafeForm(variant = "plain",
     racafeForms::racafeFormRow(columns = 3,
       racafeForms::racafeInputDate("corte", "Mes de consulta", value = fecha, ns = ns),
-      racafeForms::racafeInputSelect("asesor", "Asesor", choices = character(), ns = ns),
-      racafeForms::racafeInputSelect("esquema", "Esquema de referencia", choices = .BON_ESQUEMAS, ns = ns)),
+      .crm_select("asesor", "Asesor", choices = character(), ns = ns),
+      .crm_select("esquema", "Esquema de referencia", choices = .BON_ESQUEMAS, ns = ns)),
     .crm_nota(c("Consulta de variables y simulación; no genera pagos ni establece la política vigente.",
       "2026 usa valores provisionales: 70/85/100% de cumplimiento → 33/67/100% del factor; debajo de 70% es cero.",
       "Pesos provisionales de referencia: los de 2025. Deben reemplazarse junto con los umbrales reales.",
@@ -119,7 +119,7 @@ VariablesBono <- function(id, hechos, clientes, filtros, historico, cierre) {
         }
       }
       asesores <- asesores[!is.na(asesores)]
-      racafeForms::racafeUpdateSelect(session, "asesor", choices = asesores,
+      .crm_update_select(session, "asesor", choices = asesores,
         selected = shiny::isolate(input$asesor))
     })
     esquema <- shiny::reactive({ shiny::req(input$esquema %in% unname(.BON_ESQUEMAS)); input$esquema })

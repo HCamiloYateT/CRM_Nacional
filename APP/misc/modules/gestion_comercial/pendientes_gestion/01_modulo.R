@@ -125,7 +125,7 @@ PendientesGestionUI <- function(id) {
         `data-crm-crear-tarea` = "true"),
       racafeForms::racafeButton("actualizar", "Actualizar", variant = "secondary", icon = "arrows-rotate", ns = ns))),
     racafeForms::racafeFormRow(columns = 2, responsive = "auto",
-      racafeForms::racafeInputSelect("etapa", "Pendiente", choices = .PEN_ETAPAS,
+      .crm_select("etapa", "Pendiente", choices = .PEN_ETAPAS,
         selected = .PEN_ETAPAS, multiple = TRUE, ns = ns),
       racafeForms::racafeInputSwitch("incluir_futuros", "Incluir pedidos futuros", value = TRUE, ns = ns)),
     .gc_tarjetas_ui(ns, c(pedidos = "Pedidos por gestionar", producir = "Lotes por producir",

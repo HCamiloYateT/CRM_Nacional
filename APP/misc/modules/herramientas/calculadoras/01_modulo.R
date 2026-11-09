@@ -86,7 +86,7 @@ CalculadoraCoproductosUI <- function(id) {
     fluidRow(
       column(12,
              div(class = "calc-segmento-wrap",
-                 racafeForms::racafeInputSelect("Segmento", label = "Segmento",
+                 .crm_select("Segmento", label = "Segmento",
                    choices = c("MEDIANO", "DETAL"), selected = "MEDIANO", ns = ns)
              )
       )
@@ -575,7 +575,7 @@ CalculadoraPesosExcelso <- function(id, dat_ind, usr, margenes = NULL, guardar_m
 # Módulo integrador ----
 CalculadoraUI <- function(id) {
   ns <- NS(id)
-  tabsetPanel(
+  bs4Dash::tabsetPanel(
     tabPanel("Pesos - Excelso",   shiny::br(), CalculadoraPesosExcelsoUI(ns("pesos"))),
     tabPanel("Dólares - Excelso", shiny::br(), CalculadoraDolaresExcelsoUI(ns("dolares"))),
     tabPanel("Coproductos",       shiny::br(), CalculadoraCoproductosUI(ns("coproductos")))

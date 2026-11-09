@@ -12,12 +12,12 @@ DetalleCurvaConversionUI <- function(id) {
     fluidRow(
       style = "display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;",
       div(style = "width:220px;",
-          racafeForms::racafeInputSelect(id = ns("agrupador"), label = h6("Desglosar por"),
+          .crm_select(id = ns("agrupador"), label = h6("Desglosar por"),
                                   choices = c("Solo total" = "ninguno", "Origen" = "Origen",
                                        "Detalle Origen" = "DetOrigen", "Cohorte de Creación" = "Cohorte"),
                                   selected = "ninguno", multiple = FALSE, size = 6, empty = FALSE)),
       div(style = "width:220px;",
-          racafeForms::racafeInputSelect(id = ns("unidad_tiempo"), label = h6("Unidad de Tiempo"),
+          .crm_select(id = ns("unidad_tiempo"), label = h6("Unidad de Tiempo"),
                                   choices = c("Días" = "dias", "Semanas" = "semanas", "Meses" = "meses"),
                                   selected = "dias", multiple = FALSE, size = 5, empty = FALSE))
     ),
@@ -227,13 +227,13 @@ DetalleAnalisisConversion <- function(id, universo_contactos, usuario) {
     # Filtros ----
     output$Origen_ui <- .crm_render_ui({
       opciones <- .crm_opciones(universo_contactos()$Origen)
-      racafeForms::racafeInputSelect(ns("Origen"), "Origen", choices = opciones,
+      .crm_select(ns("Origen"), "Origen", choices = opciones,
         selected = .crm_seleccion_opciones(input, session, "Origen", opciones), multiple = TRUE, size = 8)
     })
     output$DetOrigen_ui <- .crm_render_ui({
       base <- .crm_filtrar_opciones(universo_contactos(), "Origen", input$Origen)
       opciones <- .crm_opciones(base$DetOrigen)
-      racafeForms::racafeInputSelect(ns("DetOrigen"), "Detalle Origen", choices = opciones,
+      .crm_select(ns("DetOrigen"), "Detalle Origen", choices = opciones,
         selected = .crm_seleccion_opciones(input, session, "DetOrigen", opciones), multiple = TRUE, size = 8)
     })
 

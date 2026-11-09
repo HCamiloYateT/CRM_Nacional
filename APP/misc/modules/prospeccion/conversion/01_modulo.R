@@ -59,20 +59,14 @@ EmbudoConversionUI <- function(id) {
   ns <- NS(id)
   
   tagList(
-    .pr_panel(
-      title = "Embudo de Conversión",
-      width = 12, collapsible = FALSE,
-      plotly::plotlyOutput(ns("grafico_embudo"), height = "340px")
-    ),
-    
     fluidRow(
-      column(2, .crm_caja_output(ns("kpi_total_contactos"))),
-      column(2, .crm_caja_output(ns("kpi_total_leads"))),
-      column(2, .crm_caja_output(ns("kpi_total_prospectos"))),
-      column(3, .crm_caja_output(ns("kpi_total_clientes"))),
-      column(3, .crm_caja_output(ns("kpi_total_descartados")))
-    ),
-    
+      column(7, .pr_panel(title = "Embudo de Conversión", width = 12, collapsible = FALSE,
+        plotly::plotlyOutput(ns("grafico_embudo"), height = "510px"))),
+      column(5, tags$div(class = "crm-embudo-resumen",
+        .crm_caja_output(ns("kpi_total_contactos")), .crm_caja_output(ns("kpi_total_leads")),
+        .crm_caja_output(ns("kpi_total_prospectos")), .crm_caja_output(ns("kpi_total_clientes")),
+        .crm_caja_output(ns("kpi_total_descartados"))))),
+
     .pr_panel(
       title = "Conversión Histórica",
       width = 12, collapsible = FALSE,

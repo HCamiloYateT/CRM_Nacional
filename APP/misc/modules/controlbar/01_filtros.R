@@ -17,19 +17,19 @@ FiltrosUI <- function(id) {
                            racafeForms::racafeForm(size = "compact", variant = "plain",
                                                    racafeForms::racafeFormGroup(
                                                      racafeForms::racafeFormRow(columns = 2, responsive = "fixed",
-                                                                                racafeForms::racafeInputSelect("FT_Periodo", "Valores a Usar", c("DINÁMICO", "ESTÁTICO"), selected = "DINÁMICO",
+                                                                                .crm_select("FT_Periodo", "Valores a Usar", c("DINÁMICO", "ESTÁTICO"), selected = "DINÁMICO",
                                                                                                                multiple = FALSE, empty = FALSE, search = FALSE, ns = ns),
                                                                                 racafeForms::racafeInputDateRange("FT_Fecha", "Fecha de Factura", start = as.Date(format(Sys.Date(), "%Y-01-01")),
                                                                                                                   end = Sys.Date(), required = TRUE, ns = ns)),
                                                      racafeForms::racafeInputSwitch("FT_Fechas", "Incluir lotes sin facturar", value = TRUE, variant = "primary", ns = ns)),
-                                                   racafeForms::racafeFormGroup(racafeForms::racafeInputSelect("FT_Asesor", "Asesor", choices = character(0), multiple = TRUE, size = 10, ns = ns)),
+                                                   racafeForms::racafeFormGroup(.crm_select("FT_Asesor", "Asesor", choices = character(0), multiple = TRUE, size = 10, ns = ns)),
                                                    racafeForms::racafeFormGroup(divider = FALSE,
                                                                                 racafeForms::racafeFormRow(columns = 2, responsive = "fixed",
-                                                                                                           racafeForms::racafeInputSelect("FT_LinNeg", "Línea de Negocio", choices = character(0), multiple = TRUE, size = 10, ns = ns),
-                                                                                                           racafeForms::racafeInputSelect("FT_Segmento", "Segmento", choices = character(0), multiple = TRUE, size = 10, ns = ns)),
+                                                                                                           .crm_select("FT_LinNeg", "Línea de Negocio", choices = character(0), multiple = TRUE, size = 10, ns = ns),
+                                                                                                           .crm_select("FT_Segmento", "Segmento", choices = character(0), multiple = TRUE, size = 10, ns = ns)),
                                                                                 racafeForms::racafeFormRow(columns = 2, responsive = "fixed",
-                                                                                                           racafeForms::racafeInputSelect("FT_Categoria", "Categoría", choices = character(0), multiple = TRUE, size = 10, ns = ns),
-                                                                                                           racafeForms::racafeInputSelect("FT_Producto", "Producto", choices = character(0), multiple = TRUE, size = 10, ns = ns))),
+                                                                                                           .crm_select("FT_Categoria", "Categoría", choices = character(0), multiple = TRUE, size = 10, ns = ns),
+                                                                                                           .crm_select("FT_Producto", "Producto", choices = character(0), multiple = TRUE, size = 10, ns = ns))),
                                                    racafeForms::racafeFormFooter(align = "right",
                                                                                  racafeForms::racafeButton("FT_Aplicar", "Aplicar Filtros", icon = "check", variant = "primary", size = "xs", ns = ns)))
   )
@@ -54,7 +54,7 @@ Filtros <- function(id, usuario, es_admin, dat) {
     actualizar <- function(id, choices, selected = choices) {
       choices <- .filtros_choices(choices)
       selected <- intersect(as.character(selected), choices)
-      racafeForms::racafeUpdateSelect(session, id,
+      .crm_update_select(session, id,
                                       choices = stats::setNames(choices, toupper(choices)),
                                       selected = selected)
     }

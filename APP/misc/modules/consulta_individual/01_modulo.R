@@ -6,13 +6,13 @@ ConsultaIndividualUI <- function(id) {
   racafeForms::racafeForm(variant = "plain",
     racafeForms::racafeActionBar(left = racafeForms::racafeButton("actualizar", "Actualizar",
       icon = "arrows-rotate", variant = "secondary", ns = ns)),
-    racafeForms::racafeInputSelect("entidad", "Buscar entidad comercial o cuenta principal",
+    .crm_select("entidad", "Buscar por nombre o NIT de facturación",
       choices = character(), ns = ns),
     shiny::uiOutput(ns("identidad")), shiny::uiOutput(ns("contenido")))
 }
 ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin, nit_mapa,
                                cartera = function() NULL, tareas = function() data.frame(),
-                               cargar = racafeBD::CargarDatos) {
+                               cargar = racafeBD::CargarDatos, directorio = function() data.frame()) {
   shiny::moduleServer(id, function(input, output, session) {
     revision <- shiny::reactiveVal(0L)
     modelo_guardado <- shiny::reactiveVal(NULL)
@@ -36,13 +36,13 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     })
     catalogo_clientes <- shiny::reactive(.com_clientes(clientes(), periodo()[[2]], filtros()))
     catalogo <- shiny::reactive(.in_catalogo(contactos(), catalogo_clientes(), fuentes()$etapas$datos,
-      vinculos()$datos, usuario(), es_admin(), filtros(), .gc_filtrar_dimensiones(hechos(), filtros())))
+      vinculos()$datos, usuario(), es_admin(), filtros(), .gc_filtrar_dimensiones(hechos(), filtros()), directorio()))
     shiny::observeEvent(catalogo(), {
       x <- catalogo()
       actual <- shiny::isolate(input$entidad)
       opciones <- stats::setNames(x$Clave, x$Etiqueta)
       seleccion <- if (length(actual) == 1L && actual %in% x$Clave) actual else head(x$Clave, 1L)
-      racafeForms::racafeUpdateSelect(session, "entidad", choices = opciones, selected = seleccion)
+      .crm_update_select(session, "entidad", choices = opciones, selected = seleccion)
     })
     entidad <- shiny::reactive({
       x <- .in_elegida(catalogo(), input$entidad)
@@ -54,18 +54,13 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     valores <- shiny::reactive(.in_resumen(ejecucion()))
     output$identidad <- .crm_render_ui({
       x <- entidad()
-      shiny::tagList(shiny::h4(x$Nombre), .crm_nota(c(
-        paste("Tipo:", x$Tipo, "· Vista:", x$Alcance, "· NIT:", dplyr::coalesce(x$NIT, "Sin NIT")),
-        paste("Asesor:", dplyr::coalesce(x$Asesor, "Sin asignar")),
-        if (!is.na(x$NitFacturacion) && !identical(x$NitFacturacion, x$NIT)) {
-          paste("NIT de facturación vinculado:", x$NitFacturacion)
-        },
-        if (x$Alcance == "Cuenta principal") "Consolida las sucursales dentro del alcance comercial seleccionado.",
-        "Las entidades sin clasificación o ventas conservan su ficha; los filtros comerciales restringen la ejecución.",
-        paste("Ejecución:", periodo()[[1]], "a", periodo()[[2]], "· Filtros aplicados desde el controlbar."),
-        if (x$VinculoEnRevision) "Hay varios NIT vinculados: revise el vínculo antes de atribuir facturación.",
-        if (!is.null(vinculos()$error)) "No se pudo consultar el vínculo de NIT. Puede faltar facturación vinculada.",
-        if (!is.null(fuentes()$etapas$error)) "No se pudo consultar el historial de etapas.")))
+      badge <- function(texto, clase = "") shiny::tags$span(class = paste("badge", clase), texto)
+      shiny::tagList(shiny::h4(x$Nombre), shiny::tags$div(class = "crm-identidad-badges",
+        badge(paste("Tipo:", x$Tipo), "badge-tipo"), badge(paste("Vista:", x$Alcance)),
+        badge(paste("NIT", dplyr::coalesce(x$NIT, "sin registrar"))),
+        lapply(strsplit(dplyr::coalesce(x$Asesor, "Sin asesor"), "|", fixed = TRUE)[[1]],
+          function(asesor) badge(paste("Asesor:", trimws(asesor))))),
+        if (x$VinculoEnRevision) .crm_nota("Hay varios NIT vinculados. Revise el vínculo de facturación."))
     })
     output$contenido <- .crm_render_ui({
       x <- entidad()
@@ -76,7 +71,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       opciones <- c("Ficha", if (crm) "Gestión y seguimiento",
         if (potencial) "Potencial y oportunidades",
         if (comercial) c("Ejecución y productos", "Pendientes", "Cartera"),
-        if (comercial && x$Alcance == "Cuenta principal") "Fidelidad y valor")
+        if (comercial && isTRUE(x$EsPrincipal)) "Fidelidad y valor")
       seleccion <- shiny::isolate(input$detalle_tabs)
       if (length(seleccion) != 1L || !seleccion %in% opciones) seleccion <- "Ficha"
       .crm_tabs(
@@ -114,7 +109,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
             "Las etapas pueden solaparse: sus cantidades no deben sumarse."))),
         if (comercial) tabPanel("Cartera", shiny::uiOutput(session$ns("corte_cartera")),
           .crm_tabla_ui(session$ns("cartera"))),
-        if (comercial && x$Alcance == "Cuenta principal") tabPanel("Fidelidad y valor",
+        if (comercial && isTRUE(x$EsPrincipal)) tabPanel("Fidelidad y valor",
           .crm_disclosure("¿Qué me dicen estos indicadores?",
             .crm_nota(c("RFM resume tres preguntas: ¿compró hace poco?, ¿compra seguido?, ¿cuánto margen deja?",
               "Las notas van de 1 a 5 frente a los otros clientes visibles; 5 es el valor más favorable.",
@@ -130,10 +125,10 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       x <- entidad()
       if (is.na(x$Codigo)) return(data.frame(Campo = c("Cuenta principal", "NIT", "Asesor"),
         Valor = c(x$Nombre, x$NIT, x$Asesor)))
-      c <- contactos()[.in_id(contactos()$CodContacto) %in% x$Codigo, , drop = FALSE]
+      c <- contactos()[.in_id(contactos()$CodContacto) %in% .in_codigos(x), , drop = FALSE]
       campos <- intersect(c("CodContacto", "PerRazSoc", "PerCod", "Asesor", "Origen", "DetOrigen", "Estado",
         "FechaHoraCrea", "Observaciones"), names(c))
-      etiquetas <- c(CodContacto = "Código de entidad", PerRazSoc = "Nombre", PerCod = "NIT",
+      etiquetas <- c(CodContacto = "Código de entidad", PerRazSoc = "Nombre", PerCod = "Documento registrado en CRM",
         DetOrigen = "Detalle de origen",
         FechaHoraCrea = "Creación", Observaciones = "Observaciones", Asesor = "Asesor",
         Origen = "Origen", Estado = "Estado")
@@ -162,7 +157,9 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       ejecucion() %>% dplyr::group_by(Categoria, Producto) %>%
         dplyr::summarise(Sacos70kg = .com_suma(SacosFact), MargenFCC = .com_suma(Margen), .groups = "drop")
     })
-    .crm_vancouver_server("productos", productos)
+    .crm_vancouver_server("productos", productos,
+      col_labels = c(Categoria = "Categoría", Producto = "Producto", Sacos70kg = "Sacos facturados (70 kg)",
+        MargenFCC = "Margen total FCC (COP)"))
     .crm_vancouver_server("movimientos", shiny::reactive({
       x <- ejecucion()
       .crm_nits_tabla(x[intersect(c("CLCliNit", "CLPdcCod", "CLLotCod", "FecFact", "CLLinNegNo", "Categoria",

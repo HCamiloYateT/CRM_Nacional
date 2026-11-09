@@ -2,7 +2,7 @@
 DescartarOportunidadUI <- function(id) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain", shiny::uiOutput(ns("ResumenOportunidad")),
-    racafeForms::racafeInputSelect("DES_Razon", "Razón de descarte", choices = .RAZONES_DESCARTE_OPORTUNIDAD,
+    .crm_select("DES_Razon", "Razón de descarte", choices = .RAZONES_DESCARTE_OPORTUNIDAD,
       selected = NULL, ns = ns),
     racafeForms::racafeInputTextArea("DES_Comentario", "Comentario adicional", rows = 3, ns = ns),
     racafeForms::racafeButton("DES_Solicitar", "Descartar oportunidad", icon = "ban", ns = ns))

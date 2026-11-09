@@ -227,7 +227,7 @@ generar_codigo_contacto <- function() {
 }
 # Celda de acciones (dropdown flotante) del panel
 .celda_dropdown_acciones <- function(codigo, acciones, ns) {
-  id_grupo <- paste0("acc_", gsub("[^A-Za-z0-9]", "", codigo))
+  id_grupo <- ns(paste0("acc_", gsub("[^A-Za-z0-9]", "", codigo)))
   botones_html <- paste0(
     mapply(function(clave, etiqueta) .boton_accion_circular(codigo, clave, etiqueta, ns, id_grupo),
            names(acciones), unname(acciones)),
@@ -240,10 +240,14 @@ generar_codigo_contacto <- function() {
                                "background:#C11007; color:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25);"),
                 onclick = sprintf(
                   paste0("event.stopPropagation(); ",
-                         "var p=document.getElementById('%s'); ",
+                         "var local=this.parentNode.querySelector('.rc-panel-acciones'); ",
+                         "var anterior=document.getElementById('%s'); ",
+                         "if(local && anterior && local!==anterior){anterior.remove();} ",
+                         "var p=local || anterior; ",
                          "var abierto=(p.style.display==='flex'); ",
                          "document.querySelectorAll('.rc-panel-acciones').forEach(function(x){x.style.display='none';}); ",
                          "if(!abierto){ ",
+                         "  if(p.parentNode!==document.body){document.body.appendChild(p);} ",
                          "  var r=this.getBoundingClientRect(); ",
                          "  p.style.top=(r.bottom+4)+'px'; ",
                          "  p.style.left=r.left+'px'; ",
