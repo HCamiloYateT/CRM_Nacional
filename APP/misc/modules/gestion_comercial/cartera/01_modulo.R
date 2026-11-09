@@ -53,15 +53,17 @@ CarteraComercialUI <- function(id) {
       racafeForms::racafeInputSelect("agrupacion", "Vencimientos por",
         choices = c("Semana" = "semana", "Mes" = "mes"), empty = FALSE, ns = ns)),
     shiny::uiOutput(ns("fuente")),
+    shiny::conditionalPanel(sprintf("output['%s']", ns("saldo_disponible")),
     shiny::fluidRow(lapply(c("saldo", "documentos", "sacos"), function(k) {
       shiny::column(4, .crm_caja_output(ns(k)))
     })),
-    .crm_nota("Los indicadores corresponden exclusivamente al corte y negocios seleccionados."),
+    .crm_nota("Los indicadores corresponden exclusivamente al corte y negocios seleccionados.")),
+    shiny::conditionalPanel(sprintf("output['%s']", ns("detalle_disponible")),
     shiny::uiOutput(ns("nota_vista")), shiny::uiOutput(ns("grafico_ui")),
     .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("tabla")),
     .crm_nota(c("Seleccione una fila o TOTAL para consultar su detalle.",
       "Importes en COP; sacos en la unidad de origen de Tesorería, sin convertir a 70 kg.",
-      "TOTAL recalcula clientes y facturas distintas; sus participaciones pueden solaparse entre grupos.")))
+      "TOTAL recalcula clientes y facturas distintas; sus participaciones pueden solaparse entre grupos."))))
 }
 CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admin) {
   shiny::moduleServer(id, function(input, output, session) {
@@ -71,21 +73,27 @@ CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admi
     shiny::observeEvent(input$actualizar, revision(revision() + 1L))
     fuente <- shiny::reactive({
       revision()
-      h <- historico()
-      shiny::validate(shiny::need(!is.null(h$cartera),
-        "No hay una fuente de cartera disponible. Ejecute el data prep o cargue el archivo histórico autorizado."))
-      h
+      historico()
     })
     catalogo <- shiny::reactive(.com_clientes(clientes(), Sys.Date(), filtros()))
-    saldos <- shiny::reactive(.car_scope(fuente()$cartera, catalogo(), nit_mapa))
+    saldos <- shiny::reactive({
+      x <- fuente()$cartera
+      if (!is.data.frame(x)) return(NULL)
+      .car_scope(x, catalogo(), nit_mapa)
+    })
+    cortes_disponibles <- shiny::reactive({
+      x <- fuente()$cartera
+      if (!is.data.frame(x)) return(as.Date(character()))
+      sort(unique(.car_fecha(x$TCEFch[!is.na(x$TCEFch)])), decreasing = TRUE, na.last = NA)
+    })
     facturacion <- shiny::reactive({
       h <- fuente()
       shiny::validate(shiny::need(is.data.frame(h$facturacion), "La fuente no contiene facturación histórica."))
       .car_scope(h$facturacion, catalogo(), nit_mapa)
     })
     shiny::observe({
-      x <- saldos()
-      cortes <- sort(unique(as.Date(x$TCEFch[!is.na(x$TCEFch)])), decreasing = TRUE)
+      x <- fuente()$cartera
+      cortes <- cortes_disponibles()
       actual <- shiny::isolate(input$corte)
       racafeForms::racafeUpdateSelect(session, "corte", choices = as.character(cortes),
         selected = if (length(actual) && actual %in% as.character(cortes)) actual else as.character(head(cortes, 1)))
@@ -110,7 +118,7 @@ CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admi
     })
     corte <- shiny::reactive({
       shiny::validate(shiny::need(length(input$corte) == 1L &&
-        input$corte %in% as.character(as.Date(saldos()$TCEFch)), "No hay snapshot para el corte seleccionado."))
+        input$corte %in% as.character(cortes_disponibles()), "Seleccione un corte disponible de cartera."))
       as.Date(input$corte)
     })
     datos <- shiny::reactive({
@@ -124,10 +132,52 @@ CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admi
       x[x$NIT %in% input$cliente & !x$FueraPeriodo, , drop = FALSE]
     })
     vista <- shiny::reactive(.com_elegir(input$vista, .CAR_VISTAS, "Resumen"))
+    estado <- shiny::reactive({
+      h <- fuente()
+      if (!is.data.frame(h$cartera)) {
+        return("No hay una fuente de cartera disponible. Actualice el data prep o cargue el histórico autorizado.")
+      }
+      if (!length(cortes_disponibles())) {
+        return("La fuente de cartera no contiene cortes válidos. Actualice el data prep.")
+      }
+      if (vista() %in% c("Comportamiento de pago", "Rotación", "Recaudos")) {
+        if (!is.data.frame(h$facturacion)) return("La fuente no contiene facturación histórica.")
+        if (!length(input$cliente)) return("No hay clientes seleccionados para la consulta histórica.")
+        if (length(input$facturas) != 2L || anyNA(input$facturas)) {
+          return("Seleccione un rango de fecha de factura válido.")
+        }
+        if (!nrow(pagos())) return("No hay facturas para los clientes y fechas seleccionados.")
+        return(NULL)
+      }
+      if (!length(input$corte) || !input$corte %in% as.character(cortes_disponibles())) {
+        return("Seleccione un corte disponible de cartera.")
+      }
+      if (!nrow(saldos())) {
+        return(paste("La fuente tiene cortes disponibles, pero no hay cartera que coincida con el alcance",
+          "y los filtros actuales de asesor, segmento y línea. Revise los filtros aplicados."))
+      }
+      if (!length(input$negocio)) {
+        return("No hay negocios seleccionados. Seleccione al menos uno para consultar saldos.")
+      }
+      if (!nrow(datos())) return("No hay cartera para el corte, negocios y filtros seleccionados.")
+      NULL
+    })
+    output$detalle_disponible <- shiny::reactive(is.null(estado()))
+    output$saldo_disponible <- shiny::reactive({
+      is.data.frame(fuente()$cartera) && length(input$corte) == 1L &&
+        input$corte %in% as.character(cortes_disponibles()) && length(input$negocio) > 0L && nrow(datos()) > 0L
+    })
+    shiny::outputOptions(output, "detalle_disponible", suspendWhenHidden = FALSE)
+    shiny::outputOptions(output, "saldo_disponible", suspendWhenHidden = FALSE)
     output$fuente <- .crm_render_ui({
       h <- fuente()
-      .crm_nota(c(paste("Fuente:", if (is.null(h$origen)) "Archivo histórico de cartera" else h$origen),
-        paste("Corte:", corte()), if (!is.null(h$importado_en)) paste("Generado:", h$importado_en), h$aviso))
+      mensaje <- estado()
+      shiny::tagList(
+        if (is.data.frame(h$cartera)) .crm_nota(c(
+          paste("Fuente:", if (is.null(h$origen)) "Archivo histórico de cartera" else h$origen),
+          if (length(input$corte)) paste("Corte:", input$corte),
+          if (!is.null(h$importado_en)) paste("Generado:", h$importado_en), h$aviso)),
+        if (!is.null(mensaje)) racafeForms::racafeFormMessage(mensaje, type = "empty"))
     })
     .gc_tarjetas_server(c(saldo = "Saldo al corte · COP", documentos = "Facturas al corte", sacos = "Sacos al corte"),
       shiny::reactive({
