@@ -163,7 +163,7 @@
     dplyr::mutate(MargenKg = .gc_ratio(Margen, Sacos * 70)) %>% dplyr::arrange(Fecha)
 }
 .com_fin_mes <- function(x) seq(.gc_mes(x), by = "month", length.out = 2L)[[2]] - 1L
-.com_suma <- function(x) if (anyNA(x)) NA_real_ else sum(x)
+.com_suma <- function(x) racafeCore::SumaEstricta(x)
 
 .com_elegir <- function(valor, validos, defecto) {
   if (length(valor) == 1L && !is.na(valor) && valor %in% validos) valor else defecto

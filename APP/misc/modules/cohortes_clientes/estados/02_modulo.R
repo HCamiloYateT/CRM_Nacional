@@ -248,7 +248,7 @@
   c(cols_id, comunes)
 }
 
-.na0 <- function(x) if (is.null(x) || is.na(x)) 0 else x
+.na0 <- function(x) racafeCore::ValorOCero(x)
 
 
 # Modulo Tabla Detalle ----

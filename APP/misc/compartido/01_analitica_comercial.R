@@ -5,7 +5,7 @@
   if (length(valores) == 1L) valores[[1]] else x[NA_integer_][[1]]
 }
 .gc_suma <- function(x) if (!length(x) || all(is.na(x))) NA_real_ else sum(x, na.rm = TRUE)
-.gc_mes <- function(x) as.Date(format(as.Date(x), "%Y-%m-01"))
+.gc_mes <- function(x) racafeCore::PrimerDia(as.Date(x))
 .gc_fecha_min <- function(x) if (any(!is.na(x))) min(x, na.rm = TRUE) else as.Date(NA)
 .gc_fecha_max <- function(x) if (any(!is.na(x))) max(x, na.rm = TRUE) else as.Date(NA)
 .gc_ratio <- function(a, b) ifelse(is.finite(b) & b > 0, a / b, NA_real_)

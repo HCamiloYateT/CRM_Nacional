@@ -115,13 +115,21 @@ library("racafeGraph")
 library("racafeShiny")
 library("racafeForms")
 library("racafeModulos")
+# APIs mínimas requeridas por los adaptadores compartidos.
+.versiones_componentes <- c(racafeCore = "1.0.1", racafeGraph = "1.0.1", racafeForecast = "1.0.1",
+  racafeForms = "0.8.0", racafeShiny = "1.5.0", racafeModulos = "0.6.0")
+for (.paquete in names(.versiones_componentes)) {
+  if (!requireNamespace(.paquete, quietly = TRUE) ||
+      utils::packageVersion(.paquete) < .versiones_componentes[[.paquete]]) {
+    stop(paste("Actualice", .paquete, "a", .versiones_componentes[[.paquete]],
+      "o posterior antes de iniciar. Consulte la instalación en README.md."), call. = FALSE)
+  }
+}
+rm(.paquete)
 racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", "tidyverse", "scales", "rlang",
                       "waiter", "glue", "lubridate", "stringr", "purrr", "gt", "plotly", "writexl"))
 
 # Versiones de componentes y recursos compartidos ----
-stopifnot(utils::packageVersion("racafeForms") >= "0.7.3",
-          utils::packageVersion("racafeShiny") >= "1.4.3",
-          utils::packageVersion("racafeModulos") >= "0.5.1")
 # Resolver APP desde la raíz del repositorio o desde el directorio de la aplicación.
 .crm_ruta_app <- function(inicio = getwd()) {
   candidatas <- c(inicio, file.path(inicio, "APP"))
@@ -133,15 +141,17 @@ stopifnot(utils::packageVersion("racafeForms") >= "0.7.3",
 }
 
 .ruta_app <- .crm_ruta_app()
-.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/refs/heads/main"
+.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/478efac709f068b3647e65639561f98eb685ba2a"
+.estilos_crm <- shiny::singleton(shiny::includeCSS(paste0(.url_compartido, "/Styles/crm-nacional.css")))
 .recursos_compartidos <- shiny::tagList(
+  shiny::tags$span(hidden = "hidden", `data-rf-interactions` = "true"),
   racafeForms::racafeFormsDependencies(),
+  racafeModulos::MenuAccionesDependencies(),
   shiny::includeCSS(paste0(.url_compartido, "/Styles/style.css")),
-  lapply(c("scripts", "clipboard.js", "forms.js", "controlbar.js"), function(archivo) {
+  lapply(c("scripts", "clipboard.js", "forms.js", "controlbar.js", "interactions.js"), function(archivo) {
     shiny::includeScript(paste0(.url_compartido, "/Scripts/", archivo))
   }),
-  shiny::includeCSS(file.path(.ruta_app, "www", "crm-presentacion.css")),
-  shiny::includeScript(file.path(.ruta_app, "www", "crm-presentacion.js"))
+  .estilos_crm
 )
 
 # Impresiones ----

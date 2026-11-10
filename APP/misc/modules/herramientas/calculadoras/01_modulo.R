@@ -45,7 +45,7 @@
 # Helpers server internos ----
 
 # Reemplaza ifelse(is.null(input$x), 0, input$x)
-.calc_inp0 <- function(x) if (is.null(x) || is.na(x)) 0 else x
+.calc_inp0 <- function(x) racafeCore::ValorOCero(x)
 
 # Patrón de inicialización única
 .calc_init_once <- function(fn_init) {

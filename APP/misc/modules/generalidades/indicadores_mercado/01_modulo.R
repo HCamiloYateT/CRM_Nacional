@@ -3,7 +3,7 @@ ComparacionIndicadoresUI <- function(id) {
   ns <- shiny::NS(id)
   
   shiny::tagList(
-    shiny::tags$style(shiny::HTML(".mercado-filtros .form-group {margin-bottom:0;}")),
+    .crm_estilos_ui(),
     shiny::tags$div(class = "mercado-filtros",
       style = "display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;",
       shiny::div(style = "width:220px;",

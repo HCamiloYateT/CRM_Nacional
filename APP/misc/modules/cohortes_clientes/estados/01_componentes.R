@@ -6,24 +6,9 @@
 .coha_caja <- function(id, valor, formato = "numero", texto = "", icono = "info-circle", colores = NULL,
                        mostrar_boton = TRUE, contenido_modal = NULL, titulo_modal = "", icono_modal = NULL,
                        tamano_modal = "xl", footer = NULL, footer_class = NULL) {
-  session <- shiny::getDefaultReactiveDomain()
-  .val <- function(x) if (shiny::is.reactive(x)) x() else x
-  accion <- isTRUE(mostrar_boton) && !is.null(contenido_modal)
-  session$output[[paste0(id, "_tarjeta")]] <- .crm_render_ui({
-    .crm_caja_ui(session$ns(id), texto = .val(texto), icono = .val(icono), footer = .val(footer),
-      mostrar_boton = accion, id_boton = "btn_abrir", tooltip = .val(titulo_modal))
-  })
-  shiny::moduleServer(id, function(input, output, session) {
-    output$valor_display <- .crm_render_ui({
-      v <- .val(valor)
-      if (is.numeric(v)) .coha_formato(formato)(v) else v
-    })
-    shiny::observeEvent(input$btn_abrir, {
-      shiny::req(accion)
-      shiny::showModal(racafeForms::racafeModalDetail(title = .val(titulo_modal), contenido_modal(),
-        size = .crm_tamano_modal(tamano_modal), easy_close = TRUE, footer = racafeForms::racafeModalFooter()))
-    }, ignoreInit = TRUE)
-  })
+  .crm_caja(id, valor, formato, texto, icono, mostrar_boton = mostrar_boton, contenido_modal = contenido_modal,
+    titulo_modal = titulo_modal, tamano_modal = tamano_modal, footer = footer,
+    formatear = function(v) if (is.numeric(v)) .coha_formato(formato)(v) else v)
 }
 
 # Tablas Vancouver: fila en transiciones y celda en el resumen mensual ----
@@ -57,39 +42,10 @@
       footer_tipo = footer_tipo, col_specs = col_specs, id_col = id_col, modo_seleccion = modo_seleccion,
       searchable = searchable, sortable = sortable, page_size = page_size))
   }
-  shiny::moduleServer(id, function(input, output, session) {
-    .val <- function(x) if (shiny::is.reactive(x)) x() else x
-    output$tabla <- .crm_render_ui({
-      datos <- .val(data)
-      if (!nrow(datos)) return(.crm_nota("Sin registros para los filtros seleccionados."))
-      tabla <- .crm_tabla_datos(datos, col_specs = col_specs)
-      for (col in setdiff(names(datos), id_col)) {
-        botones <- vapply(seq_len(nrow(datos)), function(i) {
-          valor <- as.character(datos[[col]][i])
-          if (identical(as.character(datos[[id_col]][i]), "TOTAL")) return(valor)
-          evento <- paste0("Shiny.setInputValue(", jsonlite::toJSON(session$ns("celda"), auto_unbox = TRUE),
-            ",", jsonlite::toJSON(list(id = as.character(datos[[id_col]][i]), col = col), auto_unbox = TRUE),
-            ",{priority:'event'});")
-          as.character(shiny::tags$button(type = "button", class = "btn btn-link crm-tabla-enlace",
-            style = "padding:0;font:inherit;color:inherit;", onclick = evento,
-            `aria-label` = paste(datos[[id_col]][i], col, valor), valor))
-        }, character(1))
-        tabla <- gt::text_transform(tabla, locations = gt::cells_body(columns = tidyselect::all_of(col)),
-          fn = local({ texto <- botones; function(x) texto }))
-      }
-      shiny::tagList(if (!is.null(titulo)) shiny::tags$strong(.val(titulo)),
-        if (!is.null(subtitulo)) shiny::tags$div(.val(subtitulo)), tabla, .crm_nota(.val(footer)))
-    })
-    shiny::observeEvent(input$celda, {
-      datos <- .val(data)
-      sel <- input$celda
-      shiny::req(is.list(sel), is.character(sel$id), length(sel$id) == 1L,
-        is.character(sel$col), length(sel$col) == 1L, .permitida(sel),
-        sel$id %in% as.character(datos[[id_col]]), sel$col %in% setdiff(names(datos), id_col))
-      if (!is.null(modal_pre_fn)) modal_pre_fn(sel)
-      shiny::showModal(racafeForms::racafeModalDetail(title = modal_titulo_fn(sel), modal_contenido_fn(sel),
-        size = .crm_tamano_modal(modal_size), easy_close = TRUE, footer = racafeForms::racafeModalFooter()))
-    }, ignoreInit = TRUE)
-  })
+  racafeModulos::TablaVancouverCeldas(id, data, titulo = titulo, subtitulo = subtitulo, footer = footer,
+    col_specs = col_specs, id_col = id_col, modal_titulo_fn = modal_titulo_fn,
+    modal_pre_fn = modal_pre_fn, modal_contenido_fn = modal_contenido_fn,
+    modal_size = .crm_tamano_modal(modal_size), datos_fn = .crm_tabla_datos,
+    nota_fn = .crm_nota, seleccion_permitida = .permitida)
 }
 
