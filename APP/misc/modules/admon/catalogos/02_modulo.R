@@ -681,6 +681,7 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
         racafeForms::racafeNotify(session, "Catálogos actualizados",
                                   "Los cambios se guardaron correctamente.",
                                   type = "success", duration = 4)
+        session$reload()
       }, error = function(e) {
         racafeForms::racafeNotify(session, "No fue posible guardar",
                                   conditionMessage(e), type = "error", duration = 6)

@@ -59,7 +59,7 @@ CohorteClientesUI <- function(id, metrica) {
     racafeForms::racafeInputDateRange("periodo", "Cohortes desde / seguimiento hasta",
       start = as.Date(format(Sys.Date(), "%Y-01-01")), end = Sys.Date(), ns = ns),
     .gc_tarjetas_ui(ns, c(base = "Clientes-línea de las cohortes", activos = "Con compra en último mes")),
-    shiny::plotOutput(ns("evolucion"), height = "260px"),
+    .crm_plot_output(ns("evolucion"), height = "260px"),
     .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("matriz"), titulo = .COH_TITULOS[[metrica]]),
     .crm_nota(c("Unidad de análisis: NIT principal y línea de negocio; M0 es el mes de primera compra observada.",
       "La primera compra se busca en toda la historia disponible, antes de recortar las fechas del informe.",

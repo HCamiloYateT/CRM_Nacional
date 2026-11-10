@@ -4,7 +4,7 @@ DetalleAlianzaUI <- function(id) {
   ns <- NS(id)
   tagList(
     uiOutput(ns("resumen")),
-    plotly::plotlyOutput(ns("serie"), height = "300px")
+    .crm_plot_output(ns("serie"), height = "300px")
   )
 }
 DetalleAlianza <- function(id, nit_aliado, fechas_alianza) {

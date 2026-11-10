@@ -15,7 +15,7 @@ DetalleCreacionMensualUI <- function(id) {
                                 id = ns("modo_tiempo"), label = NULL)
       )
     ),
-    plotly::plotlyOutput(ns("serie"), height = "280px"),
+    .crm_plot_output(ns("serie"), height = "280px"),
     br(),
     .crm_tabla_legacy_ui(ns("tabla"))
   )

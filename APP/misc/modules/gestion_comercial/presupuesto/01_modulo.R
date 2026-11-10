@@ -137,7 +137,7 @@ PresupuestoUI <- function(id) {
              bs4Dash::bs4Card(
                title = "Presupuesto de Sacos (70 Kgs)", status = "white",
                solidHeader = TRUE, width = 12, collapsible = TRUE,
-               plotlyOutput(ns("GraficoPresupuestoSacos")),
+               .crm_plot_output(ns("GraficoPresupuestoSacos")),
                uiOutput(ns("nota_serie_sacos"))
              )
       ),
@@ -145,7 +145,7 @@ PresupuestoUI <- function(id) {
              bs4Dash::bs4Card(
                title = "Presupuesto de $MNFCC", status = "white",
                solidHeader = TRUE, width = 12, collapsible = TRUE,
-               plotlyOutput(ns("GraficoPresupuestoMargen")),
+               .crm_plot_output(ns("GraficoPresupuestoMargen")),
                uiOutput(ns("nota_serie_margen"))
              )
       )
@@ -195,7 +195,7 @@ PresupuestoUI <- function(id) {
                             )
                      )
                    ),
-                   plotlyOutput(ns("grafico_proyeccion")),
+                   .crm_plot_output(ns("grafico_proyeccion")),
                    uiOutput(ns("nota_proyeccion_dimension"))
                  )
           ),
@@ -217,7 +217,7 @@ PresupuestoUI <- function(id) {
                             )
                      )
                    ),
-                   plotlyOutput(ns("grafico_velocidad")),
+                   .crm_plot_output(ns("grafico_velocidad")),
                    uiOutput(ns("nota_velocidad_dimension"))
                  )
           )

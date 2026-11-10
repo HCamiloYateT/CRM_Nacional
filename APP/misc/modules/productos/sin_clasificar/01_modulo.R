@@ -9,15 +9,15 @@ ProductosSinClasificarUI <- function(id) {
     shiny::uiOutput(ns("edicion")))
 }
 ProductosSinClasificar <- function(id, usuario, al_actualizar,
-                                  cargar = racafeBD::CargarDatos, guardar = .clas_actualizar_bd) {
+                                  cargar = racafeBD::CargarDatos, guardar = .clas_actualizar_bd, operaciones = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     revision <- shiny::reactiveVal(0L)
     pendiente <- shiny::reactiveVal(NULL)
     fuente <- shiny::reactive({ revision(); .clas_validar(cargar("CRMNALPRODS")) })
-    filas <- shiny::reactive(.clas_pendientes(fuente()))
+    filas <- shiny::reactive(.clas_pendientes(fuente(), if (is.null(operaciones)) list() else operaciones()))
     tabla <- .crm_vancouver_server("referencias", filas, id_col = "Referencia", modo_seleccion = "fila",
-      columnas = c("Marca", "NombreComercial", "Presentacion", "Linea", "Categoria", "Producto"),
-      col_labels = c(NombreComercial = "Nombre comercial", Presentacion = "Presentación / referencia del sistema",
+      columnas = c("NumeroLotes", "Marca", "NombreComercial", "Presentacion", "Linea", "Categoria", "Producto"),
+      col_labels = c(NumeroLotes = "Lotes distintos", NombreComercial = "Nombre comercial", Presentacion = "Presentación / referencia del sistema",
         Linea = "Línea de negocio", Categoria = "Categoría actual", Producto = "Producto actual"))
     elegida <- shiny::reactive({
       seleccion <- tabla$seleccion()

@@ -43,5 +43,5 @@
 # Los nombres comerciales se presentan sin cambiar valores ni códigos del ETL ----
 .crm_label_comercial <- function(x) {
   if (!is.character(x)) return(x)
-  gsub("convencionales", "Coproductos", x, ignore.case = TRUE)
+  toupper(gsub("convencionales", "Coproductos", x, ignore.case = TRUE))
 }

@@ -328,7 +328,8 @@ server <- function(input, output, session) {
   
   ### Productos ----
   CargarTabUnaVez("PD_SinClasificar", "ui_PD_SinClasificar", function() ProductosSinClasificarUI("SinClasificar"),
-    function() ProductosSinClasificar("SinClasificar", usuario, function(x) productos_cache(x)))
+    function() ProductosSinClasificar("SinClasificar", usuario, function(x) productos_cache(x),
+      operaciones = shiny::reactive(list(homologaciones$lotes, crm_maestro))))
   CargarTabUnaVez("PD_Ejecucion", "ui_PD_Ejecucion", function() ProductosEjecucionUI("ProductosEjecucion"),
     function() ProductosEjecucion("ProductosEjecucion", maestro_comercial, filtros))
   

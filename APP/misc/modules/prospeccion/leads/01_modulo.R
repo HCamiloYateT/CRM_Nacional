@@ -23,7 +23,7 @@ DetalleCurvaConversionUI <- function(id) {
     ),
     br(),
     fluidRow(
-      column(9, plotly::plotlyOutput(ns("curva_km"), height = "450px")),
+      column(9, .crm_plot_output(ns("curva_km"), height = "450px")),
       column(3,
              .crm_caja_output(ns("kpi_analizados")), br(),
              .crm_caja_output(ns("kpi_convertidos")), br(),
@@ -183,9 +183,9 @@ DetalleAnalisisConversionUI <- function(id) {
     br(),
     fluidRow(
       column(6, .pr_panel(title = "Tiempo hasta Conversión", width = 12, collapsible = FALSE,
-                    plotly::plotlyOutput(ns("kpi_tiempo"), height = "260px"))),
+                    .crm_plot_output(ns("kpi_tiempo"), height = "260px"))),
       column(6, .pr_panel(title = "Distribución del Tiempo de Conversión", width = 12, collapsible = FALSE,
-                    plotly::plotlyOutput(ns("densidad_tiempo"), height = "220px"),
+                    .crm_plot_output(ns("densidad_tiempo"), height = "220px"),
                     uiOutput(ns("nota_densidad"))))
     ),
     br(),

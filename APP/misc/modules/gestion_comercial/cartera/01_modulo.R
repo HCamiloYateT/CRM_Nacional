@@ -222,7 +222,7 @@ CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admi
       .crm_nota(texto)
     })
     output$grafico_ui <- .crm_render_ui({
-      if (vista() == "Proyección de pagos") plotly::plotlyOutput(session$ns("grafico"), height = "330px")
+      if (vista() == "Proyección de pagos") .crm_plot_output(session$ns("grafico"), height = "330px")
     })
     output$grafico <- .crm_render_plotly({
       shiny::req(vista() == "Proyección de pagos")

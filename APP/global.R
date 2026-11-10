@@ -141,7 +141,7 @@ racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", 
 }
 
 .ruta_app <- .crm_ruta_app()
-.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/478efac709f068b3647e65639561f98eb685ba2a"
+.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/0ff7bba0b3c20572e829f52236a09a5ad4f2d53a"
 .estilos_crm <- shiny::singleton(shiny::includeCSS(paste0(.url_compartido, "/Styles/crm-nacional.css")))
 .recursos_compartidos <- shiny::tagList(
   shiny::tags$span(hidden = "hidden", `data-rf-interactions` = "true"),
