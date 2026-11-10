@@ -1,11 +1,11 @@
 # Funciones Embudo ----
 
 ## Generales ----
-derivar_etapa_actual <- function(contactos = NULL) {
+derivar_etapa_actual <- function(contactos = NULL, historial = NULL) {
   if (is.null(contactos)) contactos <- CargarDatos("CRMNALCONTACTO")
   if (!"EtapaPreDescarte" %in% names(contactos)) contactos$EtapaPreDescarte <- NA_character_
   contactos <- .crm_marcas_historia(contactos)
-  historial <- tryCatch({
+  if (is.null(historial)) historial <- tryCatch({
     CargarDatos("CRMNALHISTORIALETAPA") %>% mutate(FechaHora = as_datetime(FechaHora))
   }, error = function(e) data.frame(CodContacto = character(), EtapaNueva = character(),
                                     FechaHora = as.POSIXct(character())))
@@ -30,8 +30,8 @@ derivar_etapa_actual <- function(contactos = NULL) {
     select(-EtapaUltimaTransicion)
 }
 # Fecha de entrada a la etapa actual
-derivar_fecha_entrada_etapa <- function(contactos_con_etapa) {
-  historial <- tryCatch({
+derivar_fecha_entrada_etapa <- function(contactos_con_etapa, historial = NULL) {
+  if (is.null(historial)) historial <- tryCatch({
     CargarDatos("CRMNALHISTORIALETAPA") %>% mutate(FechaHora = as_datetime(FechaHora))
   }, error = function(e) data.frame(CodContacto = character(), EtapaNueva = character(),
                                     FechaHora = as.POSIXct(character())))
@@ -541,108 +541,71 @@ generar_codigo_contacto <- function() {
   )
 }
 # Carga el pipeline completo del embudo (todas las etapas) para el kanban
-cargar_pipeline_embudo <- function() {
-  contactos <- derivar_etapa_actual() %>% derivar_fecha_entrada_etapa()
-  lead_data <- CargarDatos("CONTACTOLEAD") %>% select(CodContacto, Asesor, Segmento, LinNegocio)
-  alianzas <- tryCatch(CargarDatos("CRMNALPROSPECTOALIANZA") %>% count(CodContacto, name = "NumAlianzas"),
-                       error = function(e) data.frame(CodContacto = character(), NumAlianzas = integer()))
-  if (!"EtapaPreDescarte" %in% names(contactos)) contactos$EtapaPreDescarte <- NA_character_
-  contactos %>%
-    left_join(lead_data, by = "CodContacto") %>%
-    left_join(alianzas, by = "CodContacto") %>%
-    mutate(
-      EtapaPreDescarte = ifelse(is.na(EtapaPreDescarte), "CONTACTO", EtapaPreDescarte),
-      NumAlianzas = coalesce(NumAlianzas, 0),
+cargar_pipeline_embudo <- function(cargar = CargarDatos) {
+  contactos <- cargar("CRMNALCONTACTO")
+  historial <- cargar("CRMNALHISTORIALETAPA") %>% mutate(FechaHora = as_datetime(FechaHora))
+  contactos <- derivar_etapa_actual(contactos, historial) %>% derivar_fecha_entrada_etapa(historial)
+  leads <- cargar("CONTACTOLEAD") %>% arrange(desc(FechaConversion)) %>%
+    distinct(CodContacto, .keep_all = TRUE) %>% select(CodContacto, Asesor, Segmento, LinNegocio)
+  alianzas <- cargar("CRMNALPROSPECTOALIANZA")
+  nombres <- setNames(as.character(contactos$PerRazSoc), as.character(contactos$CodContacto))
+  alianzas <- alianzas %>% mutate(ClienteAliado = coalesce(unname(nombres[as.character(CodClienteAliado)]),
+    as.character(CodClienteAliado))) %>% group_by(CodContacto) %>%
+    summarise(NumAlianzas = n(), Alianzas = paste(unique(ClienteAliado), collapse = " | "), .groups = "drop")
+  vinculos <- cargar("CRMNALVINCULONIT") %>% group_by(CodContacto) %>%
+    summarise(NitVinculado = if (n_distinct(NitVinculado, na.rm = TRUE) == 1L) {
+      first(na.omit(as.character(NitVinculado)))
+    } else NA_character_,
+      .groups = "drop")
+  resultado <- contactos %>% left_join(leads, by = "CodContacto") %>% left_join(alianzas, by = "CodContacto") %>%
+    left_join(vinculos, by = "CodContacto") %>%
+    mutate(NumAlianzas = coalesce(NumAlianzas, 0L),
       DiasEnEtapa = as.numeric(difftime(Sys.time(), FechaEntradaEtapa, units = "days")),
-      EstadoGestion = .semaforo_gestion(DiasEnEtapa)
-    )
+      EstadoGestion = .semaforo_gestion(DiasEnEtapa))
+  for (campo in c("Asesor", "Segmento", "LinNegocio")) {
+    resultado[[campo]] <- .gc_columna(resultado, c(campo, paste0(campo, ".y"), paste0(campo, ".x")))
+  }
+  resultado
 }
 # Acciones disponibles en el kanban, segun etapa del contacto
 .acciones_por_etapa_kanban <- function(etapa) {
-  switch(
-    etapa,
-    "CONTACTO" = c("Editar", "Relacionamiento", "Promover", "CrearOportunidad", "Descartar"),
-    "LEAD" = c("Editar", "Relacionamiento", "Promover", "CrearOportunidad", "Descartar"),
-    "PROSPECTO" = c("Editar", "Relacionamiento", "Promover", "CrearOportunidad", "Descartar"),
-    "CLIENTE" = c("Editar", "Relacionamiento", "CrearOportunidad"),
-    "DESCARTADO" = c("Editar", "Reactivar"),
-    character(0)
-  )
+  c(names(.acciones_por_etapa(etapa)), "Consultar")
 }
 # Renderiza la tarjeta HTML de un contacto en el kanban, segun su etapa
-.render_tarjeta_embudo <- function(fila) {
-  clase_card <- paste0(
-    "kpb-card",
-    if (fila$Etapa %in% c("CONTACTO", "LEAD") && fila$EstadoGestion == "critical") {
-      " gestion-critical"
-    } else if (fila$Etapa %in% c("CONTACTO", "LEAD") && fila$EstadoGestion == "warning") {
-      " gestion-warning"
-    } else {
-      ""
-    }
-  )
-  identificador <- fila$PerRazSoc %||% "SIN RAZÓN SOCIAL"
-  nit <- fila$PerCod %||% "SIN NIT"
-  acciones <- tagList(lapply(.acciones_por_etapa_kanban(fila$Etapa),
-                             function(clave) .btn_kanban(fila$CodContacto, clave)))
-  # Cuerpo de la tarjeta, distinto segun la informacion relevante de cada etapa
-  cuerpo <- switch(
-    fila$Etapa,
-    "CONTACTO" = tagList(
-      if (!is.na(fila$Origen %||% NA)) {
-        div(class = "kpb-metric", tags$i(class = "fas fa-bullseye fa-xs"), " ", fila$Origen)
-      }
-    ),
-    "LEAD" = tagList(
-      if (!is.na(fila$LinNegocio %||% NA)) {
-        div(class = "kpb-metric", tags$i(class = "fas fa-briefcase fa-xs"), " ", fila$LinNegocio)
-      },
-      if (!is.na(fila$Segmento %||% NA)) {
-        div(class = "kpb-metric", tags$i(class = "fas fa-layer-group fa-xs"), " ", fila$Segmento)
-      },
-      if (!is.na(fila$Asesor %||% NA)) {
-        div(class = "kpb-metric", tags$i(class = "fas fa-user fa-xs"), " ", fila$Asesor)
-      }
-    ),
-    "PROSPECTO" = {
-      alianzas <- listar_todas_las_alianzas() %>% filter(CodContacto == fila$CodContacto)
-      if (nrow(alianzas) == 0) {
-        div(class = "kpb-metric", tags$i(class = "fas fa-handshake fa-xs"), " Sin alianzas")
-      } else {
-        div(lapply(alianzas$ClienteAliado, function(nombre) tags$span(class = "kpb-alianza-badge", nombre)))
-      }
-    },
-    "CLIENTE" = tagList(
-      if (!is.na(fila$LinNegocio %||% NA)) {
-        div(class = "kpb-metric", tags$i(class = "fas fa-briefcase fa-xs"), " ", fila$LinNegocio)
-      },
-      if (!is.na(fila$Segmento %||% NA)) {
-        div(class = "kpb-metric", tags$i(class = "fas fa-layer-group fa-xs"), " ", fila$Segmento)
-      },
-      if (!is.na(fila$Asesor %||% NA)) {
-        div(class = "kpb-metric", tags$i(class = "fas fa-user fa-xs"), " ", fila$Asesor)
-      }
-    ),
-    "DESCARTADO" = div(class = "kpb-metric", tags$i(class = "fas fa-rotate-left fa-xs"),
-                       " Origen: ", fila$EtapaPreDescarte)
-  )
-  div(
-    class = clase_card, `data-cod-contacto` = fila$CodContacto,
-    div(class = "kpb-card-actions", acciones),
-    div(class = "kpb-card-content",
-        div(class = "kpb-card-header",
-            div(class = "kpb-card-title",
-                tags$span(class = "kpb-empresa", title = identificador, identificador),
-                tags$span(class = "kpb-nit", nit))),
-        div(class = "kpb-card-body", cuerpo),
-        if (fila$Etapa %in% c("CONTACTO", "LEAD")) {
-          div(class = "kpb-card-sla", HTML(.html_badge_gestion(round(fila$DiasEnEtapa, 0))))
-        })
-  )
+.render_tarjeta_embudo <- function(fila, ns = identity) {
+  texto <- function(campo, defecto = "SIN DATO") {
+    x <- if (campo == "PerCod") .crm_nit_historia(fila[[campo]]) else as.character(fila[[campo]])
+    if (!length(x) || is.na(x) || !nzchar(x)) defecto else .crm_label_comercial(x)
+  }
+  acciones <- .acciones_por_etapa(fila$Etapa)
+  acciones <- c(acciones, Consultar = "Consulta individual")
+  config <- c(.CONFIG_ACCIONES_EMBUDO, list(Consultar = list(icono = "address-card", color = "#495057")))
+  menu <- racafeModulos::MenuAccionesUI(as.character(fila$CodContacto), acciones, config = config, ns = ns)
+  menu$children[[1]] <- shiny::tagAppendChild(menu$children[[1]], " Acciones")
+  menu$children[[2]] <- shiny::tagAppendAttributes(menu$children[[2]], class = "kpb-actions-panel")
+  menu <- htmltools::tagQuery(menu)$find(".rm-action-option")$each(function(boton, i) {
+    shiny::tagAppendChild(boton, paste0(" ", boton$attribs$title))
+  })$allTags()
+  destinos <- .kb_destinos(fila$Etapa, texto("EtapaPreDescarte", "CONTACTO"))
+  div(class = "kpb-card kpb-card-compact", draggable = "true", `data-cod-contacto` = fila$CodContacto,
+    `data-kb-source` = fila$Etapa, `data-kb-targets` = paste(destinos, collapse = " "),
+    tags$details(tags$summary(tags$strong(texto("PerRazSoc", "SIN RAZÓN SOCIAL")),
+      tags$span(class = "kpb-responsables", lapply(strsplit(texto("Asesor", "SIN ASESOR"), " | ", fixed = TRUE)[[1]],
+        function(x) racafeForms::racafeStatusBadge(x, "neutral", size = "xs")))),
+      div(class = "kpb-card-body",
+        racafeForms::racafeInfoItem("NIT", texto("PerCod", "SIN NIT")),
+        racafeForms::racafeInfoItem("Línea de negocio", texto("LinNegocio")),
+        racafeForms::racafeInfoItem("Segmento", texto("Segmento")),
+        racafeForms::racafeInfoItem("Origen", texto("Origen")),
+        if (fila$Etapa == "PROSPECTO") racafeForms::racafeInfoItem("Alianzas", texto("Alianzas", "SIN ALIANZAS")),
+        if (fila$Etapa == "DESCARTADO") racafeForms::racafeInfoItem("Etapa anterior", texto("EtapaPreDescarte")))),
+    div(class = "kpb-card-menu", menu))
 }
 # Detecta Leads con primera factura y los convierte a Cliente, registrando la transicion
-detectar_conversion_leads <- function(usr = "SISTEMA", facturas = fact_cliente) {
+detectar_conversion_leads <- function(usr = "SISTEMA", facturas = fact_cliente, codigos = NULL) {
   leads_activos <- derivar_etapa_actual() %>% filter(Etapa == "LEAD") %>% select(CodContacto, PerCod)
+  if (!is.null(codigos)) leads_activos <- leads_activos %>% filter(CodContacto %in% as.character(codigos))
+  if (!nrow(leads_activos)) return(invisible(0L))
   ya_convertidos <- tryCatch(CargarDatos("CRMNALLEADCLIENTE")$CodContacto, error = function(e) character(0))
   leads_activos <- leads_activos %>% filter(!CodContacto %in% ya_convertidos)
   if (nrow(leads_activos) == 0) return(invisible(0))

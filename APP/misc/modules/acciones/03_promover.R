@@ -290,7 +290,7 @@ PromoverUI <- function(id) {
     uiOutput(ns("Contenido"))
   )
 }
-Promover <- function(id, usuario, codigo_contacto) {
+Promover <- function(id, usuario, codigo_contacto, destino_inicial = function() NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
@@ -314,7 +314,10 @@ Promover <- function(id, usuario, codigo_contacto) {
       obtener_etapa_contacto(codigo_contacto())
     })
     
-    observeEvent(codigo_contacto(), { destino_contacto(NULL) })
+    observeEvent(list(codigo_contacto(), destino_inicial()), {
+      destino <- destino_inicial()
+      destino_contacto(if (length(destino) == 1L && destino %in% c("LEAD", "PROSPECTO")) destino else NULL)
+    })
     
     output$Titulo <- renderUI({
       req(nrow(data_contacto()) > 0)
@@ -394,7 +397,7 @@ Promover <- function(id, usuario, codigo_contacto) {
       )
     })
     
-    list(etapa = etapa_contacto)
+    list(etapa = etapa_contacto, actualizaciones = reactive(trigger_refresco()))
   })
 }
 

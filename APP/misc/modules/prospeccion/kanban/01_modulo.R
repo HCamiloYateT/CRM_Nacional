@@ -13,141 +13,72 @@
   x
 }
 
-# Kanban 
+# Tablero con salidas independientes por etapa ----
 KanbanEmbudoUI <- function(id) {
   ns <- NS(id)
-  racafeForms::racafeForm(variant = "plain",
-    racafeModulos::MenuAccionesDependencies(),
-    useShinyjs(),
-    racafeForms::racafeFormRow(columns = 3, responsive = "auto",
-      uiOutput(ns("Asesor_ui")), uiOutput(ns("Linea_ui")), uiOutput(ns("Segmento_ui"))),
-    racafeForms::racafePanel(title = NULL, uiOutput(ns("kanban_board")))
-  )
+  columnas <- lapply(ETAPAS_EMBUDO, function(etapa) {
+    contenido <- tagList(
+      racafeForms::racafeInputText(paste0("buscar_", etapa), paste("Buscar en", etapa), ns = ns),
+      uiOutput(ns(paste0("col_", etapa))))
+    div(class = "kpb-slot", `data-kb-stage` = etapa,
+      if (etapa == "DESCARTADO") .crm_disclosure("DESCARTADOS", contenido) else contenido)
+  })
+  racafeForms::racafeForm(variant = "plain", racafeModulos::MenuAccionesDependencies(), useShinyjs(),
+    racafeForms::racafeActionBar(left = racafeForms::racafeButton("actualizar", "Actualizar",
+      icon = "arrows-rotate", variant = "secondary", ns = ns)),
+    racafeModulos::TableroKanbanUI(id = "kpb_board", ns = ns, columnas))
 }
-KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE) {
+KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
+                         hechos = function() data.frame(), al_consultar = function(codigo, nit) NULL) {
   moduleServer(id, function(input, output, session) {
-    
     ns <- session$ns
-    refresh_trigger      <- reactiveVal(0)
-    codigo_seleccionado  <- reactiveVal(NULL)
-    accion_seleccionada  <- reactiveVal(NULL)
-    titulo_modal_actual  <- reactiveVal(NULL)
-    
-    # Estado del filtro "solo alertas", uno por columna (punto 1) — ya no
-    # es un switch global; cada columna CONTACTO/LEAD tiene su propio
-    # boton-badge que alterna entre "todas" y "solo alertas"
-    filtro_alertas_col <- reactiveValues(CONTACTO = FALSE, LEAD = FALSE)
-    observeEvent(input$ToggleAlertas_CONTACTO, { filtro_alertas_col$CONTACTO <- !filtro_alertas_col$CONTACTO })
-    observeEvent(input$ToggleAlertas_LEAD,     { filtro_alertas_col$LEAD     <- !filtro_alertas_col$LEAD })
-    
-    # detectar_conversion_leads() es una dependencia externa (definida junto
-    # a EmbudoLeads.R, no en este archivo)
-    observeEvent(refresh_trigger(), { detectar_conversion_leads(usuario()) }, ignoreNULL = FALSE)
-    
-    # Datos ----
+    refresh_trigger <- reactiveVal(0L)
+    codigo_seleccionado <- reactiveVal(NULL)
+    accion_seleccionada <- reactiveVal(NULL)
+    titulo_modal_actual <- reactiveVal(NULL)
+    destino_arrastre <- reactiveVal(NULL)
     pipeline_raw <- reactive({
       refresh_trigger()
       cargar_pipeline_embudo()
     })
-    
-    pipeline_alcance <- reactive({
-      .kb_alcance(pipeline_raw(), filtros(), usuario(), es_admin())
+    # Filtrar o buscar no vuelve a consultar tablas ni ejecutar conversiones.
+    pipeline_filtrado <- reactive(.kb_facturacion(pipeline_raw(), hechos(), filtros(), usuario(), es_admin()))
+    observeEvent(input$actualizar, {
+      tryCatch({
+        detectar_conversion_leads(usuario(), codigos = isolate(pipeline_filtrado()$CodContacto))
+        refresh_trigger(isolate(refresh_trigger()) + 1L)
+      }, error = function(e) showNotification(conditionMessage(e), type = "error"))
     })
-    for (campo in c("Asesor", "Linea", "Segmento")) local({
-      clave <- campo
-      output[[paste0(clave, "_ui")]] <- .crm_render_ui({
-        opciones <- .crm_opciones(pipeline_alcance()[[clave]])
-        .crm_select(ns(paste0("filtro_", clave)),
-          if (clave == "Linea") "Línea de negocio" else clave, choices = opciones,
-          selected = .crm_seleccion_opciones(input, session, paste0("filtro_", clave), opciones),
-          multiple = TRUE)
+    for (etapa in ETAPAS_EMBUDO) local({
+      clave <- etapa
+      limite <- reactiveVal(50L)
+      alerta <- reactiveVal(FALSE)
+      busqueda <- debounce(reactive(input[[paste0("buscar_", clave)]]), 250)
+      filas_base <- reactive({ x <- pipeline_filtrado(); x[x$Etapa == clave, , drop = FALSE] })
+      filas <- reactive({
+        x <- .kb_buscar(filas_base(), busqueda())
+        if (isTRUE(alerta())) x <- x[x$EstadoGestion %in% "critical", , drop = FALSE]
+        x
+      })
+      observeEvent(list(busqueda(), filas_base()), limite(50L), ignoreInit = TRUE)
+      observeEvent(input[[paste0("mas_", clave)]], limite(limite() + 50L))
+      observeEvent(input[[paste0("alerta_", clave)]], { alerta(!alerta()); limite(50L) })
+      output[[paste0("col_", clave)]] <- .crm_render_ui({
+        x <- filas()
+        visibles <- head(x, limite())
+        cuerpo <- if (!nrow(x)) .crm_nota("Sin registros para esta columna y los filtros actuales.") else {
+          tagList(lapply(seq_len(nrow(visibles)), function(i) .render_tarjeta_embudo(visibles[i, ], ns)),
+            if (nrow(x) > nrow(visibles)) racafeForms::racafeButton(paste0("mas_", clave),
+              paste("Mostrar 50 más ·", nrow(visibles), "de", nrow(x)), variant = "secondary", size = "xs", ns = ns))
+        }
+        badge <- if (clave %in% c("CONTACTO", "LEAD")) actionLink(ns(paste0("alerta_", clave)),
+          paste(if (alerta()) "Ver todas" else "Sin gestión:", sum(filas_base()$EstadoGestion %in% "critical")))
+        racafeModulos::ColumnaKanbanUI(clave, cuerpo, cantidad = nrow(x), color = COLOR_ETAPA_EMBUDO[[clave]],
+          badges = badge, acciones = if (clave == "CONTACTO") racafeForms::racafeButton("btn_nuevo_contacto",
+            "Añadir", icon = "plus", size = "xs", ns = ns))
       })
     })
-    pipeline_filtrado <- reactive({
-      dat <- pipeline_alcance()
-      for (campo in c("Asesor", "Linea", "Segmento")) {
-        dat <- .crm_filtrar_opciones(dat, campo, input[[paste0("filtro_", campo)]])
-      }
-      dat
-    })
 
-    # Metricas de conversion para el header de la columna CLIENTE (punto 5):
-    # % Lead->Cliente y % Contacto->Cliente. Se calculan sobre el universo
-    # SIN filtrar (pipeline_raw), igual que hacia el antiguo kpi_conversion,
-    # para que no varien con los filtros de Origen/Asesor de la vista
-    metricas_conversion_r <- reactive({
-      total_contactos_historico <- nrow(pipeline_filtrado())
-      total_leads_historico     <- sum(pipeline_filtrado()$Etapa %in% c("LEAD", "CLIENTE"))
-      total_clientes            <- pipeline_filtrado() %>% filter(Etapa == "CLIENTE") %>% nrow()
-      list(
-        pct_lead_cliente     = if (total_leads_historico > 0) round(total_clientes / total_leads_historico * 100) else 0,
-        pct_contacto_cliente = if (total_contactos_historico > 0) round(total_clientes / total_contactos_historico * 100) else 0
-      )
-    })
-    
-    # Board ----
-    output$kanban_board <- .crm_render_ui({
-      dat <- pipeline_filtrado()
-      if (nrow(dat) == 0) {
-        return(div(class = "kpb-board kpb-board-vacio", tags$i(class = "fas fa-inbox fa-2x"),
-                   tags$p("Sin registros con los filtros activos.")))
-      }
-      
-      construir_columna <- function(etapa_col, boton_extra = NULL, badges_extra = NULL) {
-        filas_todas <- dat %>% filter(Etapa == etapa_col)
-        n_alertas <- if (etapa_col %in% c("CONTACTO", "LEAD")) sum(filas_todas$EstadoGestion == "critical") else 0
-        
-        # El boton-toggle de alertas filtra SOLO su propia columna, no el
-        # board completo (punto 1) — cada columna mantiene su estado
-        # independiente en filtro_alertas_col
-        filas <- if (etapa_col %in% c("CONTACTO", "LEAD") && isTRUE(filtro_alertas_col[[etapa_col]])) {
-          filas_todas %>% filter(EstadoGestion == "critical")
-        } else {
-          filas_todas
-        }
-        n_col <- nrow(filas)
-        
-        cuerpo <- if (n_col == 0) {
-          div(class = "kpb-col-vacio", tags$i(class = "fas fa-inbox"), tags$span("Sin registros"))
-        } else {
-          do.call(tagList, lapply(seq_len(n_col), function(i) .render_tarjeta_embudo(filas[i, ])))
-        }
-        
-        toggle_alertas <- if (etapa_col %in% c("CONTACTO", "LEAD")) {
-          actionLink(ns(paste0("ToggleAlertas_", etapa_col)),
-                     label = tagList(tags$i(class = "fas fa-exclamation-triangle"), " ", n_alertas),
-                     class = paste0("kpb-col-alert-toggle", if (isTRUE(filtro_alertas_col[[etapa_col]])) " activo" else ""),
-                     title = if (isTRUE(filtro_alertas_col[[etapa_col]])) "Mostrando solo alertas — clic para ver todas"
-                     else "Mostrando todas — clic para ver solo alertas")
-        } else NULL
-        
-        racafeModulos::ColumnaKanbanUI(etapa_col, cuerpo, cantidad = n_col,
-          color = COLOR_ETAPA_EMBUDO[[etapa_col]], badges = tagList(toggle_alertas, badges_extra),
-          acciones = boton_extra)
-      }
-      
-      boton_nuevo_contacto <- shiny::tagAppendAttributes(
-        racafeForms::racafeButton("btn_nuevo_contacto", "Añadir", icon = "plus", size = "xs", ns = ns),
-        class = "kpb-col-add")
-      
-      # Badges de conversion en la columna CLIENTE (punto 5): % Lead->Cliente
-      # y % Contacto->Cliente, en vez del KPI global que se retiro
-      metricas <- metricas_conversion_r()
-      badges_cliente <- tagList(
-        tags$span(class = "kpb-col-metric-badge", title = "Conversión Lead → Cliente",
-                  paste0(metricas$pct_lead_cliente, "% Lead")),
-        tags$span(class = "kpb-col-metric-badge", title = "Conversión Contacto → Cliente",
-                  paste0(metricas$pct_contacto_cliente, "% Contacto"))
-      )
-      
-      racafeModulos::TableroKanbanUI(id = "kpb_board", ns = ns,
-          construir_columna("CONTACTO", boton_extra = boton_nuevo_contacto),
-          construir_columna("LEAD"),
-          construir_columna("PROSPECTO"),
-          construir_columna("CLIENTE", badges_extra = badges_cliente),
-          construir_columna("DESCARTADO"))
-    })
-    
     # Despacho de acciones — mismo patron que PanelEtapa.R: una unica
     # tabla de registro + una unica instancia de cada modulo generico,
     # en vez de 10 reactiveVal y una cadena if/else por accion.
@@ -172,31 +103,54 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE) {
     codigo_reactivar   <- reactiveVal(NULL)
     trigger_reactivar  <- reactiveVal(0)
     
-    observeEvent(input$AccionSeleccionada, {
-      seleccion <- input$AccionSeleccionada
+    abrir_accion <- function(seleccion) {
       req(seleccion$codigo, seleccion$accion)
-      
-      if (identical(seleccion$accion, "Reactivar")) {
-        # Nonce en trigger_reactivar para que el dedup interno de Reactivar
-        # (clave_disparo = codigo + disparador) no bloquee un segundo click
-        # sobre el mismo contacto tras cancelar el primer intento
-        codigo_reactivar(seleccion$codigo)
-        trigger_reactivar(isolate(trigger_reactivar()) + 1)
+      x <- isolate(pipeline_filtrado())
+      x <- x[as.character(x$CodContacto) %in% as.character(seleccion$codigo), , drop = FALSE]
+      if (nrow(x) != 1L || !seleccion$accion %in% .acciones_por_etapa_kanban(x$Etapa)) {
+        showNotification("La acción no está permitida para esta entidad o su alcance.", type = "warning")
         return(invisible(NULL))
       }
-      
+      if (seleccion$accion == "Consultar") return(al_consultar(as.character(x$CodContacto), as.character(x$PerCod)))
+      vigente <- obtener_etapa_contacto(as.character(x$CodContacto))
+      if (!identical(vigente, as.character(x$Etapa))) {
+        trigger_refresco_kanban()
+        showNotification("La etapa cambió. El tablero se actualizó; revise la entidad.", type = "warning")
+        return(invisible(NULL))
+      }
+      if (!is.null(seleccion$destino) && !seleccion$destino %in% .kb_destinos(vigente, x$EtapaPreDescarte)) {
+        showNotification("Esa transición no está permitida.", type = "warning")
+        return(invisible(NULL))
+      }
+      if (seleccion$accion == "Reactivar") {
+        codigo_reactivar(seleccion$codigo)
+        trigger_reactivar(isolate(trigger_reactivar()) + 1L)
+        return(invisible(NULL))
+      }
+      destino_arrastre(seleccion$destino)
       codigo_seleccionado(seleccion$codigo)
       accion_seleccionada(seleccion$accion)
-      titulo_modal_actual(.CONFIG_ACCIONES_EMBUDO[[seleccion$accion]]$etiqueta %||% seleccion$accion)
-      
-      clase_modal <- .CONFIG_ACCIONES_EMBUDO[[seleccion$accion]]$modal %||% "subventana2"
-      
-      modal_construido <- racafeForms::racafeModal(size = clase_modal,
-        title = titulo_modal_actual(),
-        uiOutput(ns("ModalContenido")),
-        easy_close = TRUE,
-        footer = modalButton("Cerrar"))
-      showModal(modal_construido)
+      titulo_modal_actual(.CONFIG_ACCIONES_EMBUDO[[seleccion$accion]]$etiqueta)
+      showModal(racafeForms::racafeModal(
+        size = .CONFIG_ACCIONES_EMBUDO[[seleccion$accion]]$modal %||% "subventana2",
+        title = titulo_modal_actual(), uiOutput(ns("ModalContenido")), easy_close = TRUE,
+        footer = modalButton("Cerrar")))
+    }
+    observeEvent(input$AccionSeleccionada, abrir_accion(input$AccionSeleccionada))
+    observeEvent(input$MoverTarjeta, {
+      movimiento <- input$MoverTarjeta
+      req(movimiento$codigo, movimiento$desde, movimiento$hacia)
+      x <- isolate(pipeline_filtrado())
+      x <- x[as.character(x$CodContacto) %in% as.character(movimiento$codigo), , drop = FALSE]
+      if (nrow(x) != 1L || x$Etapa != movimiento$desde ||
+          !movimiento$hacia %in% .kb_destinos(x$Etapa, x$EtapaPreDescarte)) {
+        showNotification("Movimiento no permitido o tarjeta desactualizada.", type = "warning")
+        return(invisible(NULL))
+      }
+      accion <- if (movimiento$hacia == "DESCARTADO") "Descartar" else {
+        if (movimiento$desde == "DESCARTADO") "Reactivar" else "Promover"
+      }
+      abrir_accion(list(codigo = movimiento$codigo, accion = accion, destino = movimiento$hacia))
     })
     output$ModalContenido <- .crm_render_ui({
       req(accion_seleccionada())
@@ -209,7 +163,8 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE) {
     # Instanciacion unica de cada submodulo genérico
     modulo_editar      <- Editar("Editar", usuario = usuario, codigo_contacto = reactive(codigo_seleccionado()))
     modulo_relacion    <- Relacionamiento("Relacionamiento", usuario = usuario, codigo_contacto = reactive(codigo_seleccionado()))
-    modulo_promover    <- Promover("Promover", usuario = usuario, codigo_contacto = reactive(codigo_seleccionado()))
+    modulo_promover    <- Promover("Promover", usuario = usuario, codigo_contacto = reactive(codigo_seleccionado()),
+      destino_inicial = reactive(destino_arrastre()))
     modulo_descartar   <- Descartar("Descartar", usuario = usuario, codigo_contacto = reactive(codigo_seleccionado()))
     modulo_oportunidad <- CrearOportunidad("CrearOportunidad", usuario = usuario, codigo_contacto = reactive(codigo_seleccionado()))
     # Reactivar recibe su propio par codigo/disparador — nunca el
@@ -217,8 +172,16 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE) {
     modulo_reactivar   <- Reactivar("Reactivar", usuario = usuario, codigo_contacto = reactive(codigo_reactivar()),
                                     disparador = reactive(trigger_reactivar()))
     
+    observeEvent(modulo_promover$actualizaciones(), {
+      tryCatch({
+        detectar_conversion_leads(usuario(), codigos = isolate(pipeline_filtrado()$CodContacto))
+        removeModal()
+        trigger_refresco_kanban()
+      },
+        error = function(e) showNotification(conditionMessage(e), type = "error"))
+    }, ignoreInit = TRUE)
     contadores_retorno <- list(
-      modulo_editar$actualizaciones, modulo_promover$etapa, modulo_descartar$etapa,
+      modulo_editar$actualizaciones, modulo_descartar$actualizaciones,
       modulo_oportunidad$creaciones, modulo_relacion$gestiones, modulo_reactivar$n
     )
     lapply(contadores_retorno, function(contador) {
@@ -236,26 +199,8 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE) {
         footer = modalButton("Cerrar"),
         CrearContactoUI(ns("mod_nuevo_contacto"))))
     })
-    observeEvent(contacto_mod$n(), { removeModal(); trigger_refresco_kanban() })
+    observeEvent(contacto_mod$n(), { removeModal(); trigger_refresco_kanban() }, ignoreInit = TRUE)
     
     invisible(NULL)
   })
-}
-
-# App de prueba ----
-DemoProspeccionKanban <- function() {
-  ui <- bs4DashPage(
-    title = "Prueba Kanban Embudo",
-    header = bs4DashNavbar(), sidebar = bs4DashSidebar(), controlbar = bs4DashControlbar(), footer = bs4DashFooter(),
-    body = bs4DashBody(
-      useShinyjs(),
-      includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
-                        "refs/heads/main/Styles/style.css")),
-      KanbanEmbudoUI("EmbudoKanban")
-    )
-  )
-  server <- function(input, output, session) {
-    KanbanEmbudo("EmbudoKanban", usuario = reactive("CMEDINA"))
-  }
-  shinyApp(ui, server)
 }

@@ -256,7 +256,7 @@ Descartar <- function(id, usuario, codigo_contacto) {
       )
     })
     
-    list(etapa = etapa_contacto)
+    list(etapa = etapa_contacto, actualizaciones = reactive(trigger_refresco()))
   })
 }
 

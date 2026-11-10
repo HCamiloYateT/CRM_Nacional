@@ -13,10 +13,11 @@ ConsultaIndividualUI <- function(id) {
 ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin, nit_mapa,
                                cartera = function() NULL, tareas = function() data.frame(),
                                cargar = racafeBD::CargarDatos, directorio = function() data.frame(),
-                               estados = function() data.frame()) {
+                               estados = function() data.frame(), solicitud = function() NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     revision <- shiny::reactiveVal(0L)
     revision_modelos <- shiny::reactiveVal(0L)
+    solicitud_atendida <- shiny::reactiveVal(NULL)
     shiny::observeEvent(input$actualizar, revision(revision() + 1L))
     contactos <- shiny::reactive({
       revision()
@@ -36,13 +37,32 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       x
     })
     catalogo_clientes <- shiny::reactive(.com_clientes(clientes(), periodo()[[2]], filtros()))
-    catalogo <- shiny::reactive(.in_catalogo(contactos(), catalogo_clientes(), fuentes()$etapas$datos,
-      vinculos()$datos, usuario(), es_admin(), filtros(), .gc_filtrar_dimensiones(hechos(), filtros()), directorio()))
-    shiny::observeEvent(catalogo(), {
+    catalogo <- shiny::reactive({
+      crm <- contactos()
+      leads <- fuentes()$conversion_lead$datos
+      if (all(c("CodContacto", "Asesor", "FechaConversion") %in% names(leads))) {
+        leads <- leads[order(leads$FechaConversion, decreasing = TRUE), , drop = FALSE]
+        indice <- match(as.character(crm$CodContacto), as.character(leads$CodContacto))
+        crm$Asesor <- dplyr::coalesce(as.character(.gc_columna(crm, "Asesor")), as.character(leads$Asesor[indice]))
+      }
+      .in_catalogo(crm, catalogo_clientes(), fuentes()$etapas$datos, vinculos()$datos, usuario(), es_admin(),
+        filtros(), .gc_filtrar_dimensiones(hechos(), filtros()), directorio())
+    })
+    shiny::observeEvent(list(catalogo(), solicitud()), {
       x <- catalogo()
       actual <- shiny::isolate(input$entidad)
       opciones <- stats::setNames(x$Clave, x$Etiqueta)
       seleccion <- if (length(actual) == 1L && actual %in% x$Clave) actual else head(x$Clave, 1L)
+      destino <- solicitud()
+      if (!is.null(destino) && !identical(destino, shiny::isolate(solicitud_atendida()))) {
+        codigos <- strsplit(ifelse(is.na(x$Codigo), "", as.character(x$Codigo)), "|", fixed = TRUE)
+        coincidencias <- which(vapply(codigos, function(ids) destino$codigo %in% ids, logical(1)))
+        if (!length(coincidencias)) coincidencias <- which(as.character(x$NIT) %in% destino$nit)
+        if (length(coincidencias)) seleccion <- x$Clave[coincidencias[1]] else {
+          shiny::showNotification("La entidad no está disponible para el alcance actual.", type = "warning")
+        }
+        solicitud_atendida(destino)
+      }
       .crm_update_select(session, "entidad", choices = opciones, selected = seleccion)
     })
     entidad <- shiny::reactive({

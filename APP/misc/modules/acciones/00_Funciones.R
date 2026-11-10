@@ -612,7 +612,9 @@ registrar_alianza_prospecto <- function(cod_contacto, cod_cliente_aliado, usr, o
 }
 # Promueve un Contacto a Prospecto, registrando sus alianzas
 convertir_contacto_a_prospecto <- function(cod_contacto, cods_cliente_aliado, usr, observacion = NA_character_) {
-  if (identical(obtener_etapa_contacto(cod_contacto), "CLIENTE")) stop("Esta entidad ya es cliente.")
+  if (!identical(obtener_etapa_contacto(cod_contacto), "CONTACTO")) {
+    stop("Solo un Contacto vigente puede promoverse a Prospecto. Actualice la entidad.")
+  }
   if (length(cods_cliente_aliado) == 0) stop("Debe vincular al menos una alianza")
   for (cod_cliente in cods_cliente_aliado) registrar_alianza_prospecto(cod_contacto, cod_cliente, usr, observacion)
   registrar_transicion_etapa(cod_contacto, "CONTACTO", "PROSPECTO", usr)
@@ -622,7 +624,9 @@ convertir_contacto_a_prospecto <- function(cod_contacto, cods_cliente_aliado, us
 # compartida por convertir_contacto_a_lead() y convertir_prospecto_a_lead()
 .insertar_conversion_lead <- function(cod_contacto, asesor, segmento, linea_negocio_input,
                                       etapa_anterior, usr) {
-  if (identical(obtener_etapa_contacto(cod_contacto), "CLIENTE")) stop("Esta entidad ya es cliente.")
+  if (!identical(obtener_etapa_contacto(cod_contacto), etapa_anterior)) {
+    stop("La etapa cambió o no admite esta promoción a Lead. Actualice la entidad.")
+  }
   linea <- determinar_linea_negocio(linea_negocio_input)
   fila_lead <- data.frame(
     CodContacto = cod_contacto, FechaConversion = Sys.time(), CodLinNegocio = linea$cod,
@@ -669,9 +673,14 @@ registrar_descarte <- function(cod_contacto, etapa, razon1, razon2, razon3, usr)
 }
 descartar_generico <- function(cod_contacto, etapa_origen, motivo, usr, razon1 = NA_character_,
                                razon2 = NA_character_, razon3 = NA_character_) {
+  if (length(motivo) != 1L || is.na(motivo) || !nzchar(trimws(motivo))) stop("Indique el motivo de descarte.")
+  if (length(etapa_origen) != 1L || !etapa_origen %in% c("CONTACTO", "PROSPECTO", "LEAD", "CLIENTE") ||
+      !identical(obtener_etapa_contacto(cod_contacto), etapa_origen)) {
+    stop("La etapa cambió o no permite este descarte. Actualice la entidad.")
+  }
   fila_actual <- CargarDatos("CRMNALCONTACTO") %>% filter(CodContacto == cod_contacto)
   if (nrow(fila_actual) == 0) stop("Contacto no encontrado: ", cod_contacto)
-  
+
   fila_actual$Estado           <- "DESCARTADO"
   fila_actual$EtapaPreDescarte <- etapa_origen
   fila_actual$UsuarioMod       <- usr
@@ -713,10 +722,14 @@ reactivar_contacto <- function(cod_contacto, usr) {
   fila_actual <- CargarDatos("CRMNALCONTACTO") %>% filter(CodContacto == cod_contacto)
   if (nrow(fila_actual) == 0) stop("Contacto no encontrado: ", cod_contacto)
   
+  if (!identical(as.character(fila_actual$Estado[[1]]), "DESCARTADO")) stop("La entidad ya no está descartada.")
   etapa_origen <- if ("EtapaPreDescarte" %in% names(fila_actual)) {
     fila_actual$EtapaPreDescarte[[1]] %||% "CONTACTO"
   } else "CONTACTO"
   
+  if (!etapa_origen %in% c("CONTACTO", "PROSPECTO", "LEAD", "CLIENTE")) {
+    stop("Revise la etapa previa antes de reactivar esta entidad.")
+  }
   fila_actual$Estado        <- "ACTIVO"
   fila_actual$UsuarioMod    <- usr
   fila_actual$FechaHoraModi <- Sys.time()
