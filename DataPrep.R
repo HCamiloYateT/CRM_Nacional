@@ -687,7 +687,7 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
   migrar(aplicar = TRUE)
   contactos <- cargar("CRMNALCONTACTO")
   .crm_exigir_marcas_historia(contactos)
-  contactos <- .crm_marcas_historia(contactos)
+  contactos <- .crm_normalizar_fechas_historia(.crm_marcas_historia(contactos))
   contactos$PerCod <- .crm_nit_historia(contactos$PerCod)
   clientes$CliNitPpal <- .crm_nit_historia(clientes$CliNitPpal)
   clientes <- clientes[!is.na(clientes$CliNitPpal), , drop = FALSE]
@@ -697,7 +697,8 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
   faltantes <- obtener_clientes_sin_contacto(clientes, contactos)
   creados <- 0L
   for (i in seq_len(nrow(faltantes))) {
-    fila <- registrar(faltantes[i, , drop = FALSE], usuario, .generar_codigo_contacto)
+    fila <- .crm_normalizar_fechas_historia(
+      registrar(faltantes[i, , drop = FALSE], usuario, .generar_codigo_contacto))
     fila$PerCod <- .crm_nit_historia(fila$PerCod)
     contactos <- dplyr::bind_rows(contactos, fila) %>% dplyr::distinct(CodContacto, .keep_all = TRUE)
     creados <- creados + as.integer(isTRUE(attr(fila, "Creado")))
