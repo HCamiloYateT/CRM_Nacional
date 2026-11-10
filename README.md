@@ -6,8 +6,6 @@ permanecen en CRM Nacional. No se instalan paquetes ni se ejecutan migraciones d
 ## Actualizar dependencias antes de desplegar
 
 Se requieren racafeForms >= 0.7.0, racafeShiny >= 1.4.1 y racafeModulos >= 0.5.1.
-Las referencias revisadas y los cambios de contrato están documentados en
-[docs/DATA_PREP_INTEGRATION.md](docs/DATA_PREP_INTEGRATION.md).
 
 ```r
 install.packages("remotes")
@@ -30,7 +28,6 @@ Las proyecciones y sus métricas permanecen disponibles en `crm_maestro`.
 
 Los controles de acciones y prospección utilizan racafeForms; las tablas, menús y cajas se llaman desde
 racafeModulos. Los estilos y scripts se leen desde `HCamiloYateT/Compartido`, rama `main`, al arrancar la app.
-Las apps de prueba de los módulos se abren mediante funciones `Demo*()`; no se ejecutan durante el arranque.
 
 Iniciar con `shiny::runApp("APP")` desde la raíz del repositorio o con `shiny::runApp(".")` desde `APP`.
 No se requiere `vendor/Compartido`: `includeCSS()` e `includeScript()` leen los archivos de GitHub y los
@@ -38,12 +35,6 @@ incluyen en la UI. Los logos usan URLs del mismo repositorio; para el PDF se des
 se elimina al terminar. El servidor necesita acceso HTTPS a `raw.githubusercontent.com` al iniciar la app
 y generar el PDF; el navegador también debe poder cargar los logos desde ese dominio.
 
-
-Prueba de contrato y enriquecimiento con datos ficticios, sin conexiones de negocio:
-
-```sh
-Rscript tests/test_data_contract.R .
-```
 
 La plantilla `APP/misc/modules/controlbar/cotizacion.Rmd` no está versionada en este repositorio. El cotizador
 comprueba su presencia al generar el PDF; esa ausencia ya no impide cargar el resto de la aplicación.
@@ -110,4 +101,12 @@ Actualizar racafeModulos, aplicar los cambios del CRM y reiniciar la aplicación
 
 El capítulo **Generalidades → Evolución del Negocio** incorpora la lectura histórica y el plan de crecimiento.
 Los scripts se organizan por opción del sidebar; configuración, contratos y utilidades tienen carpetas propias.
-Vea [fuentes, instalación del histórico Excel y estructura](docs/EVOLUCION_Y_ESTRUCTURA.md).
+Los históricos preparados se suministran fuera del repositorio: `APP/data/comercial_historico.rds` y
+`APP/data/evolucion_historica.rds`, o las rutas de `CRM_DATOS_COMERCIALES` y `CRM_EVOLUCION_HISTORICA`.
+Conservar esos archivos en el entorno operativo antes de regenerar `APP/data/data.RData` con `DataPrep.R`.
+Los importadores de una sola ejecución fueron retirados; el ETL conserva los lectores de los históricos.
+Sin esas fuentes, no se incorpora la información histórica opcional.
+
+La migración opcional de frecuencia de oportunidades está en
+`APP/misc/datos/migrations/2026-11-08_oportunidades_frecuencia.sql`.
+Revisar si `FrecuenciaDias` ya existe en `CRMNALCLOPT` antes de ejecutarla; la app no aplica migraciones al arrancar.
