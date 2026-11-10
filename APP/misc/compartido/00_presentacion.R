@@ -2,7 +2,7 @@
 .crm_estilos_ui <- function() {
   if (exists(".estilos_crm", inherits = TRUE)) return(get(".estilos_crm", inherits = TRUE))
   shiny::singleton(shiny::includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
-    "c94d9c3fba3eedbc4c3fa77015b2e5499b4375ab/Styles/crm-nacional.css")))
+    "f22619888e3ac20b5e88193c1381faaa6f511af5/Styles/crm-nacional.css")))
 }
 
 # Notas compactas fuera de cajas y tablas ----

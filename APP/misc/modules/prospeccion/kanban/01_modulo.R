@@ -17,15 +17,29 @@
 KanbanEmbudoUI <- function(id) {
   ns <- NS(id)
   columnas <- lapply(ETAPAS_EMBUDO, function(etapa) {
-    contenido <- tagList(
-      racafeForms::racafeInputText(paste0("buscar_", etapa), paste("Buscar en", etapa), ns = ns),
-      uiOutput(ns(paste0("col_", etapa))))
-    div(class = "kpb-slot", `data-kb-stage` = etapa,
-      if (etapa == "DESCARTADO") .crm_disclosure("DESCARTADOS", contenido) else contenido)
+    cerrada <- etapa == "DESCARTADO"
+    toggle <- shiny::tagAppendAttributes(racafeForms::racafeButton(paste0("colapsar_", etapa), NULL,
+      icon = if (cerrada) "chevron-right" else "chevron-down", variant = "ghost", size = "xs", ns = ns,
+      title = paste(if (cerrada) "Expandir" else "Colapsar", etapa)),
+      class = "kb-col-toggle", `data-kb-toggle` = "true", `aria-expanded` = if (cerrada) "false" else "true",
+      `aria-label` = paste("Expandir o colapsar", etapa), `aria-controls` = ns(paste0("cuerpo_", etapa)))
+    acciones <- tagList(if (etapa == "CONTACTO") racafeForms::racafeButton("btn_nuevo_contacto", NULL,
+      icon = "plus", title = "Añadir contacto", size = "xs", ns = ns), toggle)
+    columna <- racafeModulos::ColumnaKanbanUI(etapa, cantidad = 0L,
+      color = COLOR_ETAPA_EMBUDO[[etapa]], acciones = acciones,
+      badges = if (etapa %in% c("CONTACTO", "LEAD")) uiOutput(ns(paste0("alerta_ui_", etapa)), inline = TRUE),
+      cuerpo = tagList(racafeForms::racafeInputText(paste0("buscar_", etapa), paste("Buscar en", etapa), ns = ns),
+        uiOutput(ns(paste0("col_", etapa)))))
+    contador <- tagAppendAttributes(textOutput(ns(paste0("conteo_", etapa)), inline = TRUE),
+      class = "kpb-col-count")
+    columna <- htmltools::tagQuery(columna)$find(".kpb-col-count")$replaceWith(contador)$allTags()
+    columna <- htmltools::tagQuery(columna)$find(".kpb-col-body")$addAttrs(
+      id = ns(paste0("cuerpo_", etapa)), `aria-hidden` = if (cerrada) "true" else "false")$allTags()
+    div(class = paste("kpb-slot", if (cerrada) "kb-collapsed" else ""), `data-kb-stage` = etapa, columna)
   })
   racafeForms::racafeForm(variant = "plain", racafeModulos::MenuAccionesDependencies(), useShinyjs(),
-    racafeForms::racafeActionBar(left = racafeForms::racafeButton("actualizar", "Actualizar",
-      icon = "arrows-rotate", variant = "secondary", ns = ns)),
+    racafeForms::racafeActionBar(left = racafeForms::racafeButton("actualizar", NULL,
+      icon = "arrows-rotate", title = "Actualizar tablero", variant = "secondary", ns = ns)),
     racafeModulos::TableroKanbanUI(id = "kpb_board", ns = ns, columnas))
 }
 KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
@@ -63,19 +77,26 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
       observeEvent(list(busqueda(), filas_base()), limite(50L), ignoreInit = TRUE)
       observeEvent(input[[paste0("mas_", clave)]], limite(limite() + 50L))
       observeEvent(input[[paste0("alerta_", clave)]], { alerta(!alerta()); limite(50L) })
+      output[[paste0("conteo_", clave)]] <- renderText(nrow(filas()))
+      outputOptions(output, paste0("conteo_", clave), suspendWhenHidden = FALSE)
+      if (clave %in% c("CONTACTO", "LEAD")) {
+        output[[paste0("alerta_ui_", clave)]] <- .crm_render_ui({
+          n <- sum(filas_base()$EstadoGestion %in% "critical")
+          titulo <- paste("Sin gestión:", n, if (alerta()) "· mostrar todas" else "· mostrar solo alertas")
+          boton <- racafeForms::racafeButton(paste0("alerta_", clave), NULL, icon = "clock",
+            title = titulo, variant = "ghost", size = "xs", ns = ns)
+          shiny::tagAppendAttributes(boton, class = paste("kb-alert", if (alerta()) "activo" else ""),
+            `aria-label` = titulo, `aria-pressed` = if (alerta()) "true" else "false")
+        })
+      }
       output[[paste0("col_", clave)]] <- .crm_render_ui({
         x <- filas()
         visibles <- head(x, limite())
-        cuerpo <- if (!nrow(x)) .crm_nota("Sin registros para esta columna y los filtros actuales.") else {
-          tagList(lapply(seq_len(nrow(visibles)), function(i) .render_tarjeta_embudo(visibles[i, ], ns)),
-            if (nrow(x) > nrow(visibles)) racafeForms::racafeButton(paste0("mas_", clave),
-              paste("Mostrar 50 más ·", nrow(visibles), "de", nrow(x)), variant = "secondary", size = "xs", ns = ns))
-        }
-        badge <- if (clave %in% c("CONTACTO", "LEAD")) actionLink(ns(paste0("alerta_", clave)),
-          paste(if (alerta()) "Ver todas" else "Sin gestión:", sum(filas_base()$EstadoGestion %in% "critical")))
-        racafeModulos::ColumnaKanbanUI(clave, cuerpo, cantidad = nrow(x), color = COLOR_ETAPA_EMBUDO[[clave]],
-          badges = badge, acciones = if (clave == "CONTACTO") racafeForms::racafeButton("btn_nuevo_contacto",
-            "Añadir", icon = "plus", size = "xs", ns = ns))
+        if (!nrow(x)) return(.crm_nota("Sin registros para esta columna y los filtros actuales."))
+        tagList(lapply(seq_len(nrow(visibles)), function(i) .render_tarjeta_embudo(visibles[i, ], ns)),
+          if (nrow(x) > nrow(visibles)) racafeForms::racafeButton(paste0("mas_", clave), NULL,
+            icon = "angles-down", title = paste("Mostrar 50 más ·", nrow(visibles), "de", nrow(x)),
+            variant = "secondary", size = "xs", ns = ns))
       })
     })
 
