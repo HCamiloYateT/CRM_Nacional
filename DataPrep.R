@@ -19,6 +19,7 @@ if (utils::packageVersion("racafeCore") < "1.0.1") {
 }
 
 # Funciones ----
+sys.source("APP/misc/datos/05_historia_comercial.R", envir = environment())
 
 ## Lotes ----
 .lotes_full_sql <- function() {
@@ -648,6 +649,7 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
     contactos$EtapaPreDescarte <- NA_character_
   }
   
+  contactos <- .crm_marcas_historia(contactos)
   historial <- tryCatch(
     racafeBD::CargarDatos("CRMNALHISTORIALETAPA") %>%
       mutate(FechaHora = lubridate::as_datetime(FechaHora)),
@@ -659,7 +661,8 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
   
   ultima_transicion <- historial %>%
     group_by(CodContacto) %>%
-    filter(FechaHora == max(FechaHora)) %>%
+    filter(!is.na(FechaHora)) %>%
+    arrange(desc(FechaHora)) %>%
     slice(1L) %>%
     ungroup() %>%
     select(CodContacto, EtapaUltimaTransicion = EtapaNueva)
@@ -670,6 +673,7 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
       EtapaPreDescarte = ifelse(is.na(EtapaPreDescarte), "CONTACTO", EtapaPreDescarte),
       Etapa = case_when(
         Estado == "DESCARTADO" ~ "DESCARTADO",
+        is.na(EtapaUltimaTransicion) & EsReconstruido ~ "CLIENTE",
         is.na(EtapaUltimaTransicion) ~ "CONTACTO",
         TRUE ~ EtapaUltimaTransicion)
     ) %>%
@@ -677,79 +681,46 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
 }
 
 ## Contactos clientes ----
-.asegurar_contactos_clientes <- function(clientes, usuario = "SISTEMA") {
-  contactos <- tryCatch(
-    racafeBD::CargarDatos("CRMNALCONTACTO"),
-    error = function(e) {
-      data.frame(
-        CodContacto = character(), PerCod = numeric(), PerRazSoc = character(), Estado = character(),
-        EtapaPreDescarte = character(), FechaHoraCrea = as.POSIXct(character()),
-        FechaHoraModi = as.POSIXct(character()), stringsAsFactors = FALSE)
-    })
-  
-  contactos <- contactos %>%
-    mutate(
-      PerCod = suppressWarnings(as.numeric(PerCod)), CodContacto = as.character(CodContacto),
-      FechaHoraCrea = suppressWarnings(lubridate::as_datetime(FechaHoraCrea)),
-      FechaHoraModi = suppressWarnings(lubridate::as_datetime(FechaHoraModi)))
-  
-  clientes <- clientes %>%
-    transmute(CliNitPpal = suppressWarnings(as.numeric(CliNitPpal)), PerRazSoc = as.character(PerRazSoc)) %>%
-    filter(!is.na(CliNitPpal)) %>%
-    distinct(CliNitPpal, .keep_all = TRUE)
-  
-  contactos_existentes <- contactos %>%
-    filter(!is.na(PerCod)) %>%
-    distinct(PerCod, .keep_all = TRUE) %>%
-    transmute(CliNitPpal = PerCod, CodContacto, TieneContacto = "SI")
-  
-  clientes_mapa <- clientes %>%
-    left_join(contactos_existentes, by = "CliNitPpal")
-  
-  faltantes <- clientes_mapa %>%
-    filter(is.na(CodContacto))
-  
-  if (nrow(faltantes) > 0L) {
-    for (i in seq_len(nrow(faltantes))) {
-      codigo <- .generar_codigo_contacto(contactos)
-      
-      nuevo <- data.frame(
-        CodContacto = codigo, PerCod = faltantes$CliNitPpal[[i]], PerRazSoc = faltantes$PerRazSoc[[i]],
-        Estado = "ACTIVO", EtapaPreDescarte = "CONTACTO", UsuarioCrea = usuario, FechaHoraCrea = Sys.time(),
-        UsuarioMod = usuario, FechaHoraModi = Sys.time(), stringsAsFactors = FALSE)
-      
-      tryCatch(
-        racafeBD::AgregarDatos(nuevo, "CRMNALCONTACTO"),
-        error = function(e) {
-          stop(
-            "No fue posible crear el contacto para CliNitPpal ", faltantes$CliNitPpal[[i]], ": ",
-            conditionMessage(e))
-        })
-      
-      contactos <- bind_rows(contactos, nuevo)
-      
-      clientes_mapa$CodContacto[
-        clientes_mapa$CliNitPpal == faltantes$CliNitPpal[[i]]
-      ] <- codigo
-      
-      clientes_mapa$TieneContacto[
-        clientes_mapa$CliNitPpal == faltantes$CliNitPpal[[i]]
-      ] <- "NO"
-    }
+.asegurar_contactos_clientes <- function(clientes, usuario = "SISTEMA",
+    cargar = racafeBD::CargarDatos, registrar = .crm_registrar_cliente_historico) {
+  contactos <- cargar("CRMNALCONTACTO")
+  .crm_exigir_marcas_historia(contactos)
+  contactos <- .crm_marcas_historia(contactos)
+  contactos$PerCod <- .crm_nit_historia(contactos$PerCod)
+  clientes$CliNitPpal <- .crm_nit_historia(clientes$CliNitPpal)
+  clientes <- clientes[!is.na(clientes$CliNitPpal), , drop = FALSE]
+  clientes <- clientes[!duplicated(clientes$CliNitPpal), , drop = FALSE]
+  historial <- cargar("CRMNALHISTORIALETAPA")
+  firma_antes <- .crm_firma_conversion(contactos, historial)
+  faltantes <- obtener_clientes_sin_contacto(clientes, contactos)
+  creados <- 0L
+  for (i in seq_len(nrow(faltantes))) {
+    fila <- registrar(faltantes[i, , drop = FALSE], usuario, .generar_codigo_contacto)
+    fila$PerCod <- .crm_nit_historia(fila$PerCod)
+    contactos <- dplyr::bind_rows(contactos, fila) %>% dplyr::distinct(CodContacto, .keep_all = TRUE)
+    creados <- creados + as.integer(isTRUE(attr(fila, "Creado")))
   }
-  
+  if (!identical(firma_antes, .crm_firma_conversion(contactos, historial))) {
+    stop("La integración alteró el universo comercial real. Revise la carga antes de continuar.")
+  }
+  reconstruidos <- contactos$PerCod[contactos$EsReconstruido & !is.na(contactos$PerCod)]
+  if (anyDuplicated(reconstruidos)) stop("Hay contactos reconstruidos duplicados por NIT. Revise la integración.")
   contactos_etapa <- .derivar_etapa_actual(contactos) %>%
-    mutate(PerCod = suppressWarnings(as.numeric(PerCod))) %>%
-    distinct(PerCod, .keep_all = TRUE) %>%
-    transmute(
-      CliNitPpal = PerCod, CodContactoEtapa = as.character(CodContacto), EtapaContacto = as.character(Etapa),
-      EstadoContacto = as.character(Estado), EtapaPreDescarte = as.character(EtapaPreDescarte))
-  
-  clientes_mapa %>%
-    mutate(TieneContacto = coalesce(TieneContacto, "NO")) %>%
-    left_join(contactos_etapa, by = "CliNitPpal") %>%
-    mutate(CodContacto = coalesce(CodContacto, CodContactoEtapa)) %>%
-    select(CliNitPpal, CodContacto, TieneContacto, EtapaContacto, EstadoContacto, EtapaPreDescarte)
+    mutate(CliNitPpal = .crm_nit_historia(PerCod)) %>%
+    arrange(EsReconstruido, desc(FechaHoraCrea)) %>% distinct(CliNitPpal, .keep_all = TRUE)
+  mapa <- clientes %>% select(CliNitPpal) %>% left_join(contactos_etapa, by = "CliNitPpal") %>%
+    transmute(CliNitPpal = suppressWarnings(as.numeric(CliNitPpal)), CodContacto,
+      TieneContacto = ifelse(.crm_nit_historia(CliNitPpal) %in% faltantes$CliNitPpal, "NO", "SI"),
+      EsReconstruido, FuenteRegistro, FechaHoraCrea, Etapa = Etapa,
+      EtapaContacto = Etapa, EstadoContacto = Estado, EtapaPreDescarte)
+  if (anyNA(mapa$CodContacto) || anyDuplicated(mapa$CliNitPpal)) stop("Mapa de clientes incompleto o duplicado.")
+  message("[Clientes históricos] Universo: ", nrow(clientes), "; faltantes iniciales: ", nrow(faltantes),
+    "; creados: ", creados, "; reutilizados: ", nrow(clientes) - creados,
+    "; reconstruidos: ", sum(mapa$EsReconstruido))
+  attr(mapa, "auditoria") <- c(Clientes = nrow(clientes), Creados = creados,
+    Reutilizados = nrow(clientes) - creados, Reconstruidos = sum(mapa$EsReconstruido),
+    Duplicados = 0L, HistoriaInvariante = 1L)
+  mapa
 }
 
 ## Segmentación ----
@@ -991,9 +962,13 @@ cliente_actual_map <- clientes_hist %>%
 # Datos maestros de clientes desde sistema transaccional
 creacion <- racafeBD::ConsultaSistema("syscafe", "SELECT DISTINCT PerCod, PerFecCre FROM NPERSONA")
 
+esquema_ncliente <- racafeBD::ConsultaSistema("syscafe", "SELECT * FROM NCLIENTE WHERE 1 = 0")
+fecha_ncliente <- intersect(c("CliFecCre", "CliFecCrea", "CliFechaCreacion"), names(esquema_ncliente))
+fecha_cliente_sql <- if (length(fecha_ncliente)) paste0("c.", fecha_ncliente[[1]]) else "NULL"
+
 n_cliente <- racafeBD::ConsultaSistema(
   "syscafe",
-  query = "SELECT c.CliNit AS PerCod, c.CliCont, c.CliDir,
+  query = paste0("SELECT c.CliNit AS PerCod, c.CliCont, c.CliDir,
                   c.CliDir1, c.CliTel, c.CliConCom, c.CliTelCom,
                   c.CliEmlCom, c.CiuExtCod, c.CliFPagDbl, c.CliSegCod,
                   CASE c.CliSegCod
@@ -1002,10 +977,10 @@ n_cliente <- racafeBD::ConsultaSistema(
                     ELSE 'PEQUEÑO'
                   END AS SegmentoNCLIENTE,
                   ce.CiuExtNom, p.PerRazSoc,
-                  p.PerFecCre AS FecCreacion
+                  p.PerFecCre AS FecCreacion, ", fecha_cliente_sql, " AS FecCreacionCliente
            FROM   NCLIENTE c
            LEFT JOIN NCIUEXT ce ON c.CiuExtCod = ce.CiuExtCod
-           LEFT JOIN NPERSONA p ON c.CliNit = p.PerCod"
+           LEFT JOIN NPERSONA p ON c.CliNit = p.PerCod")
 ) %>%
   left_join(
     nit_ppal,
@@ -1018,8 +993,10 @@ n_cliente <- racafeBD::ConsultaSistema(
 
 ## Contactos ----
 contactos_clientes <- .asegurar_contactos_clientes(
-  cliente_actual_map %>%
-    left_join(n_cliente %>% transmute(CliNitPpal = suppressWarnings(as.numeric(PerCod)), PerRazSoc),
+  dplyr::bind_rows(cliente_actual_map %>% select(CliNitPpal),
+    n_cliente %>% transmute(CliNitPpal = suppressWarnings(as.numeric(PerCod)))) %>%
+    distinct(CliNitPpal) %>% left_join(n_cliente %>% transmute(CliNitPpal = suppressWarnings(as.numeric(PerCod)), PerRazSoc,
+      FecCreacionCliente, FecCreacion),
               by = "CliNitPpal"))
 
 contactos_raw <- contactos_clientes

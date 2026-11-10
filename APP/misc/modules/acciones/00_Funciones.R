@@ -65,6 +65,9 @@ registrar_transicion_etapa <- function(cod_contacto, etapa_anterior, etapa_nueva
     CodContacto = cod_contacto, EtapaAnterior = etapa_anterior, EtapaNueva = etapa_nueva,
     Usuario = usr, FechaHora = Sys.time(), Motivo = motivo, stringsAsFactors = FALSE
   )
+  if ("EsReconstruido" %in% names(CargarDatos("CRMNALHISTORIALETAPA"))) {
+    registro_historial$EsReconstruido <- FALSE
+  }
   AgregarDatos(registro_historial, "CRMNALHISTORIALETAPA")
 }
 # Muestra notificacion de error al usuario
@@ -609,6 +612,7 @@ registrar_alianza_prospecto <- function(cod_contacto, cod_cliente_aliado, usr, o
 }
 # Promueve un Contacto a Prospecto, registrando sus alianzas
 convertir_contacto_a_prospecto <- function(cod_contacto, cods_cliente_aliado, usr, observacion = NA_character_) {
+  if (identical(obtener_etapa_contacto(cod_contacto), "CLIENTE")) stop("Esta entidad ya es cliente.")
   if (length(cods_cliente_aliado) == 0) stop("Debe vincular al menos una alianza")
   for (cod_cliente in cods_cliente_aliado) registrar_alianza_prospecto(cod_contacto, cod_cliente, usr, observacion)
   registrar_transicion_etapa(cod_contacto, "CONTACTO", "PROSPECTO", usr)
@@ -618,6 +622,7 @@ convertir_contacto_a_prospecto <- function(cod_contacto, cods_cliente_aliado, us
 # compartida por convertir_contacto_a_lead() y convertir_prospecto_a_lead()
 .insertar_conversion_lead <- function(cod_contacto, asesor, segmento, linea_negocio_input,
                                       etapa_anterior, usr) {
+  if (identical(obtener_etapa_contacto(cod_contacto), "CLIENTE")) stop("Esta entidad ya es cliente.")
   linea <- determinar_linea_negocio(linea_negocio_input)
   fila_lead <- data.frame(
     CodContacto = cod_contacto, FechaConversion = Sys.time(), CodLinNegocio = linea$cod,
