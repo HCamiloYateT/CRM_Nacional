@@ -33,7 +33,7 @@
         }
         traza
       })
-      figura
+      plotly::config(figura, displayModeBar = FALSE, displaylogo = FALSE)
     })
 }
 
