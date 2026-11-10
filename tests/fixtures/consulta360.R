@@ -28,3 +28,8 @@ hechos360$PdcPrecioKilo <- ifelse(hechos360$CLCliNit == 102, 12000, 10000)
 hechos360$PdcFecCre <- as.Date(hechos360$FecFact) - 2L
 hechos360$Marca <- ifelse(hechos360$CLCliNit == 102, "Marca sede", "Marca matriz")
 hechos360$MCNom <- ifelse(hechos360$CLCliNit == 102, "Referencia sede", "Referencia matriz")
+
+# Estado comercial mensual conocido; no deducir NUEVO de ausencia de snapshots.
+estados_ficha <- data.frame(CliNitPpal = c(101, 500, 501, 101), LinNegCod = 21000,
+  FecProceso = as.Date(c("2026-11-01", "2026-11-01", "2026-11-01", "2026-10-01")),
+  EstadoPanel = c("ACTIVO", "INACTIVO", "NUEVO", "INACTIVO"))

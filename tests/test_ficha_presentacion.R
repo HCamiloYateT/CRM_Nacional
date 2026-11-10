@@ -28,9 +28,9 @@ metas <- data.frame(MetaMensualSacos = 960, MetaMensualMargen = 235200000, CLLin
 una <- html(.in_ficha_presupuesto_ui(metas, "Con presupuesto 2026", "DETALLE POR FILA"))
 varias <- html(.in_ficha_presupuesto_ui(rbind(metas, metas), "Con presupuesto 2026", "DETALLE POR FILA"))
 stopifnot(grepl("960", una), grepl("235.200.000", una), !grepl("DETALLE POR FILA", una),
-  grepl("DETALLE POR FILA", varias), !grepl("rf-metric-value", varias))
+  grepl("DETALLE POR FILA", varias), !grepl("racafe-caja-valor", varias))
 vacia <- html(.in_ficha_presupuesto_ui(metas[0, ], "Sin presupuesto registrado", "DETALLE"))
-stopifnot(grepl("Sin presupuesto registrado", vacia), !grepl("rf-metric-value", vacia))
+stopifnot(grepl("Sin presupuesto registrado", vacia), !grepl("racafe-caja-valor", vacia))
 # El bloque vacío resume seis secciones sin repetir el mismo aviso.
 estados <- lapply(names(.IN_COMPLEMENTOS), function(x) list(clave = x, n = 0L, error = FALSE))
 complementos <- html(.in_ficha_complementos_ui(estados, shiny::NS("prueba")))

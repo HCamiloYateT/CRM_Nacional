@@ -53,7 +53,7 @@
   list(texto = if (!length(estados)) "Estado CRM sin dato" else paste("Estado CRM:", paste(estados, collapse = " / ")),
     variante = if ("DESCARTADO" %in% estados) "warning" else "neutral")
 }
-.in_ficha_identidad <- function(entidad, contexto, contactos, familia, presupuesto) {
+.in_ficha_identidad <- function(entidad, contexto, contactos, familia, presupuesto, estado_comercial = NULL) {
   estado <- .in_ficha_estado(entidad, contexto, contactos)
   asesores <- .in_ficha_badge_texto(entidad$Asesor)
   es_hija <- !is.na(familia$principal) && !is.na(entidad$NIT) && entidad$NIT != familia$principal
@@ -71,22 +71,28 @@
         variant = if (entidad$Tipo == "CLIENTE") "info" else "neutral"),
       shiny::tagAppendAttributes(racafeForms::racafeStatusBadge(relacion,
         variant = if (relacion == "Cuenta padre") "danger" else "neutral"), title = familia$relacion),
-      racafeForms::racafeStatusBadge(presupuesto, variant = variante)))
+      racafeForms::racafeStatusBadge(presupuesto, variant = variante), estado_comercial))
 }
-.in_ficha_antiguedad_ui <- function(datos) {
+.in_ficha_valor <- function(id, valor, etiqueta, contexto, icono) {
+  caja <- racafeModulos::cajaValor_ui(id, texto = etiqueta, icono = icono, compact = TRUE,
+    mostrar_boton = FALSE, mostrar_kpi = FALSE, color_borde = "#dee2e6",
+    detalle = shiny::tags$strong(class = "in-ficha-kpi", valor))
+  shiny::tags$div(class = "in-ficha-valor", caja, .crm_nota(contexto))
+}
+.in_ficha_antiguedad_ui <- function(datos, ns = identity) {
   valor <- function(nombre) datos$Informacion[match(nombre, datos$Indicador)]
   racafeForms::racafeMetricGrid(columns = 2L,
-    racafeForms::racafeMetric(.in_ficha_texto(valor("Antigüedad del registro de cliente")),
-      "Antigüedad del registro de cliente", detail = "Tiempo desde el registro del cliente", padding = "compact"),
-    racafeForms::racafeMetric(.in_ficha_texto(valor("Antigüedad comercial observada")),
-      "Antigüedad comercial observada", detail = "Tiempo desde la primera compra observada", padding = "compact")) %>%
+    .in_ficha_valor(ns("ficha_edad_registro"), .in_ficha_texto(valor("Antigüedad del registro de cliente")),
+      "Antigüedad del registro de cliente", "Tiempo desde el registro del cliente", "calendar-day"),
+    .in_ficha_valor(ns("ficha_edad_comercial"), .in_ficha_texto(valor("Antigüedad comercial observada")),
+      "Antigüedad comercial observada", "Tiempo desde la primera compra observada", "handshake")) %>%
     shiny::tagList(.in_ficha_info(list("Fecha de registro del cliente" =
       .in_ficha_fecha(valor("Registrado como cliente desde")),
       "Primera compra observada" = .in_ficha_fecha(valor("Primera compra observada")),
       "Última compra observada" = .in_ficha_fecha(valor("Última compra observada")),
       "Primer contacto vinculado al CRM" = .in_ficha_fecha(valor("Primer contacto comercial vinculado en CRM")))))
 }
-.in_ficha_presupuesto_ui <- function(datos, estado, tabla_ui) {
+.in_ficha_presupuesto_ui <- function(datos, estado, tabla_ui, ns = identity) {
   if (!nrow(datos)) return(.crm_nota(estado))
   if (nrow(datos) > 1L) return(shiny::tagList(
     .crm_nota("Metas por registro. Cada fila conserva su línea, cuenta y fecha de actualización."), tabla_ui))
@@ -96,10 +102,10 @@
   }
   volumen <- .in_ficha_numero(fila$MetaMensualSacos)
   shiny::tagList(racafeForms::racafeMetricGrid(columns = 2L,
-    racafeForms::racafeMetric(if (volumen == "Sin dato") volumen else paste(volumen, "sacos de 70 kg"),
-      "Meta mensual de volumen", detail = "Cada mes", padding = "compact"),
-    racafeForms::racafeMetric(.in_ficha_numero(fila$MetaMensualMargen, moneda = TRUE),
-      "Meta mensual de margen", detail = "Margen FCC · Cada mes", padding = "compact")),
+    .in_ficha_valor(ns("ficha_meta_volumen"), volumen, "Meta mensual de volumen",
+      "Sacos de 70 kg · Cada mes", "weight-hanging"),
+    .in_ficha_valor(ns("ficha_meta_margen"), .in_ficha_numero(fila$MetaMensualMargen, moneda = TRUE),
+      "Meta mensual de margen", "Margen FCC · Cada mes", "dollar-sign")),
     shiny::tags$div(class = "in-ficha-badges",
       racafeForms::racafeDataBadge("Línea", .in_ficha_badge_texto(.crm_label_comercial(fila$CLLinNegNo))),
       racafeForms::racafeDataBadge("Segmento", .in_ficha_badge_texto(fila$Segmento)),
@@ -193,7 +199,7 @@
     shiny::tags$style(shiny::HTML(".in-ficha-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
       gap:20px 32px;position:relative;align-items:start;margin-bottom:20px;}
       .in-ficha-grid::before{content:'';position:absolute;width:1px;left:50%;top:0;bottom:0;background:#DA291C;}
-      .in-ficha .in-ficha-caja{border:1px solid #DA291C;border-radius:6px;background:#fff;margin:0 0 16px;
+      .in-ficha .in-ficha-caja{border:0;border-radius:0;background:transparent;margin:0 0 16px;
         padding:0;min-width:0;box-sizing:border-box;}
       .in-ficha-grid>.in-ficha-caja{margin:0;}.in-ficha-grid>.in-ficha-caja[open]{align-self:stretch;}
       .in-ficha .in-ficha-caja>summary{padding:12px 14px;flex-wrap:wrap;gap:8px;font-size:14px;line-height:1.4;}
@@ -212,8 +218,10 @@
         color:#805b12;}
       .in-ficha .rf-status-badge--neutral,.in-ficha-identidad .rf-status-badge--neutral{background:#eef0f2;
         color:#495057;}
-      .in-ficha .rf-metric{border:0;box-shadow:none;background:transparent;padding:0;}
-      .in-ficha .rf-metric-value{font-size:1.25rem;line-height:1.35;}
+      .in-ficha .in-ficha-valor{min-width:0;}
+      .in-ficha .in-ficha-kpi{display:block;font-size:1.2rem;line-height:1.35;}
+      .in-ficha .in-ficha-valor .rmcv-card{height:auto;}
+      .in-ficha .in-ficha-valor>.rf-notice-list{margin-top:6px;}
       .in-ficha .in-ficha-registro .rf-info-grid{grid-template-columns:minmax(0,1fr);gap:2px;margin-bottom:6px;}
       .in-ficha .in-ficha-registro .rf-info-item{display:grid;grid-template-columns:minmax(100px,.4fr) minmax(0,1fr);
         gap:10px;padding:4px 0;min-height:0;}.in-ficha .in-ficha-registro .rf-info-item dt{margin:0;}
@@ -229,9 +237,9 @@
       .in_ficha_caja(ns, "antiguedad", "Antigüedad y relación comercial", shiny::uiOutput(ns("antiguedad-tabla"))),
       .in_ficha_caja(ns, "presupuesto", "Presupuesto y metas", shiny::uiOutput(ns("presupuesto_ficha"))),
       .in_ficha_caja(ns, "contacto", "Contacto y ubicación", shiny::uiOutput(ns("contacto_sistema-tabla"))),
-      .in_ficha_caja(ns, "crm", "Registro CRM asociado", shiny::uiOutput(ns("ficha-tabla")))),
+      .in_ficha_caja(ns, "crm", "Registro CRM asociado", shiny::uiOutput(ns("ficha-tabla"))),
     .in_ficha_caja(ns, "familia", "Cuentas relacionadas", shiny::uiOutput(ns("familia-tabla")),
-      badge = shiny::uiOutput(ns("familia_contador"), inline = TRUE)),
+      open = FALSE, badge = shiny::uiOutput(ns("familia_contador"), inline = TRUE)),
     .in_ficha_caja(ns, "complementarios", "Registros complementarios", shiny::uiOutput(ns("complementarios")),
-      open = FALSE, badge = shiny::uiOutput(ns("complementarios_contador"), inline = TRUE)))
+      open = FALSE, badge = shiny::uiOutput(ns("complementarios_contador"), inline = TRUE))))
 }
