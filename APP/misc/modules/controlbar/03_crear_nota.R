@@ -6,8 +6,8 @@ CrearNotasUI <- function(id) {
                             racafeForms::racafeFormGroup(
                               racafeForms::racafeFormRow(columns = 2, responsive = "fixed",
                                 .crm_select("NOT_Tipo", label = "Tipo", required = TRUE,
-                                                               choices = c("NOTA DE REUNIÓN" = "text", "TAREA" = "list"),
-                                                               selected = "text", multiple = FALSE, empty = FALSE,
+                                                               choices = Choices()$tipo_nota,
+                                                               selected = intersect("text", unname(Choices()$tipo_nota)), multiple = FALSE, empty = FALSE,
                                                                search = FALSE, size = 2, ns = ns),
                                 racafeForms::racafeInputText("NOT_Titulo", label = "Título", required = TRUE, ns = ns)
                               )
@@ -62,6 +62,7 @@ CrearNotas <- function(id, usuario) {
     ns <- session$ns
     
     # Reactivos ----
+    catalogos_iniciados_rv <- reactiveVal(FALSE)
     contador_actividades_rv <- reactiveVal(1L)
     actualizaciones_rv <- reactiveVal(0L)
     actividades_cumplidas_rv <- reactiveValues()
@@ -69,6 +70,15 @@ CrearNotas <- function(id, usuario) {
     guardando_rv <- reactiveVal(FALSE)
     confirmacion_rv <- reactiveVal(FALSE)
     
+    catalogos_r <- ChoicesReactivos()
+    observeEvent(catalogos_r(), {
+      opciones <- catalogos_r()$tipo_nota
+      actual <- shiny::isolate(input$NOT_Tipo)
+      if (!catalogos_iniciados_rv() && is.null(actual)) actual <- "text"
+      .crm_update_select(session, "NOT_Tipo", choices = opciones, selected = intersect(actual, unname(opciones)))
+      catalogos_iniciados_rv(TRUE)
+    })
+
     etiquetas_modulo <- racafeModulos::ListaDesplegableAgregable(
       id = "NOT_Tags", label = "Etiquetas", choices = .nota_obtener_etiquetas(), selected = character(0),
       multiple = TRUE, fem = TRUE
@@ -168,7 +178,7 @@ CrearNotas <- function(id, usuario) {
     .validar_formulario <- function() {
       errores <- character(0)
       
-      if (is.null(input$NOT_Tipo) || !nzchar(input$NOT_Tipo)) {
+      if (length(input$NOT_Tipo) != 1L || !input$NOT_Tipo %in% unname(catalogos_r()$tipo_nota)) {
         errores <- c(errores, "Debe seleccionar el tipo de nota.")
       }
       
@@ -215,7 +225,7 @@ CrearNotas <- function(id, usuario) {
     }
     
     .limpiar_formulario <- function() {
-      .crm_update_select(session, "NOT_Tipo", selected = "text")
+      .crm_update_select(session, "NOT_Tipo", selected = intersect("text", unname(catalogos_r()$tipo_nota)))
       
       updateTextInput(session = session, inputId = "NOT_Titulo", value = "")
       

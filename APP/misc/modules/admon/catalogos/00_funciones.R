@@ -6,6 +6,12 @@
       !all(vapply(catalogos, is.character, logical(1)))) {
     stop("El archivo de catálogos debe ser una lista nombrada de vectores de texto.", call. = FALSE)
   }
+  tipos <- catalogos$tipo_nota
+  if (length(tipos) && (any(!tipos %in% c("text", "list")) || anyDuplicated(tipos) ||
+      is.null(names(tipos)) || anyNA(names(tipos)) || any(!nzchar(trimws(names(tipos)))) ||
+      anyDuplicated(toupper(trimws(names(tipos)))))) {
+    stop("Los tipos de nota o tarea deben tener un nombre único y un comportamiento Nota o Tarea.", call. = FALSE)
+  }
   invisible(TRUE)
 }
 
@@ -98,6 +104,9 @@
   .admon_choices_inicializar()
   catalogos <- readRDS(.ADMON_CHOICES_RDS)
   .admon_choices_validar(catalogos)
+  for (clave in setdiff(names(.ADMON_CHOICES_INICIALES), names(catalogos))) {
+    catalogos[[clave]] <- .ADMON_CHOICES_INICIALES[[clave]]
+  }
   catalogos
 }
 
@@ -138,10 +147,20 @@
 }
 
 # Edicion diferida ----
-.admon_choices_agregar_local <- function(datos, catalogo, valor, padre = "", padre2 = "") {
+.admon_choices_agregar_local <- function(datos, catalogo, valor, padre = "", padre2 = "", codigo = NULL) {
   valor <- .admon_choices_normalizar(valor)
   if (!catalogo %in% c(names(datos), "detalle_origen")) {
     stop("El catálogo no existe.", call. = FALSE)
+  }
+  if (identical(catalogo, "tipo_nota")) {
+    existentes <- datos[[catalogo]]
+    if (length(codigo) != 1L || is.na(codigo) || !codigo %in% c("text", "list")) {
+      stop("Seleccione si la opción corresponde a una nota o una tarea.", call. = FALSE)
+    }
+    if (codigo %in% existentes) stop("Ese comportamiento ya está registrado. Edite su nombre.", call. = FALSE)
+    if (valor %in% toupper(trimws(names(existentes)))) stop("Ese nombre ya existe.", call. = FALSE)
+    datos[[catalogo]] <- c(existentes, stats::setNames(codigo, valor))
+    return(datos)
   }
   anidado <- catalogo %in% c("detalle_origen", "categoria", "producto")
   if (anidado) {
@@ -186,7 +205,9 @@
       relaciones[c(filas[destino], filas[indice]), , drop = FALSE]
     attr(datos, "relaciones") <- relaciones
   } else {
-    datos[[catalogo]][c(indice, destino)] <- valores[c(destino, indice)]
+    orden <- seq_along(valores)
+    orden[c(indice, destino)] <- c(destino, indice)
+    datos[[catalogo]] <- valores[orden]
   }
   datos
 }
@@ -235,6 +256,25 @@
       stop("El RDS cambió en otra sesión. Recargue antes de guardar.", call. = FALSE)
     }
     .admon_choices_guardar(nuevos)
+    .admon_choices_actualizacion(shiny::isolate(.admon_choices_actualizacion()) + 1L)
     invisible(TRUE)
   })
+}
+
+# Los códigos persistidos no cambian al administrar los nombres de los tipos.
+.admon_choices_renombrar_tipo <- function(datos, indice, valor) {
+  tipos <- datos$tipo_nota
+  if (length(indice) != 1L || is.na(indice) || indice < 1L || indice > length(tipos)) {
+    stop("El tipo seleccionado ya no existe.", call. = FALSE)
+  }
+  valor <- .admon_choices_normalizar(valor)
+  if (valor %in% toupper(trimws(names(tipos)[-indice]))) stop("Ese nombre ya existe.", call. = FALSE)
+  names(tipos)[indice] <- valor
+  datos$tipo_nota <- tipos
+  datos
+}
+.admon_choices_rotulos <- function(valores) {
+  rotulos <- names(valores)
+  if (is.null(rotulos)) return(as.character(valores))
+  ifelse(!is.na(rotulos) & nzchar(rotulos), rotulos, as.character(valores))
 }
