@@ -82,6 +82,19 @@ obtener_clientes_sin_contacto <- function(clientes, contactos) {
   invisible(TRUE)
 }
 
+# Contrato de fechas entre lecturas SQL y registros nuevos ----
+.crm_normalizar_fechas_historia <- function(datos) {
+  for (columna in intersect(c("FechaHoraCrea", "FechaHoraModi", "FechaFuente"), names(datos))) {
+    valor <- datos[[columna]]
+    if (is.factor(valor)) valor <- as.character(valor)
+    if (is.character(valor)) valor[trimws(valor) %in% c("", "0000-00-00", "0000-00-00 00:00:00")] <- NA_character_
+    fecha <- suppressWarnings(lubridate::as_datetime(valor, tz = "America/Bogota"))
+    if (any(!is.na(valor) & is.na(fecha))) stop("Fecha inválida en ", columna, ". Revise la fuente SQL.")
+    datos[[columna]] <- fecha
+  }
+  datos
+}
+
 # Fechas SQL sin sufijo de zona horaria ----
 .crm_literal_historia <- function(con, x) {
   if (inherits(x, "POSIXt")) x <- format(x, format = "%Y-%m-%d %H:%M:%S", tz = "America/Bogota")
@@ -181,4 +194,37 @@ obtener_clientes_sin_contacto <- function(clientes, contactos) {
   eventos <- as.data.frame(eventos[order(eventos$CodContacto, eventos$FechaHora), columnas, drop = FALSE])
   rownames(eventos) <- NULL
   list(contactos = base, eventos = eventos)
+}
+
+# Diagnóstico de esquema CRM sin modificar datos ----
+.crm_diagnostico_modelo_crm <- function(con = NULL, tablas = NULL) {
+  propia <- is.null(con)
+  if (propia) con <- racafeBD::ConectarBD()
+  if (propia) on.exit(DBI::dbDisconnect(con), add = TRUE)
+  disponibles <- DBI::dbListTables(con)
+  if (is.null(tablas)) {
+    patron <- paste0("^(CRMNALCONTACTO.*|CRMNALEAD.*|CRMNALLEAD.*|CONTACTOLEAD|",
+      "CRMNALHISTORIALETAPA|CRMNALVINCULONIT|CRMNALPROSPECTOALIANZA|",
+      "CRMNALRELACIONAMIENTO|CRMNALCLOPT|CRMNALDESCARTE|CRMNALDIRECTORIO.*)$")
+    tablas <- disponibles[grepl(patron, toupper(disponibles))]
+  }
+  if (!length(tablas) || !all(tablas %in% disponibles)) stop("Revise los nombres reales de las tablas CRM.")
+  estructura <- stats::setNames(lapply(tablas, function(tabla) {
+    identificador <- as.character(DBI::dbQuoteIdentifier(con, tabla))
+    campos <- DBI::dbGetQuery(con, paste("SHOW FULL COLUMNS FROM", identificador))
+    medir <- intersect(c("CodContacto", "PerCod", "FechaHoraCrea", "FechaConversion"), campos$Field)
+    resumen <- c("COUNT(*) AS Registros", vapply(medir, function(columna) {
+      paste0("SUM(", DBI::dbQuoteIdentifier(con, columna), " IS NULL) AS ",
+        DBI::dbQuoteIdentifier(con, paste0("Nulos_", columna)))
+    }, character(1)))
+    list(campos = campos, indices = DBI::dbGetQuery(con, paste("SHOW INDEX FROM", identificador)),
+      definicion = DBI::dbGetQuery(con, paste("SHOW CREATE TABLE", identificador)),
+      resumen = DBI::dbGetQuery(con, paste("SELECT", paste(resumen, collapse = ", "), "FROM", identificador)))
+  }), tablas)
+  nombres <- paste(DBI::dbQuoteLiteral(con, tablas), collapse = ", ")
+  relaciones <- DBI::dbGetQuery(con, paste0(
+    "SELECT TABLE_NAME, COLUMN_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME ",
+    "FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() ",
+    "AND TABLE_NAME IN (", nombres, ") ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION"))
+  list(tablas = estructura, relaciones = relaciones)
 }
