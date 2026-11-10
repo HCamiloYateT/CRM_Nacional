@@ -10,7 +10,7 @@ const assert=require('node:assert/strict');
  await page.locator('#consulta-identidad h4').waitFor();
  await page.evaluate(()=>$('#consulta-entidad').selectpicker('val','nit:102').trigger('change'));
  await page.waitForFunction(()=>document.querySelector('#consulta-identidad').innerText.includes('SEDE NORTE'));
- await page.waitForFunction(()=>document.querySelector('#consulta-complementarios').textContent.includes('Sin registros'));
+ await page.waitForFunction(()=>document.querySelector('#consulta-complementarios_contador').innerText.includes('0 registros'));
  await page.locator('#consulta-contenido a[data-value="Gestión y seguimiento"]').click();
  const recorrido=page.locator('details').filter({has:page.locator('summary',{hasText:'Recorrido comercial completo'})}).first();
  await recorrido.locator('summary').click();

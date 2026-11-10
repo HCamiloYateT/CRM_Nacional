@@ -16,13 +16,15 @@ const assert = require('node:assert/strict');
     await page.waitForFunction(() => document.querySelector('#consulta-ficha-tabla').innerText.includes('900123456'));
     assert.match(await page.locator('#consulta-ficha-tabla').innerText(), /900123456/);
     assert(!/900,123,456|900\.123\.456/.test(await page.locator('#consulta-identidad').innerText()));
-    assert.equal(await page.locator('#consulta-contenido a[data-value="Ejecución y productos"]').count(), 0);
-    await page.locator('#consulta-complementarios details > summary').first().click();
+    assert.equal(await page.locator('#consulta-contenido a[data-value="Ejecución y productos"]:visible').count(), 0);
+    await page.locator('#consulta-ficha_box_complementarios > summary').first().click();
     await page.locator('#consulta-telefonos-tabla').evaluate(el=>el.closest('details').open=true);
     await page.locator('#consulta-telefonos-tabla .gt_table').waitFor();
     assert.match(await page.locator('#consulta-telefonos-tabla').innerText(), /111111/);
     assert(!/999999/.test(await page.locator('#consulta-telefonos-tabla').innerText()));
     const seleccionar = async valor => {
+      await page.waitForFunction(v => [...document.querySelector('#consulta-entidad').options]
+        .some(o => o.value === v), valor);
       await page.evaluate(v => {
         const el = $('#consulta-entidad'); el.selectpicker('val', v); el.trigger('change');
       }, valor); await idle();
@@ -32,11 +34,11 @@ const assert = require('node:assert/strict');
     await page.locator('#consulta-potencial-tabla').evaluate(el=>el.closest('details').open=true);
     await page.locator('#consulta-potencial-tabla .gt_table').waitFor();
     assert.match(await page.locator('#consulta-potencial-tabla').innerText(), /100/);
-    await page.locator('#consulta-contenido a[data-value="Ejecución y productos"]').click();
+    await page.locator('#consulta-contenido a[data-value="Ejecución y productos"]:visible').click();
     await page.locator('#consulta-productos-tabla .gt_table').waitFor();
     assert.equal((await page.locator('#alcance').innerText()).trim(), '1 | 3');
     await seleccionar('principal:101');
-    await page.locator('#consulta-contenido a[data-value="Ejecución y productos"]').click();
+    await page.locator('#consulta-contenido a[data-value="Ejecución y productos"]:visible').click();
     await page.locator('#consulta-sacos-valor_display').waitFor();
     await page.waitForFunction(() => document.querySelector('#alcance').innerText.trim() === '2 | 5');
     assert.match(await page.locator('#consulta-movimientos-tabla').innerText(), /101/);
@@ -57,7 +59,7 @@ const assert = require('node:assert/strict');
     // Selección vacía de asesores: ningún dato de la entidad anterior permanece visible.
     await page.evaluate(() => {$('#asesor').selectpicker('val', []); $('#asesor').trigger('change');});
     await page.waitForFunction(() => document.querySelector('#consulta-identidad').innerText.includes('Seleccione'));
-    assert.equal(await page.locator('#consulta-contenido .gt_table').count(), 0);
+    assert.equal(await page.locator('#consulta-contenido .gt_table:visible').count(), 0);
     await page.evaluate(() => {$('#asesor').selectpicker('val', ['ANA']); $('#asesor').trigger('change');});
     await page.locator('#consulta-ficha-tabla').waitFor({state: 'attached'});
     await seleccionar('nit:102');

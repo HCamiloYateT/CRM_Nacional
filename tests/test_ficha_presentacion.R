@@ -49,3 +49,18 @@ fila_contacto <- data.frame(NIT = c("860076919", "860076920"), Cuenta = c("Princ
 contacto_html <- html(.in_ficha_contacto_ui(fila_contacto))
 stopifnot(grepl("Calle 1", contacto_html), grepl("Calle 2", contacto_html), grepl("Luis", contacto_html),
   !grepl("SIN DATO [|]", contacto_html), .in_ficha_badge_texto(NA_character_) == "Sin dato")
+# Lista densa: el asesor común no se repite; los asesores distintos se mantienen por fila.
+familia_visual <- list(cuentas = data.frame(NIT = c("2", "1", "3"), Cuenta = c("Hija", "Padre", "Otra hija"),
+  Relacion = c("Cuenta hija", "Cuenta padre", "Cuenta hija"), Asesor = "Ana"))
+lista_html <- html(.in_ficha_familia_ui(familia_visual))
+stopifnot(!grepl("rf-panel", lista_html, fixed = TRUE),
+  regexpr("Padre", lista_html)[[1]] < regexpr("Hija", lista_html)[[1]],
+  length(regmatches(lista_html, gregexpr("Asesor:", lista_html, fixed = TRUE))[[1]]) == 1L)
+familia_visual$cuentas$Asesor[[2]] <- "Luis"
+lista_html <- html(.in_ficha_familia_ui(familia_visual))
+stopifnot(length(regmatches(lista_html, gregexpr("Asesor:", lista_html, fixed = TRUE))[[1]]) == 3L)
+
+# Una selección pendiente no se transforma en seis fallos de fuente ni vuelve a evaluar la promesa.
+seleccion_pendiente <- tryCatch(.in_ficha_complementos(list(), stop("Seleccione una entidad")), error = identity)
+stopifnot(inherits(seleccion_pendiente, "error"),
+  grepl("Seleccione una entidad", conditionMessage(seleccion_pendiente), fixed = TRUE))

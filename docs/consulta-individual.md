@@ -125,9 +125,9 @@ se aplica al HTML; el timestamp de creación del contacto conserva su precisión
 Las cuentas relacionadas se abren inicialmente con la cuenta padre primero cuando es visible. El contador usa
 las hijas del catálogo autorizado. Los seis registros complementarios se agrupan en un desplegable inicialmente
 cerrado: si todos están vacíos se muestra un solo aviso. Una fuente caída se distingue de una fuente vacía.
-El adaptador corporativo usa `racafeDisclosure` cuando está exportado y conserva compatibilidad con versiones
-anteriores mediante el panel corporativo y un `details` nativo accesible con teclado. El CSS añadido solo afecta
-las clases de la ficha y de su encabezado.
+Las seis cajas visibles usan `racafeShiny::racafeCollapsible` y se montan una sola vez. Sus contenidos y badges
+se actualizan sin sustituir los contenedores. El CSS de bordes, cuadrícula, separador y colores suaves afecta
+únicamente a la ficha y a su encabezado.
 
 `tests/fixtures/ficha.R` reproduce la referencia CREPES con información ficticia: 960 sacos y $235.200.000 COP al
 mes, edades de 23 años y 3 meses y de 5 años y 7 meses al corte de prueba, cuatro hijas visibles y una quinta fuera
@@ -145,3 +145,32 @@ ficticias. Se revisaron capturas de escritorio y móvil. No se accedió a los da
 `test-client-detail.cjs` se ejecutó sin cambiar sus aserciones: falla en «Línea roja continua de 1px bajo todos los
 encabezados». El mismo fallo se reprodujo contra la base `c0d4bde` de main, con `gt 0.7.0`; esta comprobación de
 Vancouver falla antes del recorrido del modal. No se atribuye a Ficha ni se presenta como una prueba aprobada.
+
+
+## Ajuste visual de las cajas corporativas
+
+Las cuatro cajas principales forman una cuadrícula 2 × 2. Cada caja usa borde corporativo rojo de 1 px y fondo
+neutro. Las abiertas igualan su altura por fila; la línea vertical queda en el espacio entre columnas y desaparece
+en móvil. Cinco cajas se abren inicialmente y Registros complementarios queda cerrada. Los valores principales
+conservan racafeMetric sin marcos interiores; las metas muestran explícitamente su periodicidad mensual.
+
+NIT y asesor se muestran en una línea secundaria. Los badges usan verde suave para activo, azul suave para cliente
+y presupuesto, rosado suave para padre, gris para hija y atributos, y ámbar para revisión. El nombre de la cuenta
+padre de una hija se conserva en el título accesible de su pill de relación. Las cuentas relacionadas son filas
+compactas con separadores, razón social/NIT a la izquierda y relación a la derecha. Si el asesor es común se muestra
+una sola vez al pie; si difiere se mantiene por registro. Los contadores usan las mismas fuentes y permisos.
+
+El contenedor de pestañas permanece montado. Se conserva la lógica previa de disponibilidad de navegación y
+se vuelve a Ficha cuando la pestaña seleccionada deja de aplicar. Esto evita cerrar los desplegables al cambiar
+de cliente o filtros. Las tablas y sus servidores conservan sus IDs, búsquedas y acciones.
+
+`racafeShiny` 1.4.4 añade `header_badge` al final de la firma de racafeCollapsible. El badge es hermano del título
+en summary; el título sigue escapado y el binding no cambia. Para instalaciones anteriores, el adaptador local
+inserta el mismo espacio de badge en el summary inicial mediante tagQuery, sin modificar el binding ni reinstanciar
+las cajas. Los contadores cambian en outputs hijos del encabezado.
+
+Verificación del ajuste: pruebas R de presentación, identidad, permisos y estructura; cuatro recorridos Chromium
+vigentes de consulta, histórico/RFM, precios y Ficha. El recorrido de Ficha se ejecuta con la API nueva y con la
+anterior, verificando seis IDs únicos, nodos DOM persistentes, estado abierto/cerrado, binding Shiny y teclado,
+colores, bordes, alturas por fila, separador y vista móvil. La referencia CREPES usa datos ficticios: cuatro hijas
+visibles y cero complementos; otro contacto permite verificar búsquedas y detalle con datos. No se accedió a staging.
