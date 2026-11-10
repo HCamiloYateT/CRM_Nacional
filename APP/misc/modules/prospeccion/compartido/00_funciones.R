@@ -581,11 +581,8 @@ cargar_pipeline_embudo <- function(cargar = CargarDatos) {
   acciones <- c(acciones, Consultar = "Consulta individual")
   config <- c(.CONFIG_ACCIONES_EMBUDO, list(Consultar = list(icono = "address-card", color = "#495057")))
   menu <- racafeModulos::MenuAccionesUI(as.character(fila$CodContacto), acciones, config = config, ns = ns)
-  menu$children[[1]] <- shiny::tagAppendChild(menu$children[[1]], " Acciones")
+  menu$children[[1]] <- shiny::tagAppendAttributes(menu$children[[1]], `aria-label` = "Acciones")
   menu$children[[2]] <- shiny::tagAppendAttributes(menu$children[[2]], class = "kpb-actions-panel")
-  menu <- htmltools::tagQuery(menu)$find(".rm-action-option")$each(function(boton, i) {
-    shiny::tagAppendChild(boton, paste0(" ", boton$attribs$title))
-  })$allTags()
   destinos <- .kb_destinos(fila$Etapa, texto("EtapaPreDescarte", "CONTACTO"))
   div(class = "kpb-card kpb-card-compact", draggable = "true", `data-cod-contacto` = fila$CodContacto,
     `data-kb-source` = fila$Etapa, `data-kb-targets` = paste(destinos, collapse = " "),
