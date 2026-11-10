@@ -682,7 +682,9 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
 
 ## Contactos clientes ----
 .asegurar_contactos_clientes <- function(clientes, usuario = "SISTEMA",
-    cargar = racafeBD::CargarDatos, registrar = .crm_registrar_cliente_historico) {
+    cargar = racafeBD::CargarDatos, registrar = .crm_registrar_cliente_historico,
+    migrar = .crm_migrar_esquema_historia) {
+  migrar(aplicar = TRUE)
   contactos <- cargar("CRMNALCONTACTO")
   .crm_exigir_marcas_historia(contactos)
   contactos <- .crm_marcas_historia(contactos)
