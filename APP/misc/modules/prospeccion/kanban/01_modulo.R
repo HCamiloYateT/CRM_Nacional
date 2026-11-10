@@ -17,7 +17,7 @@
 KanbanEmbudoUI <- function(id) {
   ns <- NS(id)
   columnas <- lapply(ETAPAS_EMBUDO, function(etapa) {
-    cerrada <- etapa == "DESCARTADO"
+    cerrada <- FALSE
     toggle <- shiny::tagAppendAttributes(racafeForms::racafeButton(paste0("colapsar_", etapa), NULL,
       icon = if (cerrada) "chevron-right" else "chevron-down", variant = "ghost", size = "xs", ns = ns,
       title = paste(if (cerrada) "Expandir" else "Colapsar", etapa)),
@@ -29,7 +29,8 @@ KanbanEmbudoUI <- function(id) {
       color = COLOR_ETAPA_EMBUDO[[etapa]], acciones = acciones,
       badges = if (etapa %in% c("CONTACTO", "LEAD")) uiOutput(ns(paste0("alerta_ui_", etapa)), inline = TRUE),
       cuerpo = tagList(racafeForms::racafeInputText(paste0("buscar_", etapa), paste("Buscar en", etapa), ns = ns),
-        uiOutput(ns(paste0("col_", etapa)))))
+        tagAppendAttributes(uiOutput(ns(paste0("col_", etapa))), class = "kb-cards")))
+    columna <- tagAppendAttributes(columna, style = paste0("--kb-stage-color:", COLOR_ETAPA_EMBUDO[[etapa]], ";"))
     contador <- tagAppendAttributes(textOutput(ns(paste0("conteo_", etapa)), inline = TRUE),
       class = "kpb-col-count")
     columna <- htmltools::tagQuery(columna)$find(".kpb-col-count")$replaceWith(contador)$allTags()
@@ -37,9 +38,18 @@ KanbanEmbudoUI <- function(id) {
       id = ns(paste0("cuerpo_", etapa)), `aria-hidden` = if (cerrada) "true" else "false")$allTags()
     div(class = paste("kpb-slot", if (cerrada) "kb-collapsed" else ""), `data-kb-stage` = etapa, columna)
   })
+  escala <- tagAppendAttributes(racafeForms::racafeButton("escalas_color", NULL, icon = "palette",
+    title = "Escalas de color", variant = "secondary", ns = ns),
+    class = "dropdown-toggle", `data-toggle` = "dropdown", `aria-haspopup` = "true", `aria-expanded` = "false")
+  leyenda <- div(class = "dropdown-menu dropdown-menu-right kb-scale-menu",
+    tags$strong("ETAPA DE LA ENTIDAD"), lapply(ETAPAS_EMBUDO, function(etapa) {
+      div(tags$span(class = "kb-scale-swatch", style = paste0("background:", COLOR_ETAPA_EMBUDO[[etapa]])), etapa)
+    }))
   racafeForms::racafeForm(variant = "plain", racafeModulos::MenuAccionesDependencies(), useShinyjs(),
     racafeForms::racafeActionBar(left = racafeForms::racafeButton("actualizar", NULL,
-      icon = "arrows-rotate", title = "Actualizar tablero", variant = "secondary", ns = ns)),
+      icon = "arrows-rotate", title = "Actualizar tablero", variant = "secondary", ns = ns),
+      right = div(class = "dropdown", escala, leyenda)),
+    .crm_nota("Clientes: NIT de facturación distintos dentro del periodo y los filtros seleccionados."),
     racafeModulos::TableroKanbanUI(id = "kpb_board", ns = ns, columnas))
 }
 KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
@@ -128,11 +138,15 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
       req(seleccion$codigo, seleccion$accion)
       x <- isolate(pipeline_filtrado())
       x <- x[as.character(x$CodContacto) %in% as.character(seleccion$codigo), , drop = FALSE]
-      if (nrow(x) != 1L || !seleccion$accion %in% .acciones_por_etapa_kanban(x$Etapa)) {
+      if (nrow(x) != 1L || !seleccion$accion %in% .acciones_por_etapa_kanban(x$Etapa) ||
+          (isTRUE(x$EsSoloFacturacion) && seleccion$accion != "Consultar")) {
         showNotification("La acción no está permitida para esta entidad o su alcance.", type = "warning")
         return(invisible(NULL))
       }
-      if (seleccion$accion == "Consultar") return(al_consultar(as.character(x$CodContacto), as.character(x$PerCod)))
+      if (seleccion$accion == "Consultar") {
+        codigo <- if (isTRUE(x$EsSoloFacturacion)) "" else as.character(x$CodContacto)
+        return(al_consultar(codigo, as.character(x$PerCod)))
+      }
       vigente <- obtener_etapa_contacto(as.character(x$CodContacto))
       if (!identical(vigente, as.character(x$Etapa))) {
         trigger_refresco_kanban()
@@ -163,7 +177,7 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
       req(movimiento$codigo, movimiento$desde, movimiento$hacia)
       x <- isolate(pipeline_filtrado())
       x <- x[as.character(x$CodContacto) %in% as.character(movimiento$codigo), , drop = FALSE]
-      if (nrow(x) != 1L || x$Etapa != movimiento$desde ||
+      if (nrow(x) != 1L || isTRUE(x$EsSoloFacturacion) || x$Etapa != movimiento$desde ||
           !movimiento$hacia %in% .kb_destinos(x$Etapa, x$EtapaPreDescarte)) {
         showNotification("Movimiento no permitido o tarjeta desactualizada.", type = "warning")
         return(invisible(NULL))
