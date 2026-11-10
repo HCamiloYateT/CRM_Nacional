@@ -474,7 +474,8 @@ racafeCore::Loadpkg(REQUIRED_PACKAGES)
           datos_raw <- datos_raw[-1L, , drop = FALSE] %>%
             dplyr::select(!dplyr::matches("^COLUMNA_[0-9]+$")) %>%
             .normalizar_base_margen() %>%
-            dplyr::mutate(ANHO = as.integer(anho$anho_num[[1L]]), CLASE = as.character(archivo$clase[[1L]]))
+            dplyr::mutate(ANHO = as.integer(anho$anho_num[[1L]]), CLASE = as.character(archivo$clase[[1L]]),
+              FECHA_CORTE_ARCHIVO = as.Date(sprintf("%04d-%02d-01", anho$anho_num[[1L]], mes$mes_num[[1L]])))
           
           datos_raw
         },
@@ -1247,6 +1248,14 @@ data_pyg <- margenes_pyg %>%
     LinNegCod = ifelse(LinNegCod == 20000L, 21000L, LinNegCod),
     FechaEmbarque = coalesce(FechaEmbarque, FecMes)
   )
+
+# Precio y fecha reales de cabecera para facturas históricas; nunca inferirlos del margen ----
+.precios_pedido <- ped %>%
+  dplyr::select(CLPdcCod = PdcCod, CLCliNit, PdcPrecioKilo, PdcFecCre) %>% dplyr::distinct() %>%
+  dplyr::group_by(CLPdcCod, CLCliNit) %>% dplyr::filter(dplyr::n() == 1L) %>% dplyr::ungroup()
+data_pyg <- data_pyg %>%
+  dplyr::select(-PdcPrecioKilo, -PdcFecCre) %>%
+  dplyr::left_join(.precios_pedido, by = c("CLPdcCod", "CLCliNit"))
 
 # Validación de pedidos ----
 .verificar_clave_unica(ped, c("PdcCod", "PdcLin"), "EXPPEDI1/EXPPEDID")

@@ -22,3 +22,9 @@ historia360 <- do.call(rbind, lapply(c(101, 102, 500:529), function(nit) {
   fila
 }))
 hechos360 <- dplyr::bind_rows(hechos_individual, historia360)
+
+# Precios reales de cabecera ficticios: conservar año anterior y referencias comerciales.
+hechos360$PdcPrecioKilo <- ifelse(hechos360$CLCliNit == 102, 12000, 10000)
+hechos360$PdcFecCre <- as.Date(hechos360$FecFact) - 2L
+hechos360$Marca <- ifelse(hechos360$CLCliNit == 102, "Marca sede", "Marca matriz")
+hechos360$MCNom <- ifelse(hechos360$CLCliNit == 102, "Referencia sede", "Referencia matriz")

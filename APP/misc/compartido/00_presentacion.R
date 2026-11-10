@@ -123,6 +123,10 @@
   argumentos <- list(...)
   if (is.null(argumentos$labels)) argumentos$labels <- unlist(.crm_etiquetas(names(datos)), use.names = TRUE)
   datos <- .crm_nits_tabla(datos, argumentos$labels)
+  datos[] <- lapply(datos, function(x) {
+    if (is.factor(x)) x <- as.character(x)
+    if (is.character(x)) gsub("convencionales", "Coproductos", x, ignore.case = TRUE) else x
+  })
   do.call(racafeShiny::racafeTableVancouver,
     c(list(data = datos, header_color = "#495057", header_width = 1.5, decimals = NULL), argumentos))
 }
@@ -223,7 +227,8 @@
     primera <- visibles[[1]]
     enlaces <- vapply(seq_len(nrow(datos)), function(i) as.character(shiny::tags$button(type = "button",
       class = "btn btn-link crm-tabla-enlace", style = "padding:0;font:inherit;color:inherit;text-align:left;",
-      onclick = on_row(indices[[i]]), as.character(datos[[primera]][[i]]))), character(1))
+      onclick = on_row(indices[[i]]),
+      gsub("convencionales", "Coproductos", as.character(datos[[primera]][[i]]), ignore.case = TRUE))), character(1))
     tabla <- gt::text_transform(tabla, locations = gt::cells_body(columns = tidyselect::all_of(primera)),
       fn = local({ texto <- enlaces; function(x) texto }))
   }
