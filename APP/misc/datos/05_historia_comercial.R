@@ -107,7 +107,10 @@ obtener_clientes_sin_contacto <- function(clientes, contactos) {
       UsuarioCrea = usuario, FechaHoraCrea = if (imputada) Sys.time() else fecha,
       UsuarioMod = usuario, FechaHoraModi = Sys.time(), EsReconstruido = TRUE,
       FuenteRegistro = "CLIENTE_HISTORICO", FechaFuente = fecha, FechaImputada = imputada)
-      DBI::dbAppendTable(con, "CRMNALCONTACTO", fila)
+      columnas <- paste(DBI::dbQuoteIdentifier(con, names(fila)), collapse = ", ")
+      valores <- vapply(fila, function(x) as.character(DBI::dbQuoteLiteral(con, x[[1]])), character(1))
+      DBI::dbExecute(con, paste0("INSERT INTO ", DBI::dbQuoteIdentifier(con, "CRMNALCONTACTO"),
+        " (", columnas, ") VALUES (", paste(valores, collapse = ", "), ")"))
       attr(fila, "Creado") <- TRUE
       fila
     }
