@@ -141,14 +141,15 @@ racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", 
 }
 
 .ruta_app <- .crm_ruta_app()
-.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/0ff7bba0b3c20572e829f52236a09a5ad4f2d53a"
+.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/c94d9c3fba3eedbc4c3fa77015b2e5499b4375ab"
 .estilos_crm <- shiny::singleton(shiny::includeCSS(paste0(.url_compartido, "/Styles/crm-nacional.css")))
 .recursos_compartidos <- shiny::tagList(
   shiny::tags$span(hidden = "hidden", `data-rf-interactions` = "true"),
   racafeForms::racafeFormsDependencies(),
   racafeModulos::MenuAccionesDependencies(),
   shiny::includeCSS(paste0(.url_compartido, "/Styles/style.css")),
-  lapply(c("scripts", "clipboard.js", "forms.js", "controlbar.js", "interactions.js"), function(archivo) {
+  lapply(c("scripts", "clipboard.js", "forms.js", "controlbar.js", "interactions.js", "crm-kanban.js"),
+    function(archivo) {
     shiny::includeScript(paste0(.url_compartido, "/Scripts/", archivo))
   }),
   .estilos_crm

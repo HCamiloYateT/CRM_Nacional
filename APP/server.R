@@ -1,5 +1,6 @@
 server <- function(input, output, session) {
   .crm_iniciar_loader(input)
+  consulta_solicitada <- reactiveVal(NULL)
   
   # Datos reactivos ----
   usuario <- reactive({
@@ -269,7 +270,11 @@ server <- function(input, output, session) {
   
   ### Prospección ----
   CargarTabUnaVez("PR_Kanban", "ui_PR_Kanban", function() KanbanEmbudoUI("Kanban"),
-                  function() KanbanEmbudo("Kanban", usuario, filtros, es_admin))
+                  function() KanbanEmbudo("Kanban", usuario, filtros, es_admin, hechos = maestro_base_comercial,
+                    al_consultar = function(codigo, nit) {
+                      consulta_solicitada(list(codigo = codigo, nit = nit, solicitud = Sys.time()))
+                      bs4Dash::updateTabItems(session, "menu_principal", selected = "IN_Consulta")
+                    }))
   
   CargarTabUnaVez("PR_Contactos", "ui_PR_Contactos", function() DetalleContactoUI("DetalleContacto"),
                   function() DetalleContacto("DetalleContacto", usuario))
@@ -351,7 +356,7 @@ server <- function(input, output, session) {
   CargarTabUnaVez("IN_Consulta", "ui_IN_Consulta", function() ConsultaIndividualUI("ConsultaIndividual"),
     function() ConsultaIndividual("ConsultaIndividual", maestro_base_comercial, clientes_raw_cache, filtros,
       usuario, es_admin, nit_ppal, cartera_financiera_r, notas_datos,
-      directorio = reactive(n_cliente), estados = data_cohortes))
+      directorio = reactive(n_cliente), estados = data_cohortes, solicitud = consulta_solicitada))
   
 }
 

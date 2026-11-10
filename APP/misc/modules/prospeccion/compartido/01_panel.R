@@ -591,8 +591,8 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
     
     contadores_retorno <- list(
       modulo_editar$actualizaciones,
-      modulo_promover$etapa,
-      modulo_descartar$etapa,
+      modulo_promover$actualizaciones,
+      modulo_descartar$actualizaciones,
       modulo_oportunidad$creaciones,
       modulo_relacion$gestiones,
       modulo_reactivar$n
