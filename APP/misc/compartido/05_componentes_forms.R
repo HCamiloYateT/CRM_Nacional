@@ -20,12 +20,14 @@
 
 # Un selector muestra opciones reales; la ausencia de selección es un estado del control.
 .crm_choices <- function(x) {
+  if (!length(x)) return(x)
   if (is.list(x)) return(lapply(x, .crm_choices))
   nombres <- names(x)
   quitar <- is.na(x) | as.character(x) == ""
   etiquetas <- if (is.null(nombres)) as.character(x) else nombres
   quitar <- quitar | toupper(trimws(etiquetas)) %in% c("NINGUNO", "NINGUNA")
   x <- x[!quitar]
+  if (!length(x)) return(x)
   names(x) <- .crm_label_comercial(if (is.null(names(x))) as.character(x) else names(x))
   x
 }
