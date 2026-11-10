@@ -792,7 +792,7 @@ DetalleClientes <- function(id, usuario) {
       refresh_trigger()
       lead_data <- .obtener_conversion_lead()
       cliente_data <- .obtener_conversion_cliente()
-      contactos <- CargarDatos("CRMNALCONTACTO") %>%
+      contactos <- CargarDatos("CRMNALCONTACTO") %>% .crm_marcas_historia() %>%
         mutate(FechaHoraCrea = as_datetime(FechaHoraCrea), Usuario = UsuarioCrea)
       rel <- tryCatch(
         CargarDatos("CRMNALRELACIONAMIENTO") %>%
@@ -850,6 +850,7 @@ DetalleClientes <- function(id, usuario) {
     clientes_activos_r <- reactive({
       universo_contactos_r() %>% filter(EsClienteActivo)
     })
+    universo_conversion_r <- reactive(filtrar_historia_comercial_real(universo_contactos_r()))
     # KPIs ----
     .pr_caja(
       "kpi_total",
@@ -863,10 +864,10 @@ DetalleClientes <- function(id, usuario) {
       footer = "Clientes cuya etapa vigente es CLIENTE y cuyo estado actual es ACTIVO."
     )
     tasa_conversion_contacto_r <- reactive({
-      mean(universo_contactos_r()$EsCliente, na.rm = TRUE)
+      mean(universo_conversion_r()$EsCliente, na.rm = TRUE)
     })
     tasa_conversion_lead_r <- reactive({
-      universo <- universo_contactos_r()
+      universo <- universo_conversion_r()
       total_leads <- sum(universo$EsLead, na.rm = TRUE)
       if (total_leads == 0) return(0)
       sum(universo$EsCliente & universo$EsLead, na.rm = TRUE) / total_leads
@@ -903,18 +904,18 @@ DetalleClientes <- function(id, usuario) {
       },
       footer = "Leads convertidos históricamente a Cliente / total de contactos que alcanzaron la etapa Lead."
     )
-    DetalleAnalisisConversionCliente("analisis_contacto_cliente", universo_contactos = universo_contactos_r,
+    DetalleAnalisisConversionCliente("analisis_contacto_cliente", universo_contactos = universo_conversion_r,
                                      usuario = usuario, tipo = "contacto_cliente")
-    DetalleAnalisisConversionCliente("analisis_lead_cliente", universo_contactos = universo_contactos_r,
+    DetalleAnalisisConversionCliente("analisis_lead_cliente", universo_contactos = universo_conversion_r,
                                      usuario = usuario, tipo = "lead_cliente")
     # Resumen por dimension ----
-    datos_usuario_r <- reactive(.resumen_dimension_cliente(universo_contactos_r(), "Usuario"))
+    datos_usuario_r <- reactive(.resumen_dimension_cliente(universo_conversion_r(), "Usuario"))
     .estilo_usuario <- .estilo_fila_total(datos_usuario_r, "Usuario")
     .crm_tabla_legacy(id = "tabla_usuario", data = datos_usuario_r, columnas = NULL,
                     col_specs = .col_specs_resumen_cliente("Usuario", "Usuario", .estilo_usuario),
                     modo_seleccion = "ninguno", id_col = "Usuario", sortable = TRUE, searchable = TRUE,
                     page_size = 10, compact = TRUE, mostrar_badge = FALSE, mostrar_nota = FALSE)
-    datos_origen_r <- reactive(.resumen_dimension_cliente(universo_contactos_r(), "Origen"))
+    datos_origen_r <- reactive(.resumen_dimension_cliente(universo_conversion_r(), "Origen"))
     .estilo_origen <- .estilo_fila_total(datos_origen_r, "Origen")
     modulo_tabla_origen <- .crm_tabla_legacy(
       id = "tabla_origen", data = datos_origen_r, columnas = NULL,
@@ -937,7 +938,7 @@ DetalleClientes <- function(id, usuario) {
     datos_det_origen_r <- reactive({
       req(origen_seleccionado())
       req(origen_seleccionado() != "TOTAL")
-      base <- universo_contactos_r()
+      base <- universo_conversion_r()
       if (identical(origen_seleccionado(), "SIN DATO")) {
         base <- base %>% filter(is.na(Origen) | Origen == "")
       } else {
@@ -950,13 +951,13 @@ DetalleClientes <- function(id, usuario) {
                     col_specs = .col_specs_resumen_cliente("DetOrigen", "Detalle Origen", .estilo_det_origen),
                     modo_seleccion = "ninguno", id_col = "DetOrigen", sortable = TRUE, searchable = TRUE,
                     page_size = 10, compact = TRUE, mostrar_badge = FALSE, mostrar_nota = FALSE)
-    datos_asesor_r <- reactive(.resumen_dimension_cliente_convertido(universo_contactos_r(), "AsesorLead"))
+    datos_asesor_r <- reactive(.resumen_dimension_cliente_convertido(universo_conversion_r(), "AsesorLead"))
     .estilo_asesor <- .estilo_fila_total(datos_asesor_r, "AsesorLead")
     .crm_tabla_legacy(id = "tabla_asesor", data = datos_asesor_r, columnas = NULL,
                     col_specs = .col_specs_resumen_cliente_convertido("AsesorLead", "Asesor", .estilo_asesor),
                     modo_seleccion = "ninguno", id_col = "AsesorLead", sortable = TRUE, searchable = TRUE,
                     page_size = 10, compact = TRUE, mostrar_badge = FALSE, mostrar_nota = FALSE)
-    datos_linnegocio_r <- reactive(.resumen_dimension_cliente_convertido(universo_contactos_r(), "LinNegocio"))
+    datos_linnegocio_r <- reactive(.resumen_dimension_cliente_convertido(universo_conversion_r(), "LinNegocio"))
     .estilo_linnegocio <- .estilo_fila_total(datos_linnegocio_r, "LinNegocio")
     .crm_tabla_legacy(
       id = "tabla_linnegocio", data = datos_linnegocio_r, columnas = NULL,
@@ -964,7 +965,7 @@ DetalleClientes <- function(id, usuario) {
       modo_seleccion = "ninguno", id_col = "LinNegocio", sortable = TRUE, searchable = TRUE,
       page_size = 10, compact = TRUE, mostrar_badge = FALSE, mostrar_nota = FALSE
     )
-    datos_segmento_r <- reactive(.resumen_dimension_cliente_convertido(universo_contactos_r(), "Segmento"))
+    datos_segmento_r <- reactive(.resumen_dimension_cliente_convertido(universo_conversion_r(), "Segmento"))
     .estilo_segmento <- .estilo_fila_total(datos_segmento_r, "Segmento")
     .crm_tabla_legacy(id = "tabla_segmento", data = datos_segmento_r, columnas = NULL,
                     col_specs = .col_specs_resumen_cliente_convertido("Segmento", "Segmento", .estilo_segmento),

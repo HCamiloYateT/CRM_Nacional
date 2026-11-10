@@ -14,7 +14,7 @@
 }
 .in_catalogo <- function(contactos, clientes, historial, vinculos, usuario, admin, filtros, hechos = NULL,
                          directorio = NULL) {
-  c <- .op_contactos_visibles(contactos, usuario, admin)
+  c <- .crm_marcas_historia(.op_contactos_visibles(contactos, usuario, admin))
   asesor <- .in_id(.gc_columna(c, "Asesor"))
   # Una entidad aún sin asesor conserva su ficha; una selección global vacía no incluye ninguna.
   permitidas <- length(filtros$asesor) > 0L & (asesor %in% filtros$asesor | is.na(asesor))
@@ -22,7 +22,7 @@
   base <- data.frame(Clave = if (nrow(c)) paste0("contacto:", .in_id(.gc_columna(c, "CodContacto"))) else character(),
     Codigo = .in_id(.gc_columna(c, "CodContacto")), Nombre = as.character(.gc_columna(c, "PerRazSoc")),
     NIT = .in_id(.gc_columna(c, "PerCod")), Principal = rep(NA_character_, nrow(c)),
-    Tipo = as.character(.gc_columna(c, "Etapa", "CONTACTO")),
+    Tipo = ifelse(c$EsReconstruido, "CLIENTE", as.character(.gc_columna(c, "Etapa", "CONTACTO"))),
     Asesor = as.character(.gc_columna(c, "Asesor")), Alcance = rep("Entidad", nrow(c)), stringsAsFactors = FALSE)
   base <- base[!is.na(base$Codigo), , drop = FALSE]
   if (anyDuplicated(base$Clave)) stop("Hay códigos de contacto duplicados. Revise el catálogo.")

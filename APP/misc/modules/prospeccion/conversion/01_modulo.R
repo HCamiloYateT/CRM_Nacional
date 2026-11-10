@@ -69,6 +69,8 @@ EmbudoConversionUI <- function(id) {
 
     .pr_panel(
       title = "Conversión Histórica",
+      .crm_nota(c("Tasas y tiempos: solo contactos y transiciones comerciales observados.",
+        "Los clientes incorporados desde la base histórica se incluyen en el estado actual, no en la conversión.")),
       width = 12, collapsible = FALSE,
       fluidRow(
         column(3, .crm_caja_output(ns("kpi_tasa_contacto_lead"))),

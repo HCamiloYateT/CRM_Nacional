@@ -4,13 +4,15 @@
 derivar_etapa_actual <- function(contactos = NULL) {
   if (is.null(contactos)) contactos <- CargarDatos("CRMNALCONTACTO")
   if (!"EtapaPreDescarte" %in% names(contactos)) contactos$EtapaPreDescarte <- NA_character_
+  contactos <- .crm_marcas_historia(contactos)
   historial <- tryCatch({
     CargarDatos("CRMNALHISTORIALETAPA") %>% mutate(FechaHora = as_datetime(FechaHora))
   }, error = function(e) data.frame(CodContacto = character(), EtapaNueva = character(),
                                     FechaHora = as.POSIXct(character())))
   ultima_transicion <- historial %>%
     group_by(CodContacto) %>%
-    filter(FechaHora == max(FechaHora)) %>%
+    filter(!is.na(FechaHora)) %>%
+    arrange(desc(FechaHora)) %>%
     slice(1) %>%
     ungroup() %>%
     select(CodContacto, EtapaUltimaTransicion = EtapaNueva)
@@ -20,6 +22,7 @@ derivar_etapa_actual <- function(contactos = NULL) {
       EtapaPreDescarte = ifelse(is.na(EtapaPreDescarte), "CONTACTO", EtapaPreDescarte),
       Etapa = case_when(
         Estado == "DESCARTADO" ~ "DESCARTADO",
+        is.na(EtapaUltimaTransicion) & EsReconstruido ~ "CLIENTE",
         is.na(EtapaUltimaTransicion) ~ "CONTACTO",
         TRUE ~ EtapaUltimaTransicion
       )
@@ -34,7 +37,8 @@ derivar_fecha_entrada_etapa <- function(contactos_con_etapa) {
                                     FechaHora = as.POSIXct(character())))
   ultima_transicion <- historial %>%
     group_by(CodContacto) %>%
-    filter(FechaHora == max(FechaHora)) %>%
+    filter(!is.na(FechaHora)) %>%
+    arrange(desc(FechaHora)) %>%
     slice(1) %>%
     ungroup() %>%
     select(CodContacto, FechaUltimaTransicion = FechaHora)
@@ -116,7 +120,8 @@ obtener_ultimo_motivo_descarte <- function() {
       filter(EtapaNueva == "DESCARTADO") %>%
       mutate(FechaHora = as_datetime(FechaHora)) %>%
       group_by(CodContacto) %>%
-      filter(FechaHora == max(FechaHora)) %>%
+      filter(!is.na(FechaHora)) %>%
+    arrange(desc(FechaHora)) %>%
       slice(1) %>%
       ungroup() %>%
       select(CodContacto, Motivo)
@@ -915,8 +920,10 @@ detectar_conversion_leads <- function(usr = "SISTEMA", facturas = fact_cliente) 
 }
 # Calcula las metricas generales usando la estructura vigente de CRMNALDESCARTE.
 calcular_metricas_embudo <- function() {
-  base_contactos <- CargarDatos("CRMNALCONTACTO")
-  contactos <- derivar_etapa_actual(base_contactos)
+  base_contactos <- .crm_marcas_historia(CargarDatos("CRMNALCONTACTO"))
+  contactos_actuales <- derivar_etapa_actual(base_contactos)
+  contactos <- contactos_actuales
+  contactos_conversion <- filtrar_historia_comercial_real(base_contactos)
   
   historial <- .cargar_embudo_seguro(
     "CRMNALHISTORIALETAPA",
@@ -1005,11 +1012,15 @@ calcular_metricas_embudo <- function() {
     descartes_etapa, "EtapaPreDescarte", "PROSPECTO"
   )
   
+  historial <- filtrar_historia_comercial_real(historial) %>%
+    filter(CodContacto %in% contactos_conversion$CodContacto)
+  leads_dat <- leads_dat %>% filter(CodContacto %in% contactos_conversion$CodContacto)
+
   # Identifica las etapas alcanzadas historicamente.
   historico_etapas <- bind_rows(
     historial %>%
       select(CodContacto, EtapaNueva, FechaHora),
-    base_contactos %>%
+    contactos_conversion %>%
       transmute(
         CodContacto,
         EtapaNueva = "CONTACTO",
@@ -1018,7 +1029,7 @@ calcular_metricas_embudo <- function() {
   ) %>%
     filter(!is.na(CodContacto), !is.na(EtapaNueva))
   
-  codigos_contacto <- unique(base_contactos$CodContacto)
+  codigos_contacto <- unique(contactos_conversion$CodContacto)
   codigos_lead <- historico_etapas %>%
     filter(EtapaNueva == "LEAD") %>%
     pull(CodContacto) %>%
@@ -1090,7 +1101,10 @@ calcular_metricas_embudo <- function() {
       values_from = Fecha
     )
   
-  tiempos <- base_contactos %>%
+  for (etapa in c("LEAD", "CLIENTE")) {
+    if (!etapa %in% names(fechas_etapa)) fechas_etapa[[etapa]] <- rep(as.POSIXct(NA), nrow(fechas_etapa))
+  }
+  tiempos <- contactos_conversion %>%
     select(CodContacto, FechaHoraCrea) %>%
     mutate(FechaHoraCrea = as_datetime(FechaHoraCrea)) %>%
     left_join(fechas_etapa, by = "CodContacto")
@@ -1146,7 +1160,7 @@ calcular_metricas_embudo <- function() {
   # Calcula la actividad registrada durante los ultimos 30 dias.
   limite_30d <- Sys.time() - lubridate::days(30)
   
-  contactos_30d <- base_contactos %>%
+  contactos_30d <- contactos_conversion %>%
     mutate(FechaHoraCrea = as_datetime(FechaHoraCrea)) %>%
     filter(FechaHoraCrea >= limite_30d) %>%
     nrow()
@@ -1175,7 +1189,7 @@ calcular_metricas_embudo <- function() {
   } else 0
   
   # Resume la conversion historica por origen.
-  conversion_por_canal <- base_contactos %>%
+  conversion_por_canal <- contactos_conversion %>%
     mutate(
       EsLead = CodContacto %in% codigos_lead,
       EsCliente = CodContacto %in% codigos_cliente,
@@ -1851,6 +1865,8 @@ tokenizar_motivos_libres <- function(cod_contacto_vec, historial_dat) {
 }
 # Construye el universo historico asegurando todos los indicadores de etapa.
 .construir_universo_historico_embudo <- function(base_contactos, historial, leads_dat) {
+  base_contactos <- .crm_marcas_historia(base_contactos)
+  historial <- filtrar_historia_comercial_real(historial)
   flags_historicos <- historial %>%
     filter(EtapaNueva %in% ETAPAS_EMBUDO) %>%
     distinct(CodContacto, EtapaNueva) %>%
@@ -1892,7 +1908,7 @@ tokenizar_motivos_libres <- function(cod_contacto_vec, historial_dat) {
       CodContacto,
       UsuarioCrea,
       Origen,
-      DetOrigen
+      DetOrigen, EsReconstruido, FuenteRegistro, FechaImputada, IncluirConversion
     ) %>%
     left_join(
       flags_historicos,
@@ -1903,11 +1919,11 @@ tokenizar_motivos_libres <- function(cod_contacto_vec, historial_dat) {
       by = "CodContacto"
     ) %>%
     mutate(
-      ContactoHistorico = TRUE,
-      LeadHistorico = coalesce(LEAD, FALSE),
-      ProspectoHistorico = coalesce(PROSPECTO, FALSE),
-      ClienteHistorico = coalesce(CLIENTE, FALSE),
-      DescartadoHistorico = coalesce(DESCARTADO, FALSE),
+      ContactoHistorico = IncluirConversion,
+      LeadHistorico = IncluirConversion & coalesce(LEAD, FALSE),
+      ProspectoHistorico = IncluirConversion & coalesce(PROSPECTO, FALSE),
+      ClienteHistorico = IncluirConversion & coalesce(CLIENTE, FALSE),
+      DescartadoHistorico = IncluirConversion & coalesce(DESCARTADO, FALSE),
       UsuarioCrea = coalesce(UsuarioCrea, "SIN DATO"),
       Origen = coalesce(Origen, "SIN DATO"),
       DetOrigen = coalesce(DetOrigen, "SIN DATO"),
@@ -1927,10 +1943,11 @@ tokenizar_motivos_libres <- function(cod_contacto_vec, historial_dat) {
       LeadHistorico,
       ProspectoHistorico,
       ClienteHistorico,
-      DescartadoHistorico
+      DescartadoHistorico, EsReconstruido, FuenteRegistro, FechaImputada, IncluirConversion
     )
 }
 .resumen_dimension_embudo <- function(dat, dimension ) {
+  dat <- filtrar_historia_comercial_real(dat)
   resumen <- dat %>%
     group_by(
       Dim = .data[[dimension]]

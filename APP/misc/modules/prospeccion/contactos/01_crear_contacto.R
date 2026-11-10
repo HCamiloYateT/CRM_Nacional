@@ -315,6 +315,9 @@ CrearContacto <- function(id, usuario) {
         )
       
       tryCatch({
+        columnas <- names(CargarDatos("CRMNALCONTACTO"))
+        marcas <- list(EsReconstruido = FALSE, FuenteRegistro = "CRM", FechaImputada = FALSE)
+        for (nombre in intersect(names(marcas), columnas)) fila[[nombre]] <- marcas[[nombre]]
         AgregarDatos(fila, "CRMNALCONTACTO")
         removeModal()
         .LimpiarValidacion()
