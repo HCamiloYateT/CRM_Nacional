@@ -135,10 +135,6 @@ del alcance. Esas cifras no están fijadas en producción. `tests/test-ficha.cjs
 móvil de 390 px, teclado, cambio de cliente/línea, visibilidad y casos sin presupuesto y con varias metas.
 `tests/test_ficha_presentacion.R` comprueba datos parciales, formato, timestamp, estados, vacíos y metas por fila.
 
-`tests/test-client-detail.cjs` corresponde al modal del header y a los estilos de Vancouver. No valida la pestaña
-Ficha; sus aserciones se conservan. Los recorridos de Consulta Individual, consulta360 y precios siguen cubriendo
-las tablas, permisos y cálculos de las otras pestañas.
-
 Resultado de verificación del rediseño: pruebas R de presentación, consulta y estructura aprobadas; recorridos
 `test-ficha.cjs`, `test-consulta360.cjs`, `test-consulta-individual.cjs` y `test-perfil-precios.cjs` aprobados con fuentes
 ficticias. Se revisaron capturas de escritorio y móvil. No se accedió a los datos reales de CREPES ni a producción.

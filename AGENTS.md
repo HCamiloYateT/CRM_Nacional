@@ -47,6 +47,7 @@
 ## Documentación y comunicación
 
 - Crear o actualizar documentación únicamente por solicitud expresa.
+- Informar la rama de trabajo y los casos dudosos conservados al entregar una limpieza.
 - Evitar subagentes para tareas simples y mantener los avances breves, centrados en hallazgos, decisiones o bloqueos.
 - Usar español técnico y directo. Conservar literales los comandos, rutas, identificadores y errores relevantes.
 - Si se pide un ajuste puntual, entregar el fragmento exacto. Si se pide el script completo, entregarlo completo.

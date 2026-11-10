@@ -156,8 +156,4 @@ resumen operativo, conversión de leads y formularios con datos reales. El repos
 | `APP/server.R` | Modificado |
 | `APP/ui.R` | Revisado; conserva implementación |
 | `DataPrep.R` | Modificado |
-| `tests/check_ui.R` | Revisado; conserva implementación |
-| `tests/client-detail/app.R` | Revisado; conserva implementación |
 | `tests/helpers.R` | Revisado; conserva implementación |
-| `tests/kpi-actions/app.R` | Revisado; conserva implementación |
-| `tests/ui/app.R` | Revisado; conserva implementación |
