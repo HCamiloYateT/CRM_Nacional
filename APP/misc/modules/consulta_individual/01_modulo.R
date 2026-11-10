@@ -12,7 +12,8 @@ ConsultaIndividualUI <- function(id) {
 }
 ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin, nit_mapa,
                                cartera = function() NULL, tareas = function() data.frame(),
-                               cargar = racafeBD::CargarDatos, directorio = function() data.frame()) {
+                               cargar = racafeBD::CargarDatos, directorio = function() data.frame(),
+                               estados = function() data.frame()) {
   shiny::moduleServer(id, function(input, output, session) {
     revision <- shiny::reactiveVal(0L)
     revision_modelos <- shiny::reactiveVal(0L)
@@ -60,10 +61,20 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     presupuesto_ficha <- shiny::reactive(.in_presupuesto(metas_anuales(), entidad()))
     antiguedad_ficha <- shiny::reactive(.in_antiguedad(contexto_crm(), datos_cliente(),
       contactos(), historico(), periodo()[[2]]))
+    estado_comercial <- shiny::reactive({
+      revision()
+      if (entidad()$Tipo != "CLIENTE" && !nrow(historia())) return(NULL)
+      tryCatch(.in_clasificacion_cliente(estados(), historia(), metas_anuales(), entidad(), periodo()[[2]],
+        principal = familia()$principal), error = function(e) {
+          message("[Consulta individual · estados] ", conditionMessage(e))
+          list(datos = data.frame(), mes = .gc_mes(periodo()[[2]]), error = TRUE)
+        })
+    })
     output$identidad <- .crm_render_ui({
       x <- entidad()
       shiny::tagList(.in_ficha_identidad(x, contexto_crm(), contactos(), familia(),
-        .in_estado_presupuesto(metas_anuales(), x, periodo()[[2]])),
+        .in_estado_presupuesto(metas_anuales(), x, periodo()[[2]]),
+        .in_clasificacion_badges(estado_comercial(), x)),
         if (x$VinculoEnRevision) .crm_nota("Hay varios NIT vinculados. Revise el vínculo de facturación."))
     })
     tabs_disponibles <- shiny::reactive({
@@ -206,8 +217,8 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       .in_ficha_crm_registros(contexto_crm(), contactos())))
     output$presupuesto_ficha <- .crm_render_ui(.in_ficha_presupuesto_ui(presupuesto_ficha(),
       .in_estado_presupuesto(metas_anuales(), entidad(), periodo()[[2]]),
-      .crm_tabla_ui(session$ns("presupuesto"), searchable = FALSE)))
-    output[["antiguedad-tabla"]] <- .crm_render_ui(.in_ficha_antiguedad_ui(antiguedad_ficha()))
+      .crm_tabla_ui(session$ns("presupuesto"), searchable = FALSE), ns = session$ns))
+    output[["antiguedad-tabla"]] <- .crm_render_ui(.in_ficha_antiguedad_ui(antiguedad_ficha(), ns = session$ns))
     output[["contacto_sistema-tabla"]] <- .crm_render_ui(shiny::tags$div(id = session$ns("geografia-tabla"),
       .in_ficha_contacto_ui(datos_cliente())))
     output[["familia-tabla"]] <- .crm_render_ui(.in_ficha_familia_ui(familia()))

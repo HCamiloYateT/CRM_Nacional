@@ -122,7 +122,7 @@ con varias se conserva el orden y el detalle por registro, sin sumar ni escoger 
 Los valores desconocidos se muestran como «Sin dato», y un cero real se mantiene. El formato de fechas y cifras
 se aplica al HTML; el timestamp de creación del contacto conserva su precisión en la fuente.
 
-Las cuentas relacionadas se abren inicialmente con la cuenta padre primero cuando es visible. El contador usa
+Las cuentas relacionadas inician colapsadas y muestran primero la cuenta padre cuando es visible. El contador usa
 las hijas del catálogo autorizado. Los seis registros complementarios se agrupan en un desplegable inicialmente
 cerrado: si todos están vacíos se muestra un solo aviso. Una fuente caída se distingue de una fuente vacía.
 Las seis cajas visibles usan `racafeShiny::racafeCollapsible` y se montan una sola vez. Sus contenidos y badges
@@ -149,10 +149,9 @@ Vancouver falla antes del recorrido del modal. No se atribuye a Ficha ni se pres
 
 ## Ajuste visual de las cajas corporativas
 
-Las cuatro cajas principales forman una cuadrícula 2 × 2. Cada caja usa borde corporativo rojo de 1 px y fondo
-neutro. Las abiertas igualan su altura por fila; la línea vertical queda en el espacio entre columnas y desaparece
-en móvil. Cinco cajas se abren inicialmente y Registros complementarios queda cerrada. Los valores principales
-conservan racafeMetric sin marcos interiores; las metas muestran explícitamente su periodicidad mensual.
+Las seis cajas forman una cuadrícula de tres filas y dos columnas. Las cajas usan el contenedor nativo sin borde rojo exterior. Las abiertas igualan su altura por fila; la línea vertical queda en el espacio entre columnas y desaparece
+en móvil. Las cuatro primeras cajas abren inicialmente; Cuentas relacionadas y Registros complementarios quedan cerradas. Los valores principales
+usan cajaValor_ui de racafeModulos como tarjetas informativas sin botones; las metas muestran explícitamente su periodicidad mensual.
 
 NIT y asesor se muestran en una línea secundaria. Los badges usan verde suave para activo, azul suave para cliente
 y presupuesto, rosado suave para padre, gris para hija y atributos, y ámbar para revisión. El nombre de la cuenta
@@ -174,3 +173,30 @@ vigentes de consulta, histórico/RFM, precios y Ficha. El recorrido de Ficha se 
 anterior, verificando seis IDs únicos, nodos DOM persistentes, estado abierto/cerrado, binding Shiny y teclado,
 colores, bordes, alturas por fila, separador y vista móvil. La referencia CREPES usa datos ficticios: cuatro hijas
 visibles y cero complementos; otro contacto permite verificar búsquedas y detalle con datos. No se accedió a staging.
+
+
+## Grid y clasificación comercial mensual
+
+Las seis secciones siguen usando racafeShiny::racafeCollapsible, sin borde exterior rojo, en tres filas de dos
+columnas. Cuentas relacionadas y Registros complementarios comparten la última fila y comienzan colapsadas;
+conservan su estado al cambiar de cliente. En móvil se apilan. Las cuatro cifras de antigüedad/presupuesto utilizan
+`racafeModulos::cajaValor_ui`, exportada por la versión instalada, en modo informativo (`mostrar_kpi = FALSE`),
+con valor visual en detalle y sin botón. Esto permite mostrar edades en años/meses sin forzarlas a un formato numérico.
+Se conserva el acento neutro de borde y las notas externas. Cero/una/varias metas mantienen su tratamiento previo.
+
+El encabezado diferencia estado del registro CRM de estado comercial. El nuevo argumento opcional `estados`
+recibe el mismo `data_cohortes` que alimenta el panel aprobado de Cohortes. Para cada unidad comercial visible
+(cuenta principal y línea) se lee `EstadoPanel` del mes del corte del controlbar, con la última observación disponible
+hasta ese corte. Se muestran Activo, Inactivo o Cliente nuevo; para hijas se identifica en el hover la cuenta principal.
+NUEVO conserva la regla vigente del panel, incluida su propagación anual: el badge lo ubica en el mes consultado,
+sin redefinirlo como primera compra. No se deduce actividad de ventas ni se arrastran estados de otros meses.
+
+Si falta clasificación se muestra Sin clasificación/Sin dato; si hay estados contradictorios en la misma fecha,
+Requiere revisión. Si el proveedor falla, Clasificación comercial no disponible y el resto de la ficha sigue funcionando.
+Se conservan únicamente las unidades visibles del historial/metas de la entidad y de su cuenta principal actual.
+El argumento es opcional para conservar los consumidores existentes del módulo. No cambia el cálculo de Cohortes.
+
+Validación adicional: `tests/test_estado_comercial_individual.R` prueba los tres estados, unidad de la hija,
+mes ausente, contradicciones, corte futuro y otra línea; el recorrido `test-ficha.cjs` comprueba la grid 3 × 2,
+cuatro cajas de racafeModulos sin acciones, dos secciones cerradas y badges mensuales. Validación local con fixtures;
+no se accedió a staging ni se ejecutó ETL.

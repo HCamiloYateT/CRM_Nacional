@@ -349,7 +349,8 @@ server <- function(input, output, session) {
   ### Consulta Individual ----
   CargarTabUnaVez("IN_Consulta", "ui_IN_Consulta", function() ConsultaIndividualUI("ConsultaIndividual"),
     function() ConsultaIndividual("ConsultaIndividual", maestro_base_comercial, clientes_raw_cache, filtros,
-      usuario, es_admin, nit_ppal, cartera_financiera_r, notas_datos, directorio = reactive(n_cliente)))
+      usuario, es_admin, nit_ppal, cartera_financiera_r, notas_datos,
+      directorio = reactive(n_cliente), estados = data_cohortes))
   
 }
 

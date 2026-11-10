@@ -11,6 +11,7 @@ for (ruta in c("compartido/00_presentacion.R", "compartido/01_analitica_comercia
   "modules/encabezado/02_notificaciones_tareas.R", "modules/consulta_individual/00_datos.R",
   "modules/consulta_individual/01_modulo.R", "modules/consulta_individual/02_perfil_analitico.R",
   "modules/consulta_individual/03_precios_pedidos.R", "modules/consulta_individual/04_ficha_presentacion.R",
+  "modules/consulta_individual/05_estado_comercial.R", "modules/cohortes_clientes/estados/00_datos.R",
   "modules/generalidades/indicadores_mercado/00_constantes.R",
   "modules/generalidades/indicadores_mercado/00_funciones.R",
   "modules/productos/compartido/00_funciones.R",
@@ -57,7 +58,8 @@ server <- function(input, output, session) {
     mapa <- data.frame(PerCod = c(101, 102, 303, .ficha_nits),
       CliNitPpal = c(101, 101, 303, rep(.ficha_nit, length(.ficha_nits))))
     ConsultaIndividual("consulta", reactive(hechos360), reactive(clientes_individual), f,
-      reactive("ANA"), reactive(FALSE), mapa, cargar = cargar, directorio = reactive(directorio360))
+      reactive("ANA"), reactive(FALSE), mapa, cargar = cargar, directorio = reactive(directorio360),
+      estados = reactive(estados_ficha))
   }), local)
 }
 shinyApp(ui, server)

@@ -32,3 +32,6 @@ directorio360 <- dplyr::bind_rows(directorio360, .ficha_directorio)
   CRMNALDIRECTORIOEMPRESARIAL = data.frame(CodContacto = "C1", CorreoGeneral = "hola@example.test"),
   CRMNALDIRECTORIOTELEFONO = data.frame(CodContacto = c("C1", "C1", "C3"),
     Telefono = c("6011234567", "3001234567", "NO VISIBLE")))
+
+estados_ficha <- dplyr::bind_rows(estados_ficha, data.frame(CliNitPpal = .ficha_nit,
+  LinNegCod = 21000, FecProceso = as.Date("2026-11-01"), EstadoPanel = "ACTIVO"))
