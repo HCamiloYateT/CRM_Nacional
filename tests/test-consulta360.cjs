@@ -11,7 +11,7 @@ const assert = require('node:assert/strict');
     const idle = () => page.waitForFunction(() => window.Shiny && Shiny.shinyapp.isConnected() &&
       !document.documentElement.classList.contains('shiny-busy') &&
       (!document.querySelector('#rsh-loader-host') || document.querySelector('#rsh-loader-host').hidden));
-    await page.locator('#consulta-ficha-tabla .gt_table').waitFor(); await idle();
+    await page.locator('#consulta-identidad h4').waitFor(); await idle();
     const elegir = async nit => {
       await page.evaluate(v => {$('#consulta-entidad').selectpicker('val', v).trigger('change');}, nit);
       await idle();
@@ -21,11 +21,11 @@ const assert = require('node:assert/strict');
     assert.match(await page.locator('#consulta-identidad').innerText(), /Con presupuesto 2026/);
     assert.match(await page.locator('#consulta-identidad').innerText(), /Cuenta hija de CASA MATRIZ/);
     await page.locator('#consulta-contenido a[data-value="Ficha"]').click();
-    await page.locator('#consulta-contacto_sistema-tabla .gt_table').waitFor();
+    await page.locator('#consulta-contacto_sistema-tabla .rf-info-item').first().waitFor();
     const contacto = await page.locator('#consulta-contacto_sistema-tabla').innerText();
     assert.match(contacto, /222222/); assert(!/111111/.test(contacto));
     assert.match(await page.locator('#consulta-geografia-tabla').innerText(), /Medellín/);
-    assert.match(await page.locator('#consulta-antiguedad-tabla').innerText(), /2015-06-01/);
+    assert.match(await page.locator('#consulta-antiguedad-tabla').innerText(), /01\/06\/2015/);
     assert.match(await page.locator('#consulta-antiguedad-tabla').innerText(), /11 años/);
     await page.locator('#consulta-contenido a[data-value="Potencial y oportunidades"]').click();
     await page.locator('#consulta-oportunidades-tabla').evaluate(el=>el.closest('details').open=true);
@@ -63,7 +63,7 @@ const assert = require('node:assert/strict');
     await page.waitForFunction(() => document.querySelector('#consulta-identidad').innerText.includes('Sin presupuesto'));
     await page.setViewportSize({width: 390, height: 844}); await idle();
     await page.locator('#consulta-contenido a[data-value="Ficha"]').click();
-    await page.locator('#consulta-antiguedad-tabla .gt_table').waitFor();
+    await page.locator('#consulta-antiguedad-tabla .rf-metric').first().waitFor();
     assert.deepEqual(errors, []);
     await page.screenshot({path: '/tmp/consulta360-final.png', fullPage: true});
     console.log('OK: presupuesto, familia, contacto/geografía, antigüedad, historia anterior, RFM/CLV por hija y venta cruzada.');

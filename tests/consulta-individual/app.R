@@ -10,7 +10,7 @@ for (ruta in c("compartido/00_presentacion.R", "compartido/01_analitica_comercia
   "modules/gestion_comercial/fidelidad_riesgo/00_modelos.R", "modules/gestion_comercial/cartera/00_datos.R",
   "modules/encabezado/02_notificaciones_tareas.R", "modules/consulta_individual/00_datos.R",
   "modules/consulta_individual/01_modulo.R", "modules/consulta_individual/02_perfil_analitico.R",
-  "modules/consulta_individual/03_precios_pedidos.R",
+  "modules/consulta_individual/03_precios_pedidos.R", "modules/consulta_individual/04_ficha_presentacion.R",
   "modules/generalidades/indicadores_mercado/00_constantes.R",
   "modules/generalidades/indicadores_mercado/00_funciones.R",
   "modules/productos/compartido/00_funciones.R",
@@ -24,7 +24,9 @@ sys.source(file.path(root, "tests/fixtures/consulta_individual.R"), contexto)
 sys.source(file.path(root, "tests/fixtures/consulta360.R"), contexto)
 sys.source(file.path(root, "tests/fixtures/cartera.R"), contexto)
 shiny::addResourcePath("individual-assets", file.path(root, "APP/www"))
-ui <- with(contexto, shiny::tagList(racafeForms::racafeFormsDependencies(), shinyjs::useShinyjs(),
+ui <- with(contexto, shiny::tagList(racafeForms::racafeFormsDependencies(),
+    racafeForms::racafeSharedAssets(system.file("gallery-assets", package = "racafeForms"), global_css = FALSE),
+    shinyjs::useShinyjs(),
   tags$head(tags$link(rel = "stylesheet", href = "individual-assets/crm-presentacion.css"),
     tags$script(src = "individual-assets/crm-presentacion.js")), .crm_loader_ui(show_logo = FALSE),
   racafeForms::racafeFormRow(columns = 3,

@@ -57,16 +57,13 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     valores <- shiny::reactive(.in_resumen(ejecucion()))
     historico <- shiny::reactive(.in_facturacion_historica(historia(), periodo()[[2]]))
     datos_cliente <- shiny::reactive(.in_datos_cliente(entidad(), familia(), directorio(), historia()))
+    presupuesto_ficha <- shiny::reactive(.in_presupuesto(metas_anuales(), entidad()))
+    antiguedad_ficha <- shiny::reactive(.in_antiguedad(contexto_crm(), datos_cliente(),
+      contactos(), historico(), periodo()[[2]]))
     output$identidad <- .crm_render_ui({
       x <- entidad()
-      badge <- function(texto, clase = "") racafeForms::racafeStatusBadge(texto, variant = "neutral")
-      shiny::tagList(shiny::h4(x$Nombre), shiny::tags$div(class = "crm-identidad-badges",
-        badge(paste("Tipo:", x$Tipo), "badge-tipo"), badge(paste("Vista:", x$Alcance)),
-        badge(paste("NIT", dplyr::coalesce(x$NIT, "sin registrar"))),
-        lapply(strsplit(dplyr::coalesce(x$Asesor, "Sin asesor"), "|", fixed = TRUE)[[1]],
-          function(asesor) badge(paste("Asesor:", trimws(asesor)))),
-        badge(.in_estado_presupuesto(metas_anuales(), entidad(), periodo()[[2]])),
-        badge(familia()$relacion)),
+      shiny::tagList(.in_ficha_identidad(x, contexto_crm(), contactos(), familia(),
+        .in_estado_presupuesto(metas_anuales(), x, periodo()[[2]])),
         if (x$VinculoEnRevision) .crm_nota("Hay varios NIT vinculados. Revise el vínculo de facturación."))
     })
     output$contenido <- .crm_render_ui({
@@ -82,22 +79,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       seleccion <- shiny::isolate(input$detalle_tabs)
       if (length(seleccion) != 1L || !seleccion %in% opciones) seleccion <- "Ficha"
       .crm_tabs(
-        tabPanel("Ficha", shiny::uiOutput(session$ns("alcance_crm")),
-          .crm_tabla_ui(session$ns("ficha"), "Registro CRM asociado", searchable = FALSE),
-          .crm_tabla_ui(session$ns("antiguedad"), "Antigüedad y relación comercial", searchable = FALSE),
-          .crm_tabla_ui(session$ns("contacto_sistema"), "Datos de contacto del cliente"),
-          .crm_tabla_ui(session$ns("geografia"), "Ubicación del cliente"),
-          .crm_tabla_ui(session$ns("familia"), "Cuenta padre y cuentas relacionadas visibles"),
-          .crm_tabla_ui(session$ns("presupuesto"), "Presupuesto y metas de la cuenta"),
-          if (crm) shiny::tagList(
-            .in_panel_ui("directorio", "Directorio empresarial", session$ns),
-            .in_panel_ui("telefonos", "Teléfonos", session$ns),
-            .in_panel_ui("personas", "Personas de contacto", session$ns),
-            .in_panel_ui("redes", "Redes sociales", session$ns),
-            .in_panel_ui("ubicaciones", "Ubicaciones", session$ns),
-            .in_panel_ui("sucursales", "Sucursales", session$ns)) else {
-              .crm_nota("Para consultar directorio y gestiones propias, seleccione una entidad del CRM.")
-            }),
+        tabPanel("Ficha", .in_ficha_ui(session$ns)),
         if (crm) tabPanel("Gestión y seguimiento",
           shiny::uiOutput(session$ns("alcance_seguimiento")),
           .in_panel_ui("gestiones", "Gestiones realizadas", session$ns),
@@ -198,7 +180,21 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
         paste(unique(stats::na.omit(as.character(v))), collapse = " | ")
       }, character(1)))
     })
-    .crm_vancouver_server("ficha", ficha, searchable = FALSE)
+    output[["ficha-tabla"]] <- .crm_render_ui(.in_ficha_crm_ui(
+      .in_ficha_crm_registros(contexto_crm(), contactos())))
+    output$presupuesto_ficha <- .crm_render_ui(.in_ficha_presupuesto_ui(presupuesto_ficha(),
+      .in_estado_presupuesto(metas_anuales(), entidad(), periodo()[[2]]),
+      .crm_tabla_ui(session$ns("presupuesto"), searchable = FALSE)))
+    output[["antiguedad-tabla"]] <- .crm_render_ui(.in_ficha_antiguedad_ui(antiguedad_ficha()))
+    output[["contacto_sistema-tabla"]] <- .crm_render_ui(shiny::tags$div(id = session$ns("geografia-tabla"),
+      .in_ficha_contacto_ui(datos_cliente())))
+    output[["familia-tabla"]] <- .crm_render_ui(.in_ficha_familia_ui(familia()))
+    output$familia_contador <- .crm_render_ui(racafeForms::racafeStatusBadge(
+      paste(length(familia()$hijos), if (length(familia()$hijos) == 1L) "cuenta hija visible" else {
+        "cuentas hijas visibles"
+      }), variant = "neutral"))
+    complementos_ficha <- shiny::reactive(.in_ficha_complementos(fuentes(), contexto_crm()))
+    output$complementarios <- .crm_render_ui(.in_ficha_complementos_ui(complementos_ficha(), session$ns))
     for (nombre in names(.IN_FUENTES)) local({
       clave <- nombre
       .in_conteo(output, clave, shiny::reactive(.in_detalle_crm(fuentes()[[clave]], contexto_crm(),
@@ -221,9 +217,12 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     .crm_vancouver_server("tareas", tareas_entidad)
     .in_conteo(output, "tareas", tareas_entidad)
     .gc_tarjetas_server(.IN_CAJAS, valores, list(sacos = "numero", margen = "dinero"))
-    .crm_vancouver_server("presupuesto", shiny::reactive(.in_presupuesto(metas_anuales(), entidad())),
-      col_labels = c(PresupuestoEnRevision = "Requiere revisión del presupuesto"),
-      col_specs = list(PresupuestoEnRevision = list(cell = function(x) {
+    .crm_vancouver_server("presupuesto", presupuesto_ficha,
+      col_labels = c(MetaMensualSacos = "Meta mensual · sacos 70 kg", MetaMensualMargen = "Meta mensual · margen COP",
+        FecProceso = "Actualización", PresupuestoEnRevision = "Revisión del presupuesto"),
+      col_specs = list(MetaMensualSacos = list(cell = .in_ficha_numero),
+        MetaMensualMargen = list(cell = function(x) .in_ficha_numero(x, moneda = TRUE)),
+        PresupuestoEnRevision = list(cell = function(x) {
         if (is.na(x)) "Sin información" else if (x) "Sí" else "No"
       })))
     productos <- shiny::reactive({
@@ -354,15 +353,6 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
         plotly::layout(title = list(text = "Compras mensuales", font = list(size = 16)),
           xaxis = list(title = "Mes"), yaxis = list(title = "Sacos 70 kg"), font = list(size = 12))
     })
-    .crm_vancouver_server("familia", shiny::reactive(familia()$cuentas),
-      col_labels = c(Relacion = "Relación con la cuenta padre"))
-    .crm_vancouver_server("antiguedad", shiny::reactive(.in_antiguedad(contexto_crm(), datos_cliente(),
-      contactos(), historico(), periodo()[[2]])), searchable = FALSE)
-    .crm_vancouver_server("contacto_sistema", datos_cliente,
-      columnas = c("NIT", "Cuenta", "Contacto", "Telefono", "Correo"))
-    .crm_vancouver_server("geografia", datos_cliente,
-      columnas = c("NIT", "Cuenta", "Direccion", "Ciudad", "Departamento", "Region", "Pais"),
-      col_labels = c(Region = "Región", Pais = "País"))
     cronologia <- shiny::reactive(.in_cronologia(contexto_crm(), contactos(), fuentes(), periodo()[[2]]))
     .in_conteo(output, "cronologia", cronologia)
     .crm_vancouver_server("cronologia", cronologia,

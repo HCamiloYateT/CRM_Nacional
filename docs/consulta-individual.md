@@ -104,3 +104,44 @@ clasificación anterior. El detalle muestra la fecha utilizada. El siguiente ETL
 Verificación: `tests/test_precios_segmentos.R` comprueba precios, indicadores del día exacto, snapshots recientes,
 labels y enriquecimiento ETL sin duplicación. `tests/test-perfil-precios.cjs` recorre los paneles, conteos, referencias,
 comparación y Market Basket con fuentes ficticias y una versión anterior instalada de racafeForms.
+
+## Rediseño de Ficha
+
+El punto de entrada vigente es `ConsultaIndividual` en `IN_Consulta`. La nueva presentación está aislada en
+`04_ficha_presentacion.R`; el servidor conserva argumentos, retorno, fuentes, filtros y cálculos. Se conservan
+los IDs de salida `ficha-tabla`, `antiguedad-tabla`, `contacto_sistema-tabla`, `geografia-tabla`, `familia-tabla`
+y la tabla de presupuesto. Las pruebas que esperaban una tabla GT para los bloques informativos ahora comprueban
+sus componentes corporativos; las tablas operativas de las demás pestañas se conservan.
+
+La ficha presenta razón social, NIT de facturación, asesor, estado CRM, tipo, relación y disponibilidad de presupuesto
+sin duplicar el encabezado. «Activo en CRM» requiere un estado ACTIVO explícito del registro propio (o de los
+registros visibles de la vista consolidada); una hija con seguimiento heredado no obtiene ese estado por su padre.
+
+Dos filas adaptables muestran antigüedad/metas y contacto/registro CRM. Con una meta se destacan sus dos cifras;
+con varias se conserva el orden y el detalle por registro, sin sumar ni escoger una cifra para el encabezado.
+Los valores desconocidos se muestran como «Sin dato», y un cero real se mantiene. El formato de fechas y cifras
+se aplica al HTML; el timestamp de creación del contacto conserva su precisión en la fuente.
+
+Las cuentas relacionadas se abren inicialmente con la cuenta padre primero cuando es visible. El contador usa
+las hijas del catálogo autorizado. Los seis registros complementarios se agrupan en un desplegable inicialmente
+cerrado: si todos están vacíos se muestra un solo aviso. Una fuente caída se distingue de una fuente vacía.
+El adaptador corporativo usa `racafeDisclosure` cuando está exportado y conserva compatibilidad con versiones
+anteriores mediante el panel corporativo y un `details` nativo accesible con teclado. El CSS añadido solo afecta
+las clases de la ficha y de su encabezado.
+
+`tests/fixtures/ficha.R` reproduce la referencia CREPES con información ficticia: 960 sacos y $235.200.000 COP al
+mes, edades de 23 años y 3 meses y de 5 años y 7 meses al corte de prueba, cuatro hijas visibles y una quinta fuera
+del alcance. Esas cifras no están fijadas en producción. `tests/test-ficha.cjs` verifica escritorio de 1440 px,
+móvil de 390 px, teclado, cambio de cliente/línea, visibilidad y casos sin presupuesto y con varias metas.
+`tests/test_ficha_presentacion.R` comprueba datos parciales, formato, timestamp, estados, vacíos y metas por fila.
+
+`tests/test-client-detail.cjs` corresponde al modal del header y a los estilos de Vancouver. No valida la pestaña
+Ficha; sus aserciones se conservan. Los recorridos de Consulta Individual, consulta360 y precios siguen cubriendo
+las tablas, permisos y cálculos de las otras pestañas.
+
+Resultado de verificación del rediseño: pruebas R de presentación, consulta y estructura aprobadas; recorridos
+`test-ficha.cjs`, `test-consulta360.cjs`, `test-consulta-individual.cjs` y `test-perfil-precios.cjs` aprobados con fuentes
+ficticias. Se revisaron capturas de escritorio y móvil. No se accedió a los datos reales de CREPES ni a producción.
+`test-client-detail.cjs` se ejecutó sin cambiar sus aserciones: falla en «Línea roja continua de 1px bajo todos los
+encabezados». El mismo fallo se reprodujo contra la base `c0d4bde` de main, con `gt 0.7.0`; esta comprobación de
+Vancouver falla antes del recorrido del modal. No se atribuye a Ficha ni se presenta como una prueba aprobada.
