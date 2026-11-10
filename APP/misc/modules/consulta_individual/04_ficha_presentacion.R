@@ -199,7 +199,7 @@
     shiny::tags$style(shiny::HTML(".in-ficha-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
       gap:20px 32px;position:relative;align-items:start;margin-bottom:20px;}
       .in-ficha-grid::before{content:'';position:absolute;width:1px;left:50%;top:0;bottom:0;background:#DA291C;}
-      .in-ficha .in-ficha-caja{border:0;border-radius:0;background:transparent;margin:0 0 16px;
+      .in-ficha .in-ficha-caja{border:1px solid #dee2e6;border-radius:0;background:transparent;margin:0 0 16px;
         padding:0;min-width:0;box-sizing:border-box;}
       .in-ficha-grid>.in-ficha-caja{margin:0;}.in-ficha-grid>.in-ficha-caja[open]{align-self:stretch;}
       .in-ficha .in-ficha-caja>summary{padding:12px 14px;flex-wrap:wrap;gap:8px;font-size:14px;line-height:1.4;}
