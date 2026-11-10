@@ -441,7 +441,7 @@ CohortesEstadosUI <- function(id) {
       ),
       tags$hr(style = "margin:10px 0;"),
       .crm_tabla_ui(ns("tbl_resumen_mensual"), searchable = FALSE),
-      plotly::plotlyOutput(ns("plot_crecimiento"), height = "400px")
+      .crm_plot_output(ns("plot_crecimiento"), height = "400px")
     )
   )
 }

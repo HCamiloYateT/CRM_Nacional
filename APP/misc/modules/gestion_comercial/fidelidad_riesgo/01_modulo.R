@@ -55,7 +55,7 @@ FidelidadRiesgoUI <- function(id) {
       tabPanel("RFM", .crm_tabla_ui(ns("rfm"))),
       tabPanel("BTYD y CLV", shiny::uiOutput(ns("estado_modelo")),
         shiny::conditionalPanel(sprintf("output['%s']", ns("modelo_disponible")),
-          plotly::plotlyOutput(ns("modelo_grafico"), height = "330px"), .crm_tabla_ui(ns("btyd")))),
+          .crm_plot_output(ns("modelo_grafico"), height = "330px"), .crm_tabla_ui(ns("btyd")))),
       tabPanel("Diagnóstico del modelo",
         shiny::conditionalPanel(sprintf("output['%s']", ns("modelo_disponible")),
           .crm_tabla_ui(ns("modelo_parametros")), .crm_tabla_ui(ns("validacion"))),

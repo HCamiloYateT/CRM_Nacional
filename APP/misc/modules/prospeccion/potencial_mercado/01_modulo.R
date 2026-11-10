@@ -43,7 +43,7 @@ PotencialMercadoUI <- function(id, periodo_local = FALSE) {
         ns = ns)),
     .gc_tarjetas_ui(ns, c(entidades = "Entidades comerciales", comparable = "Con potencial comparable",
       facturados = "Kg facturados en el mes", brecha = "Brecha positiva de potencial · kg")),
-    plotly::plotlyOutput(ns("grafico"), height = "330px"), .crm_descarga_ui("descargar", ns),
+    .crm_plot_output(ns("grafico"), height = "330px"), .crm_descarga_ui("descargar", ns),
     .crm_tabla_ui(ns("tabla")),
     .crm_nota(c("El potencial es consumo mensual actualmente declarado; no es presupuesto ni compromiso de compra.",
       "Facturación se compara en kg: los sacos de ejecución del CRM equivalen a 70 kg.",

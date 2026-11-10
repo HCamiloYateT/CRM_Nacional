@@ -275,6 +275,6 @@
 }
 .admon_choices_rotulos <- function(valores) {
   rotulos <- names(valores)
-  if (is.null(rotulos)) return(as.character(valores))
-  ifelse(!is.na(rotulos) & nzchar(rotulos), rotulos, as.character(valores))
+  if (is.null(rotulos)) return(toupper(as.character(valores)))
+  toupper(ifelse(!is.na(rotulos) & nzchar(rotulos), rotulos, as.character(valores)))
 }

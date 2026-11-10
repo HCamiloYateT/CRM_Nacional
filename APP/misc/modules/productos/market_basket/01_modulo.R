@@ -79,8 +79,8 @@ MarketBasketUI <- function(id) {
     racafeForms::racafeActionBar(left = racafeForms::racafeButton("analizar", "Analizar",
       icon = "magnifying-glass", ns = ns)),
     shiny::uiOutput(ns("estado")), .gc_tarjetas_ui(ns, .MBA_CAJAS),
-    shiny::fluidRow(shiny::column(6, shiny::plotOutput(ns("fuerza"), height = "300px")),
-      shiny::column(6, shiny::plotOutput(ns("pares"), height = "300px"))),
+    shiny::fluidRow(shiny::column(6, .crm_plot_output(ns("fuerza"), height = "300px")),
+      shiny::column(6, .crm_plot_output(ns("pares"), height = "300px"))),
     .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("tabla")),
     .crm_tabla_ui(ns("parametros"), titulo = "Alcance y parámetros del último análisis"),
     .crm_disclosure("Detalle técnico del análisis",
@@ -213,7 +213,10 @@ MarketBasket <- function(id, hechos, filtros, on_result = NULL) {
     output$fuerza <- .crm_render_plot({
       x <- resultado()$reglas
       shiny::validate(shiny::need(nrow(x) > 0, "Sin reglas para graficar."))
-      ggplot2::ggplot(x, ggplot2::aes(x = Soporte, y = Confianza, size = CestasAmbos, colour = Lift)) +
+      x$Detalle <- paste0("SI COMPRA: ", x$SiCompra, "<br>TAMBIÉN COMPRA: ", x$TambienCompra,
+        "<br>CESTAS EN COMÚN: ", x$CestasAmbos, "<br>SOPORTE: ", round(100 * x$Soporte, 2),
+        "%<br>CONFIANZA: ", round(100 * x$Confianza, 2), "%<br>LIFT: ", round(x$Lift, 2))
+      ggplot2::ggplot(x, ggplot2::aes(text = Detalle, x = Soporte, y = Confianza, size = CestasAmbos, colour = Lift)) +
         ggplot2::geom_point(alpha = 0.7) + ggplot2::scale_colour_gradient(low = "#6C757D", high = "#DA291C") +
         ggplot2::scale_x_continuous(labels = scales::label_percent()) +
         ggplot2::scale_y_continuous(labels = scales::label_percent()) +

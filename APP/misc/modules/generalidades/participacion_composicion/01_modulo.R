@@ -13,7 +13,7 @@ AnalisisComercialUI <- function(id, tipo = "evolucion", fecha = Sys.Date()) {
       racafeForms::racafeInputSwitch("abiertos", "Incluir facturación de meses abiertos", value = FALSE, ns = ns)),
     .gc_tarjetas_ui(ns, c(sacos = "Sacos facturados de 70 kg", margen = "Margen FCC",
       kilos = "Margen por kilo", cumplimiento = "Cumplimiento del presupuesto de margen")),
-    shiny::plotOutput(ns("grafico"), height = "300px"),
+    .crm_plot_output(ns("grafico"), height = "300px"),
     .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("dimensiones")),
     if (tipo == "evolucion") .crm_tabla_ui(ns("serie"), titulo = "Comportamiento mensual e interanual"),
     .crm_nota(c("Se aplican las dimensiones del controlbar; el periodo se selecciona en este informe.",

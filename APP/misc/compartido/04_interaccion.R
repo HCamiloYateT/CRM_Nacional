@@ -4,18 +4,35 @@
   racafeShiny::racafeRenderUI(if (quoted) expr else substitute(expr), env = env, quoted = TRUE)
 }
 .crm_render_plot <- function(expr, ..., env = parent.frame(), quoted = FALSE) {
-  racafeShiny::racafeRenderPlot(if (quoted) expr else substitute(expr), ..., env = env, quoted = TRUE)
+  calcular <- shiny::exprToFunction(if (quoted) expr else substitute(expr), env = env, quoted = TRUE)
+  .crm_render_plotly({
+    grafico <- calcular()
+    plotly::ggplotly(grafico, height = 450, tooltip = "all")
+  })
 }
 .crm_render_plotly <- function(expr, env = parent.frame(), quoted = FALSE) {
   etiqueta <- function(x) {
-    if (is.character(x)) return(.crm_label_comercial(x))
+    if (is.character(x)) return(gsub("convencionales", "Coproductos", x, ignore.case = TRUE))
     if (is.list(x)) return(lapply(x, etiqueta))
     x
   }
   racafeShiny::racafeRenderPlotly(if (quoted) expr else substitute(expr), env = env, quoted = TRUE,
     transform = function(figura) {
+      altura <- suppressWarnings(as.numeric(figura$x$layout$height))
+      figura$x$layout$height <- if (length(altura) == 1L && is.finite(altura)) max(450, altura) else 450
       figura$x$data <- etiqueta(figura$x$data)
       figura$x$layout <- etiqueta(figura$x$layout)
+      figura$x$data <- lapply(figura$x$data, function(traza) {
+        if (is.null(traza$hovertemplate) && is.null(traza$text) &&
+            !any(traza$hoverinfo %in% c("skip", "none"))) {
+          if (identical(traza$type, "pie")) {
+            traza$hovertemplate <- "%{label}<br>VALOR: %{value:,.2f}<br>PARTICIPACIÓN: %{percent}<extra></extra>"
+          } else if (!is.null(traza$x) && !is.null(traza$y)) {
+            traza$hovertemplate <- "%{x}<br>VALOR: %{y:,.2f}<extra>%{fullData.name}</extra>"
+          }
+        }
+        traza
+      })
       figura
     })
 }
@@ -94,4 +111,11 @@
 
 .crm_iniciar_loader <- function(input) {
   shiny::observeEvent(input$crm_recalcular, { invisible(NULL) }, ignoreInit = FALSE)
+}
+
+# Altura legible incluso en los gráficos que antes usaban una imagen estática ----
+.crm_plot_output <- function(outputId, width = "100%", height = "450px", ...) {
+  pixeles <- suppressWarnings(as.numeric(sub("px$", "", height)))
+  height <- if (length(pixeles) == 1L && is.finite(pixeles)) paste0(max(450, pixeles), "px") else "450px"
+  plotly::plotlyOutput(outputId, width = width, height = height, ...)
 }

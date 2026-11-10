@@ -42,7 +42,7 @@
 # Renderiza un grafico Plotly dentro del modal de detalle.
 .GraficoDetalleEmbudoUI <- function(id) {
   ns <- NS(id)
-  plotly::plotlyOutput(ns("grafico"), height = "420px")
+  .crm_plot_output(ns("grafico"), height = "420px")
 }
 .GraficoDetalleEmbudo <- function(id, plot_reactive) {
   moduleServer(id, function(input, output, session) {
@@ -61,7 +61,7 @@ EmbudoConversionUI <- function(id) {
   tagList(
     fluidRow(
       column(7, .pr_panel(title = "Embudo de Conversión", width = 12, collapsible = FALSE,
-        plotly::plotlyOutput(ns("grafico_embudo"), height = "510px"))),
+        .crm_plot_output(ns("grafico_embudo"), height = "510px"))),
       column(5, tags$div(class = "crm-embudo-resumen",
         .crm_caja_output(ns("kpi_total_contactos")), .crm_caja_output(ns("kpi_total_leads")),
         .crm_caja_output(ns("kpi_total_prospectos")), .crm_caja_output(ns("kpi_total_clientes")),
@@ -148,7 +148,7 @@ EmbudoConversionUI <- function(id) {
         column(3, .crm_caja_output(ns("kpi_motivo_top")))
       ),
       tags$hr(),
-      plotly::plotlyOutput(ns("grafico_descartados"), height = "380px")
+      .crm_plot_output(ns("grafico_descartados"), height = "380px")
     ),
     
     .pr_panel(

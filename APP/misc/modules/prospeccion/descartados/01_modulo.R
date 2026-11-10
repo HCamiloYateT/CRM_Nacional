@@ -46,7 +46,7 @@ DetalleDescartadosUI <- function(id) {
         4,
         .pr_panel(title = "Nube de Palabras", width = 12,
             collapsible = TRUE, collapsed = FALSE,
-            plotly::plotlyOutput(ns("nube_palabras"), height = "400px"))
+            .crm_plot_output(ns("nube_palabras"), height = "400px"))
       )
     )
   )
@@ -382,7 +382,7 @@ DetalleDescartados <- function(id, usuario) {
             column(3, .crm_caja_output(ns("kpi_precio_mediana"))),
             column(3, .crm_caja_output(ns("kpi_precio_max")))
           ),
-          plotly::plotlyOutput(ns("histograma_precio"), height = "260px")
+          .crm_plot_output(ns("histograma_precio"), height = "260px")
         )
       } else {
         tagList(
