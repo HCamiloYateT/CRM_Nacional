@@ -198,8 +198,7 @@
   shiny::tags$div(class = "in-ficha",
     shiny::tags$style(shiny::HTML(".in-ficha-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
       gap:20px 32px;position:relative;align-items:start;margin-bottom:20px;}
-      .in-ficha-grid::before{content:'';position:absolute;width:1px;left:50%;top:0;bottom:0;background:#DA291C;}
-      .in-ficha .in-ficha-caja{border:1px solid #dee2e6;border-radius:0;background:transparent;margin:0 0 16px;
+      .in-ficha .in-ficha-caja{border:1px solid #dee2e6;border-radius:12px;background:transparent;margin:0 0 16px;
         padding:0;min-width:0;box-sizing:border-box;}
       .in-ficha-grid>.in-ficha-caja{margin:0;}.in-ficha-grid>.in-ficha-caja[open]{align-self:stretch;}
       .in-ficha .in-ficha-caja>summary{padding:12px 14px;flex-wrap:wrap;gap:8px;font-size:14px;line-height:1.4;}
@@ -231,7 +230,7 @@
       .in-ficha-cuenta-datos{min-width:0;overflow-wrap:anywhere;}.in-ficha-asesor-comun{margin-top:8px;}
       .in-ficha-complemento+.in-ficha-complemento{border-top:1px solid #dee2e6;margin-top:12px;padding-top:8px;}
       @media(max-width:767px){.in-ficha-grid{grid-template-columns:minmax(0,1fr);gap:14px;}
-        .in-ficha-grid::before{display:none;}}")),
+      }")),
     shiny::uiOutput(ns("alcance_crm")),
     shiny::tags$div(class = "in-ficha-grid",
       .in_ficha_caja(ns, "antiguedad", "Antigüedad y relación comercial", shiny::uiOutput(ns("antiguedad-tabla"))),
