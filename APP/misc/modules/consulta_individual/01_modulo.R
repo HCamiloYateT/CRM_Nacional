@@ -8,7 +8,7 @@ ConsultaIndividualUI <- function(id) {
       icon = "arrows-rotate", variant = "secondary", ns = ns)),
     .crm_select("entidad", "Buscar por nombre o NIT de facturación",
       choices = character(), ns = ns),
-    shiny::uiOutput(ns("identidad")), shiny::uiOutput(ns("contenido")))
+    shiny::uiOutput(ns("identidad")), shiny::uiOutput(ns("visibilidad_tabs")), shiny::uiOutput(ns("contenido")))
 }
 ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin, nit_mapa,
                                cartera = function() NULL, tareas = function() data.frame(),
@@ -66,8 +66,9 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
         .in_estado_presupuesto(metas_anuales(), x, periodo()[[2]])),
         if (x$VinculoEnRevision) .crm_nota("Hay varios NIT vinculados. Revise el vínculo de facturación."))
     })
-    output$contenido <- .crm_render_ui({
-      x <- entidad()
+    tabs_disponibles <- shiny::reactive({
+      x <- tryCatch(entidad(), error = function(e) NULL)
+      if (is.null(x)) return(character())
       comercial <- x$Tipo == "CLIENTE" || nrow(historia()) > 0L
       crm <- !is.na(contexto_crm()$Codigo)
       potencial <- crm && (x$Tipo %in% c("PROSPECTO", "LEAD", "CLIENTE") ||
@@ -76,11 +77,32 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
         if (potencial) "Potencial y oportunidades",
         if (comercial) c("Ejecución y productos", "Histórico completo", "Preferencias de compra",
           "Pendientes", "Cartera", "Fidelidad y valor", "Venta cruzada"))
-      seleccion <- shiny::isolate(input$detalle_tabs)
-      if (length(seleccion) != 1L || !seleccion %in% opciones) seleccion <- "Ficha"
+      opciones
+    })
+    output$visibilidad_tabs <- shiny::renderUI({
+      disponibles <- tabs_disponibles()
+      prefijo <- paste0("#", session$ns("contenido"))
+      todas <- c("Ficha", "Gestión y seguimiento", "Potencial y oportunidades", "Ejecución y productos",
+        "Histórico completo", "Preferencias de compra", "Pendientes", "Cartera", "Fidelidad y valor", "Venta cruzada")
+      reglas <- if (!length(disponibles)) paste0(prefijo, "{display:none;}") else {
+        vapply(setdiff(todas, disponibles), function(tab) {
+          valor <- jsonlite::toJSON(tab, auto_unbox = TRUE)
+          paste0(prefijo, " li:has(>a[data-value=", valor, "]),", prefijo,
+            " .tab-pane[data-value=", valor, "]{display:none!important;}")
+        }, character(1))
+      }
+      shiny::tags$style(shiny::HTML(paste(reglas, collapse = "\n")))
+    })
+    shiny::observeEvent(list(tabs_disponibles(), input$detalle_tabs), {
+      if (!is.null(input$detalle_tabs) && !input$detalle_tabs %in% tabs_disponibles()) {
+        shiny::updateTabsetPanel(session, "detalle_tabs", selected = "Ficha")
+      }
+    })
+    # Los contenedores se montan una sola vez; cambian sus outputs y la disponibilidad de navegación.
+    output$contenido <- .crm_render_ui({
       .crm_tabs(
         tabPanel("Ficha", .in_ficha_ui(session$ns)),
-        if (crm) tabPanel("Gestión y seguimiento",
+        tabPanel("Gestión y seguimiento",
           shiny::uiOutput(session$ns("alcance_seguimiento")),
           .in_panel_ui("gestiones", "Gestiones realizadas", session$ns),
           .in_panel_ui("recordatorios", "Recordatorios", session$ns),
@@ -91,11 +113,11 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
             .in_panel_ui("conversion_lead", "Conversión a lead", session$ns),
             .in_panel_ui("conversion_cliente", "Conversión a cliente", session$ns),
             .in_panel_ui("alianzas", "Alianzas comerciales", session$ns))),
-        if (potencial) tabPanel("Potencial y oportunidades",
+        tabPanel("Potencial y oportunidades",
           .crm_nota("Las oportunidades muestran el estado actual guardado para la entidad comercial asociada."),
           .in_panel_ui("potencial", "Potencial registrado", session$ns),
           .in_panel_ui("oportunidades", "Oportunidades de la entidad", session$ns)),
-        if (comercial) tabPanel("Ejecución y productos", .gc_tarjetas_ui(session$ns, .IN_CAJAS),
+        tabPanel("Ejecución y productos", .gc_tarjetas_ui(session$ns, .IN_CAJAS),
           plotly::plotlyOutput(session$ns("tendencia"), height = "310px"),
           .crm_descarga_ui("descargar", session$ns),
           .crm_tabla_ui(session$ns("productos"), "Marcas y nombres comerciales comprados"),
@@ -114,7 +136,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
           .crm_tabla_ui(session$ns("movimientos"), "Facturación del periodo"),
           .crm_nota(c("El margen de meses abiertos es provisional; un importe desconocido no se convierte en cero.",
             "El periodo corresponde a las fechas seleccionadas en el controlbar."))),
-        if (comercial) tabPanel("Histórico completo",
+        tabPanel("Histórico completo",
           .crm_nota("Incluye todos los años disponibles hasta el corte del controlbar, con sus filtros comerciales."),
           .gc_tarjetas_ui(session$ns, c(hist_sacos = "Sacos en todo el histórico (70 kg)",
             hist_margen = "Margen histórico FCC (COP)", hist_pedidos = "Pedidos históricos",
@@ -122,18 +144,18 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
           plotly::plotlyOutput(session$ns("historico_grafico"), height = "330px"),
           .crm_tabla_ui(session$ns("historico_anual"), "Compras y margen por año"),
           .crm_descarga_ui("descargar_historico", session$ns, "Descargar histórico completo")),
-        if (comercial) tabPanel("Preferencias de compra",
+        tabPanel("Preferencias de compra",
           plotly::plotlyOutput(session$ns("preferencias_grafico"), height = "330px"),
           .crm_tabla_ui(session$ns("preferencias"), "Qué productos compra, con qué frecuencia y desde cuándo"),
           .crm_nota(c("Ranking basado en las compras históricas de esta cuenta hasta el corte seleccionado.",
             "Las preferencias declaradas en Potencial muestran el último registro disponible."))),
-        if (comercial) tabPanel("Pendientes", .crm_tabla_ui(session$ns("pendientes")),
+        tabPanel("Pendientes", .crm_tabla_ui(session$ns("pendientes")),
           .crm_nota(c("Incluye pedidos sin asignar y futuros, producción, despacho, facturación y revisión de margen.",
             "Usa el flujo disponible y la fecha final del controlbar como referencia de vencimiento.",
             "Las etapas pueden solaparse: sus cantidades no deben sumarse."))),
-        if (comercial) tabPanel("Cartera", shiny::uiOutput(session$ns("corte_cartera")),
+        tabPanel("Cartera", shiny::uiOutput(session$ns("corte_cartera")),
           .crm_tabla_ui(session$ns("cartera"))),
-        if (comercial) tabPanel("Fidelidad y valor",
+        tabPanel("Fidelidad y valor",
           .crm_disclosure("¿Qué me dicen estos indicadores?",
             .crm_nota(c("RFM resume tres preguntas: ¿compró hace poco?, ¿compra seguido?, ¿cuánto margen deja?",
               "Las notas van de 1 a 5 frente a los otros clientes visibles; 5 es el valor más favorable.",
@@ -145,14 +167,14 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
           .crm_tabla_ui(session$ns("rfm"), "Hábitos de compra de la cuenta consultada"),
           racafeForms::racafeButton("modelar", "Recalcular estimación a 12 meses", ns = session$ns),
           shiny::uiOutput(session$ns("modelo"))),
-        if (comercial) tabPanel("Venta cruzada",
+        tabPanel("Venta cruzada",
           .crm_disclosure("Cómo usar estas propuestas",
             .crm_nota(c("Son productos que otras cuentas comparables compran junto con los de esta cuenta.",
               "Solo se proponen productos que esta cuenta aún no registra en su historia observada.",
               "Se requieren al menos dos cuentas que respalden la combinación y afinidad mayor que 1.",
               "Las compras pueden ser de pedidos y años distintos. Confirme interés, calidad y presentación."))),
           shiny::uiOutput(session$ns("venta_cruzada"))),
-        id = session$ns("detalle_tabs"), selected = seleccion)
+        id = session$ns("detalle_tabs"), selected = "Ficha")
     })
     nota_crm <- shiny::reactive({
       x <- contexto_crm()
@@ -190,10 +212,11 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       .in_ficha_contacto_ui(datos_cliente())))
     output[["familia-tabla"]] <- .crm_render_ui(.in_ficha_familia_ui(familia()))
     output$familia_contador <- .crm_render_ui(racafeForms::racafeStatusBadge(
-      paste(length(familia()$hijos), if (length(familia()$hijos) == 1L) "cuenta hija visible" else {
-        "cuentas hijas visibles"
+      paste(length(familia()$hijos), if (length(familia()$hijos) == 1L) "hija visible" else {
+        "hijas visibles"
       }), variant = "neutral"))
     complementos_ficha <- shiny::reactive(.in_ficha_complementos(fuentes(), contexto_crm()))
+    output$complementarios_contador <- .crm_render_ui(.in_ficha_complementos_badge(complementos_ficha()))
     output$complementarios <- .crm_render_ui(.in_ficha_complementos_ui(complementos_ficha(), session$ns))
     for (nombre in names(.IN_FUENTES)) local({
       clave <- nombre

@@ -29,6 +29,6 @@ hechos360 <- dplyr::bind_rows(hechos360, .ficha_hechos)
 .ficha_directorio$CliDir <- "Calle 100"; .ficha_directorio$CiuExtNom <- "Bogotá"
 directorio360 <- dplyr::bind_rows(directorio360, .ficha_directorio)
 .ficha_fuentes <- list(
-  CRMNALDIRECTORIOEMPRESARIAL = data.frame(CodContacto = "CREPES", CorreoGeneral = "hola@example.test"),
-  CRMNALDIRECTORIOTELEFONO = data.frame(CodContacto = c("CREPES", "CREPES", "C3"),
+  CRMNALDIRECTORIOEMPRESARIAL = data.frame(CodContacto = "C1", CorreoGeneral = "hola@example.test"),
+  CRMNALDIRECTORIOTELEFONO = data.frame(CodContacto = c("C1", "C1", "C3"),
     Telefono = c("6011234567", "3001234567", "NO VISIBLE")))
