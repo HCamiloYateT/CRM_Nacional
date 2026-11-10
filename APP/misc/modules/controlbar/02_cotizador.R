@@ -71,6 +71,11 @@ VENDEDORES_DATA <- data.frame(
   x <- .cot_choices(x)
   stats::setNames(x, stringr::str_to_upper(x))
 }
+.cot_catalogo_choices <- function(x) {
+  valores <- .cot_choices(x)
+  stats::setNames(valores, .admon_choices_rotulos(x)[match(valores, as.character(x))])
+}
+
 .cot_formatear_numero_tabla <- function(x, dec = 0) {
   x <- suppressWarnings(as.numeric(x))
   
@@ -107,6 +112,7 @@ VENDEDORES_DATA <- data.frame(
 ## Producto ----
 ProductoUI <- function(id, numero, lineas) {
   ns <- NS(id)
+  catalogos <- Choices()
   div(id = ns("wrapper"), class = "cotizador-producto-grid",
       racafeForms::racafeFormGroup(title = paste("Producto", numero), variant = "bordered", divider = FALSE,
                                    racafeForms::racafeForm(size = "compact", variant = "plain",
@@ -123,15 +129,10 @@ ProductoUI <- function(id, numero, lineas) {
                                                            ),
                                                            racafeForms::racafeFormRow(columns = 2, responsive = "fixed",
                                                              .crm_select("Presentacion", label = "Presentación", required = TRUE,
-                                                                                            choices = c("SACOS DE 70 KGS" = "Sacos de 70kgs",
-                                                                                                        "SACOS DE 62.5 KGS" = "Sacos de 62.5Kgs",
-                                                                                                        "SACOS DE 35 KGS" = "Sacos de 35Kgs",
-                                                                                                        "GRAINPRO 70 KGS" = "Grainpro 70kgs"),
+                                                                                            choices = .cot_catalogo_choices(catalogos$cot_presentacion),
                                                                                             selected = "", multiple = FALSE, ns = ns, size = 5),
                                                              .crm_select("Empaque", label = "Empaque", required = TRUE,
-                                                                                            choices = c("BLANCO #6" = "Blanco #6",
-                                                                                                        "PREMARCADO #7" = "Premarcado #7",
-                                                                                                        "PREMARCADO #7 ARTE DEL CLIENTE" = "Premarcado #7 Arte del cliente"),
+                                                                                            choices = .cot_catalogo_choices(catalogos$cot_empaque),
                                                                                             selected = "", multiple = FALSE, ns = ns, size = 4)
                                                            ),
                                                            racafeForms::racafeFormRow(columns = 2, responsive = "fixed",
@@ -153,6 +154,13 @@ Producto <- function(id, catalogos_r) {
     
     # Reactivos ----
     ## Datos ----
+    observeEvent(catalogos_r(), {
+      for (par in list(c("Presentacion", "cot_presentacion"), c("Empaque", "cot_empaque"))) {
+        opciones <- .cot_catalogo_choices(catalogos_r()[[par[[2]]]])
+        .crm_update_select(session, par[[1]], choices = opciones,
+          selected = intersect(shiny::isolate(input[[par[[1]]]]), unname(opciones)))
+      }
+    }, ignoreInit = TRUE)
     categorias_r <- reactive({
       linea <- input$LinNeg
       req(!is.null(linea), nzchar(linea))
@@ -230,7 +238,8 @@ Producto <- function(id, catalogos_r) {
            Precio = .cot_numero_seguro(input$Precio),
            Total = total_producto_r(),
            Valido = all(nzchar(input$LinNeg %||% ""), nzchar(input$Categoria %||% ""), nzchar(input$Producto %||% ""),
-                        nzchar(input$Presentacion %||% ""), nzchar(input$Empaque %||% ""),
+                        .cot_valor_seguro(input$Presentacion) %in% catalogos_r()$cot_presentacion,
+                        .cot_valor_seguro(input$Empaque) %in% catalogos_r()$cot_empaque,
                         .cot_numero_seguro(input$Cantidad) > 0, .cot_numero_seguro(input$Precio) > 0
            )
       )
@@ -266,11 +275,12 @@ CotizacionUI <- function(id) {
                                                        ),
                                                        racafeForms::racafeFormRow(columns = 2, responsive = "fixed",
                                                          .crm_select("COT_Divisa", label = "Divisa", required = TRUE,
-                                                                                        choices = c("PESO COLOMBIANO" = "Peso Colombiano", "DÓLARES" = "Dólares"),
-                                                                                        selected = "Peso Colombiano", multiple = FALSE, empty = FALSE,
+                                                                                        choices = .cot_catalogo_choices(Choices()$cot_divisa),
+                                                                                        selected = intersect("Peso Colombiano", Choices()$cot_divisa), multiple = FALSE, empty = FALSE,
                                                                                         search = FALSE, ns = ns, size = 2),
                                                          .crm_select("COT_FPago", label = "Forma de Pago", required = TRUE,
-                                                                                        choices = .cot_choices_ui(Choices()$formapago), selected = "PAGO ANTICIPADO",
+                                                                                        choices = .cot_catalogo_choices(Choices()$formapago),
+                                                                                        selected = intersect("PAGO ANTICIPADO", Choices()$formapago),
                                                                                         multiple = FALSE, ns = ns, size = 10)
                                                        )
                           ),
@@ -293,6 +303,7 @@ CotizacionUI <- function(id) {
 Cotizacion <- function(id, usuario, dat) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    catalogos_iniciados_rv <- reactiveVal(FALSE)
     fecha_ini_r <- reactive(input$COT_FechaIni)
     fecha_fin_r <- reactive(input$COT_FechaFin)
     
@@ -311,6 +322,20 @@ Cotizacion <- function(id, usuario, dat) {
       catalogos
     })
     
+    catalogos_guardados <- ChoicesReactivos()
+    observeEvent(catalogos_guardados(), {
+      catalogos <- catalogos_guardados()
+      catalogos_rv(catalogos)
+      iniciales <- c(COT_Divisa = "Peso Colombiano", COT_FPago = "PAGO ANTICIPADO")
+      for (par in list(c("COT_Divisa", "cot_divisa"), c("COT_FPago", "formapago"))) {
+        opciones <- .cot_catalogo_choices(catalogos[[par[[2]]]])
+        actual <- shiny::isolate(input[[par[[1]]]])
+        if (!catalogos_iniciados_rv() && is.null(actual)) actual <- iniciales[[par[[1]]]]
+        .crm_update_select(session, par[[1]], choices = opciones, selected = intersect(actual, unname(opciones)))
+      }
+      catalogos_iniciados_rv(TRUE)
+    })
+
     clientes_r <- reactive({
       req(dat())
       
@@ -430,7 +455,7 @@ Cotizacion <- function(id, usuario, dat) {
       cliente <- cliente_actual_r()
       
       if (nrow(cliente) != 1L || is.na(cliente$CliNitPpal[[1]])) {
-        .crm_update_select(session, "COT_FPago", selected = "PAGO ANTICIPADO")
+        .crm_update_select(session, "COT_FPago", selected = intersect("PAGO ANTICIPADO", catalogos_rv()$formapago))
         
         return(invisible(NULL))
       }
@@ -545,7 +570,8 @@ Cotizacion <- function(id, usuario, dat) {
       fin <- fecha_fin_r()
       if (!inherits(inicio, "POSIXct") || !inherits(fin, "POSIXct") ||
           anyNA(c(inicio, fin)) || length(inicio) != 1L || length(fin) != 1L || fin <= inicio) return(FALSE)
-      if (!nzchar(input$COT_Divisa %||% "") || !nzchar(input$COT_FPago %||% "")) return(FALSE)
+      if (!.cot_valor_seguro(input$COT_Divisa) %in% catalogos_rv()$cot_divisa ||
+          !.cot_valor_seguro(input$COT_FPago) %in% catalogos_rv()$formapago) return(FALSE)
       if (isFALSE(input$COT_NombrePropio) && !nzchar(input$COT_Responsable %||% "")) return(FALSE)
       TRUE
     })
@@ -784,9 +810,9 @@ Cotizacion <- function(id, usuario, dat) {
       
       .crm_update_select(session, "COT_Cliente-sel", selected = character(0))
       
-      .crm_update_select(session, "COT_Divisa", selected = "Peso Colombiano")
+      .crm_update_select(session, "COT_Divisa", selected = intersect("Peso Colombiano", catalogos_rv()$cot_divisa))
       
-      .crm_update_select(session, "COT_FPago", selected = "PAGO ANTICIPADO")
+      .crm_update_select(session, "COT_FPago", selected = intersect("PAGO ANTICIPADO", catalogos_rv()$formapago))
       
       .crm_update_select(session, "COT_Responsable", selected = character(0))
       

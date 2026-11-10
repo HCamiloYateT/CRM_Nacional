@@ -27,7 +27,9 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
       personas = "Personas", segmento = "Segmentos",
       linneg = "Líneas de negocio → Categorías → Productos",
       origen = "Orígenes → Detalles del origen",
-      raz_descarte = "Razones de descarte", formapago = "Formas de pago"
+      raz_descarte = "Razones de descarte", formapago = "Formas de pago del cotizador",
+      cot_presentacion = "Presentaciones del cotizador", cot_empaque = "Empaques del cotizador",
+      cot_divisa = "Divisas del cotizador", tipo_nota = "Tipos de nota o tarea"
     )
     excluidos <- c("categoria", "producto", "detalle_origen", "paises", "deptos",
                    "direccion_via", "direccion_cardinalidad")
@@ -39,6 +41,8 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
     eliminacion_rv <- shiny::reactiveVal(NULL)
     nuevo_nivel_rv <- shiny::reactiveVal(NULL)
     nueva_opcion_rv <- shiny::reactiveVal(NULL)
+    edicion_indice_rv <- shiny::reactiveVal(NULL)
+    edicion_codigo_rv <- shiny::reactiveVal(NULL)
     seleccionado_1_rv <- shiny::reactiveVal("")
     seleccionado_2_rv <- shiny::reactiveVal("")
     actualizaciones_rv <- shiny::reactiveVal(0L)
@@ -194,6 +198,9 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
       shiny::tags$span(
         class = "d-inline-flex align-items-center",
         style = "gap:3px;white-space:nowrap;",
+        if (identical(catalogo_r(), "tipo_nota")) {
+          .boton_fila(nivel, indice, "renombrar", "pen", "Editar nombre")
+        },
         if (indice > 1L) .boton_fila(nivel, indice, "subir", "arrow-up", "Subir"),
         if (indice < total) .boton_fila(nivel, indice, "bajar", "arrow-down", "Bajar")
       )
@@ -205,7 +212,7 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
       )
       total <- length(valores)
       tabla <- data.frame(
-        Numero = seq_len(total), Opcion = valores,
+        Numero = seq_len(total), Opcion = .admon_choices_rotulos(valores),
         Orden = rep("", total), Eliminar = rep("", total),
         stringsAsFactors = FALSE
       )
@@ -224,7 +231,7 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
                 class = if (identical(valor, seleccionado))
                   "font-weight-bold text-danger" else "text-body",
                 onclick = .seleccion_js(nivel, valor),
-                valor
+                .admon_choices_rotulos(valores)[[i]]
               )
               gt::html(as.character(enlace))
             })
@@ -268,6 +275,9 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
     .footer_nivel <- function(nivel) {
       tipos <- jerarquia_r()
       if (nivel > length(tipos)) return(NULL)
+      if (identical(tipos[[1]], "tipo_nota")) {
+        return("Edite el nombre de Nota o Tarea. Su comportamiento y los registros existentes se conservan.")
+      }
       if (length(tipos) == 1L) return("Catálogo independiente, sin jerarquía")
       if (nivel == 1L) {
         if (!nzchar(padre_1_r())) {
@@ -311,7 +321,13 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
       
       for (clave in claves) {
         if (clave %in% c("categoria", "producto", "detalle_origen")) next
-        comparar(base[[clave]] %||% character(), nuevo[[clave]] %||% character(),
+        anterior <- base[[clave]] %||% character()
+        actual <- nuevo[[clave]] %||% character()
+        if (identical(clave, "tipo_nota")) {
+          anterior <- paste(.admon_choices_rotulos(anterior), unname(anterior), sep = " / ")
+          actual <- paste(.admon_choices_rotulos(actual), unname(actual), sep = " / ")
+        }
+        comparar(anterior, actual,
                  if (clave %in% names(etiquetas)) etiquetas[[clave]] else clave)
       }
       
@@ -451,6 +467,8 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
           datos, contexto$catalogo, indice, evento$accion,
           contexto$padre, contexto$padre2
         ))
+      } else if (identical(evento$accion, "renombrar") && identical(contexto$catalogo, "tipo_nota")) {
+        .mostrar_nueva_opcion(nivel, indice)
       } else if (identical(evento$accion, "eliminar")) {
         eliminacion_rv(list(contexto = contexto, valor = valores[[indice]],
                             indice = indice))
@@ -459,7 +477,7 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
           shiny::tags$p("La opción se retirará del catálogo al guardar los cambios."),
           racafeForms::racafeInfoGrid(
             racafeForms::racafeInfoItem("CATÁLOGO", .titulo_nivel(nivel)),
-            racafeForms::racafeInfoItem("OPCIÓN", valores[[indice]]),
+            racafeForms::racafeInfoItem("OPCIÓN", .admon_choices_rotulos(valores)[[indice]]),
             if (nzchar(contexto$padre)) racafeForms::racafeInfoItem(
               "DEPENDE DE", paste(c(contexto$padre, contexto$padre2)[
                 nzchar(c(contexto$padre, contexto$padre2))], collapse = " / ")
@@ -499,32 +517,42 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
       })
     })
     
-    for (nivel in seq_len(3L)) {
-      local({
-        i <- nivel
-        shiny::observeEvent(input[[paste0("ADM_Nuevo", i)]], {
-          shiny::req(isTRUE(es_admin()), i <= length(jerarquia_r()))
-          nuevo_nivel_rv(i)
-          shiny::showModal(racafeForms::racafeModal(
-            title = paste("Nueva opción:", .titulo_nivel(i)), size = "subventana5",
-            racafeForms::racafeInputText(
-              "ADM_NuevoValor", "Nueva opción", required = TRUE,
-              placeholder = "Escriba una opción", ns = ns
-            ),
-            footer = racafeForms::racafeModalFooter(
-              racafeForms::racafeButtonCancel(
-                "ADM_CancelarNuevo", "Cancelar", ns = ns, size = "xs"
-              ),
-              racafeForms::racafeButton(
-                "ADM_ConfirmarNuevo", "Continuar", icon = "arrow-right",
-                variant = "primary", size = "xs", ns = ns
-              )
-            )
-          ))
-        })
-      })
+    .mostrar_nueva_opcion <- function(nivel, indice = NULL) {
+      contexto <- .contexto(nivel)
+      valores <- .valores_nivel(nivel)
+      tipo <- identical(contexto$catalogo, "tipo_nota")
+      opciones <- c("Nota" = "text", "Tarea" = "list")
+      if (tipo && is.null(indice)) opciones <- opciones[!opciones %in% valores]
+      if (tipo && !length(opciones)) {
+        racafeForms::racafeNotify(session, "Tipos registrados",
+          "Use el botón de edición para cambiar el nombre de Nota o Tarea.", type = "info")
+        return(invisible(NULL))
+      }
+      nuevo_nivel_rv(nivel)
+      edicion_indice_rv(indice)
+      edicion_codigo_rv(if (is.null(indice)) NULL else unname(valores[[indice]]))
+      shiny::showModal(racafeForms::racafeModal(
+        title = paste(if (is.null(indice)) "Nueva opción:" else "Editar nombre:", .titulo_nivel(nivel)),
+        size = "subventana5",
+        racafeForms::racafeInputText("ADM_NuevoValor", "Nombre", required = TRUE,
+          value = if (is.null(indice)) "" else .admon_choices_rotulos(valores)[[indice]],
+          placeholder = "Escriba una opción", ns = ns),
+        if (tipo) .crm_select("ADM_TipoNota", "Comportamiento", choices = opciones,
+          selected = if (is.null(indice)) unname(opciones[[1]]) else unname(valores[[indice]]),
+          multiple = FALSE, empty = FALSE, disabled = !is.null(indice), ns = ns),
+        footer = racafeForms::racafeModalFooter(
+          racafeForms::racafeButtonCancel("ADM_CancelarNuevo", "Cancelar", ns = ns, size = "xs"),
+          racafeForms::racafeButton("ADM_ConfirmarNuevo", "Continuar", icon = "arrow-right",
+            variant = "primary", size = "xs", ns = ns))))
     }
-    
+    for (nivel in seq_len(3L)) local({
+      i <- nivel
+      shiny::observeEvent(input[[paste0("ADM_Nuevo", i)]], {
+        shiny::req(isTRUE(es_admin()), i <= length(jerarquia_r()))
+        .mostrar_nueva_opcion(i)
+      })
+    })
+
     shiny::observeEvent(input$ADM_CancelarNuevo, {
       nueva_opcion_rv(NULL)
       nuevo_nivel_rv(NULL)
@@ -536,15 +564,21 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
       shiny::req(isTRUE(es_admin()), !is.null(nivel))
       contexto <- .contexto(nivel)
       valor <- trimws(as.character(input$ADM_NuevoValor %||% ""))
+      indice <- shiny::isolate(edicion_indice_rv())
+      codigo <- if (is.null(indice)) input$ADM_TipoNota else shiny::isolate(edicion_codigo_rv())
       tryCatch({
         if (!nzchar(valor)) stop("Ingrese el nombre de la nueva opción.", call. = FALSE)
-        .admon_choices_agregar_local(
-          shiny::isolate(borrador_rv()), contexto$catalogo,
-          valor, contexto$padre, contexto$padre2
-        )
-        nueva_opcion_rv(list(contexto = contexto, valor = valor, nivel = nivel))
+        if (is.null(indice)) {
+          .admon_choices_agregar_local(shiny::isolate(borrador_rv()), contexto$catalogo,
+            valor, contexto$padre, contexto$padre2, codigo = codigo)
+        } else {
+          if (!identical(contexto$catalogo, "tipo_nota")) stop("Repita la selección del tipo.", call. = FALSE)
+          .admon_choices_renombrar_tipo(shiny::isolate(borrador_rv()), indice, valor)
+        }
+        nueva_opcion_rv(list(contexto = contexto, valor = valor, nivel = nivel, indice = indice, codigo = codigo))
         shiny::showModal(racafeForms::racafeModal(
-          title = "Confirmar nueva opción", size = "subventana5",
+          title = if (is.null(indice)) "Confirmar nueva opción" else "Confirmar cambio de nombre",
+          size = "subventana5",
           shiny::tags$p("Revise la información antes de añadirla al catálogo."),
           racafeForms::racafeInfoGrid(
             racafeForms::racafeInfoItem("CATÁLOGO", .titulo_nivel(nivel)),
@@ -578,10 +612,17 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
       shiny::req(isTRUE(es_admin()), !is.null(pendiente))
       nueva_opcion_rv(NULL)
       nuevo_nivel_rv(NULL)
-      .cambiar(function(datos) .admon_choices_agregar_local(
-        datos, pendiente$contexto$catalogo, pendiente$valor,
-        pendiente$contexto$padre, pendiente$contexto$padre2
-      ))
+      .cambiar(function(datos) {
+        if (!is.null(pendiente$indice)) {
+          if (length(datos$tipo_nota) < pendiente$indice ||
+              !identical(unname(datos$tipo_nota[[pendiente$indice]]), pendiente$codigo)) {
+            stop("El tipo cambió. Repita la selección.", call. = FALSE)
+          }
+          return(.admon_choices_renombrar_tipo(datos, pendiente$indice, pendiente$valor))
+        }
+        .admon_choices_agregar_local(datos, pendiente$contexto$catalogo, pendiente$valor,
+          pendiente$contexto$padre, pendiente$contexto$padre2, codigo = pendiente$codigo)
+      })
       shiny::removeModal()
     })
     
