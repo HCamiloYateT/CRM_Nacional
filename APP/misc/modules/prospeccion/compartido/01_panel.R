@@ -4,17 +4,7 @@ PanelEtapaUI <- function(id) {
   tagList(
     uiOutput(ns("Titulo")),
     racafeModulos::TablaReactableUI(ns("TablaEtapa"), titulo = NULL),
-    tags$script(
-      HTML(
-        "document.addEventListener('click', function(e){
-          document.querySelectorAll('.rc-panel-acciones').forEach(function(p){
-            if(!p.contains(e.target) && !e.target.closest('.rc-boton-acciones')){
-              p.style.display='none';
-            }
-          });
-        });"
-      )
-    )
+    racafeModulos::MenuAccionesDependencies()
   )
 }
 PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra = NULL) {

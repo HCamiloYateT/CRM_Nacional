@@ -212,60 +212,10 @@ generar_codigo_contacto <- function() {
   )
 }
 # Boton circular por accion dentro del panel desplegable de acciones
-.boton_accion_circular <- function(codigo, clave, etiqueta, ns, id_grupo) {
-  cfg <- .CONFIG_ACCIONES_EMBUDO[[clave]] %||% list(icono = "ellipsis", color = "#C11007")
-  as.character(tags$button(
-    type = "button", title = etiqueta,
-    style = paste0("display:inline-flex; align-items:center; justify-content:center;",
-                   "width:26px; height:26px; border-radius:50%; border:1px solid ", cfg$color, "; cursor:pointer;",
-                   "background:#fff; color:", cfg$color, "; margin:2px; font-size:11px;"),
-    onclick = sprintf(paste0("Shiny.setInputValue('%s', {codigo:'%s', accion:'%s'}, {priority:'event'}); ",
-                             "document.getElementById('%s').style.display='none';"),
-                      ns("AccionSeleccionada"), codigo, clave, id_grupo),
-    icon(cfg$icono)
-  ))
-}
+
 # Celda de acciones (dropdown flotante) del panel
 .celda_dropdown_acciones <- function(codigo, acciones, ns) {
-  id_grupo <- ns(paste0("acc_", gsub("[^A-Za-z0-9]", "", codigo)))
-  botones_html <- paste0(
-    mapply(function(clave, etiqueta) .boton_accion_circular(codigo, clave, etiqueta, ns, id_grupo),
-           names(acciones), unname(acciones)),
-    collapse = ""
-  )
-  as.character(tags$span(
-    tags$button(type = "button", title = "Acciones", class = "rc-boton-acciones",
-                style = paste0("display:inline-flex; align-items:center; justify-content:center;",
-                               "width:26px; height:26px; border-radius:50%; border:none; cursor:pointer;",
-                               "background:#C11007; color:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25);"),
-                onclick = sprintf(
-                  paste0("event.stopPropagation(); ",
-                         "var local=this.parentNode.querySelector('.rc-panel-acciones'); ",
-                         "var anterior=document.getElementById('%s'); ",
-                         "if(local && anterior && local!==anterior){anterior.remove();} ",
-                         "var p=local || anterior; ",
-                         "var abierto=(p.style.display==='flex'); ",
-                         "document.querySelectorAll('.rc-panel-acciones').forEach(function(x){x.style.display='none';}); ",
-                         "if(!abierto){ ",
-                         "  if(p.parentNode!==document.body){document.body.appendChild(p);} ",
-                         "  var r=this.getBoundingClientRect(); ",
-                         "  p.style.top=(r.bottom+4)+'px'; ",
-                         "  p.style.left=r.left+'px'; ",
-                         "  p.style.display='flex'; ",
-                         "} else { p.style.display='none'; }"),
-                  id_grupo),
-                icon("ellipsis")),
-    tags$div(id = id_grupo, class = "rc-panel-acciones",
-             style = paste0("display:none; position:fixed; z-index:99999;",
-                            "background:#fff; border:1px solid #dee2e6; border-radius:8px; padding:4px;",
-                            "box-shadow:0 2px 8px rgba(0,0,0,.15); white-space:nowrap;"),
-             HTML(botones_html)),
-    tags$script(HTML(
-      sprintf(paste0("(function(){ var p=document.getElementById('%s'); ",
-                     "if(p && p.parentNode!==document.body){ document.body.appendChild(p); } })();"),
-              id_grupo)
-    ))
-  ))
+  as.character(racafeModulos::MenuAccionesUI(codigo, acciones, config = .CONFIG_ACCIONES_EMBUDO, ns = ns))
 }
 # Definicion reactable de la columna de acciones (dropdown)
 .coldef_dropdown_acciones <- function(acciones, ns) {
@@ -476,18 +426,22 @@ generar_codigo_contacto <- function() {
        (lubridate::year(fecha_conversion) - lubridate::year(fecha_creacion)) * 12L +
          lubridate::month(fecha_conversion) - lubridate::month(fecha_creacion))
 }
-.factor_tiempo_lead <- function(unidad) {
+.factor_tiempo_embudo <- function(unidad) {
   switch(unidad, dias = 1, semanas = 7, meses = 30.4375, 1)
 }
+
+.etiqueta_tiempo_embudo <- function(unidad) {
+  switch(unidad, dias = "Día", semanas = "Semana", meses = "Mes")
+}
+
+.factor_tiempo_lead <- function(unidad) .factor_tiempo_embudo(unidad)
 .titulo_tiempo_lead <- function(unidad) {
   switch(unidad,
          dias = "Días desde creación del Contacto",
          semanas = "Semanas desde creación del Contacto",
          meses = "Meses desde creación del Contacto")
 }
-.etiqueta_tiempo_lead <- function(unidad) {
-  switch(unidad, dias = "Día", semanas = "Semana", meses = "Mes")
-}
+.etiqueta_tiempo_lead <- function(unidad) .etiqueta_tiempo_embudo(unidad)
 
 ## Detalle Descartados ----
 .pct_vs_total <- function(descartados, total) {
@@ -744,12 +698,8 @@ detectar_conversion_leads <- function(usr = "SISTEMA", facturas = fact_cliente) 
     etapa_actual
   )
 }
-.factor_tiempo_cliente <- function(unidad) {
-  switch(unidad, dias = 1, semanas = 7, meses = 30.4375, 1)
-}
-.etiqueta_tiempo_cliente <- function(unidad) {
-  switch(unidad, dias = "Día", semanas = "Semana", meses = "Mes")
-}
+.factor_tiempo_cliente <- function(unidad) .factor_tiempo_embudo(unidad)
+.etiqueta_tiempo_cliente <- function(unidad) .etiqueta_tiempo_embudo(unidad)
 .titulo_tiempo_cliente <- function(unidad, tipo) {
   if (identical(tipo, "contacto_cliente")) {
     switch(unidad,

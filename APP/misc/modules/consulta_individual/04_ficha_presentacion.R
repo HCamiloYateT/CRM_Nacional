@@ -196,41 +196,7 @@
 }
 .in_ficha_ui <- function(ns) {
   shiny::tags$div(class = "in-ficha",
-    shiny::tags$style(shiny::HTML(".in-ficha-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
-      gap:20px 32px;position:relative;align-items:start;margin-bottom:20px;}
-      .in-ficha .in-ficha-caja{border:1px solid #dee2e6;border-radius:12px;background:transparent;margin:0 0 16px;
-        padding:0;min-width:0;box-sizing:border-box;}
-      .in-ficha-grid>.in-ficha-caja{margin:0;}.in-ficha-grid>.in-ficha-caja[open]{align-self:stretch;}
-      .in-ficha .in-ficha-caja>summary{padding:12px 14px;flex-wrap:wrap;gap:8px;font-size:14px;line-height:1.4;}
-      .in-ficha .in-ficha-caja>.rsh-collapsible-content{padding:4px 14px 14px;min-width:0;}
-      .in-ficha-identidad{border-bottom:1px solid #DA291C;padding-bottom:10px;margin-bottom:12px;}
-      .in-ficha-identidad h4{font-family:inherit;}.in-ficha-secundario{color:#596168;font-size:12px;margin:4px 0;}
-      .in-ficha-badges{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0;}
-      .in-ficha .rf-status-badge,.in-ficha-identidad .rf-status-badge{width:fit-content;max-width:100%;
-        justify-self:start;align-self:center;white-space:normal;flex:0 0 auto;}
-      .in-ficha .rf-status-badge--success,.in-ficha-identidad .rf-status-badge--success{background:#e4f3e9;
-        color:#21653b;}
-      .in-ficha .rf-status-badge--info,.in-ficha-identidad .rf-status-badge--info{background:#e7eff9;color:#31577f;}
-      .in-ficha .rf-status-badge--danger,.in-ficha-identidad .rf-status-badge--danger{background:#f9e6e9;
-        color:#9b303b;}
-      .in-ficha .rf-status-badge--warning,.in-ficha-identidad .rf-status-badge--warning{background:#fff0d2;
-        color:#805b12;}
-      .in-ficha .rf-status-badge--neutral,.in-ficha-identidad .rf-status-badge--neutral{background:#eef0f2;
-        color:#495057;}
-      .in-ficha .in-ficha-valor{min-width:0;}
-      .in-ficha .in-ficha-kpi{display:block;font-size:1.2rem;line-height:1.35;}
-      .in-ficha .in-ficha-valor .rmcv-card{height:auto;}
-      .in-ficha .in-ficha-valor>.rf-notice-list{margin-top:6px;}
-      .in-ficha .in-ficha-registro .rf-info-grid{grid-template-columns:minmax(0,1fr);gap:2px;margin-bottom:6px;}
-      .in-ficha .in-ficha-registro .rf-info-item{display:grid;grid-template-columns:minmax(100px,.4fr) minmax(0,1fr);
-        gap:10px;padding:4px 0;min-height:0;}.in-ficha .in-ficha-registro .rf-info-item dt{margin:0;}
-      .in-ficha .in-ficha-registro+.in-ficha-registro{border-top:1px solid #dee2e6;margin-top:8px;padding-top:8px;}
-      .in-ficha-cuenta{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px 0;}
-      .in-ficha-cuenta+.in-ficha-cuenta{border-top:1px solid #dee2e6;}
-      .in-ficha-cuenta-datos{min-width:0;overflow-wrap:anywhere;}.in-ficha-asesor-comun{margin-top:8px;}
-      .in-ficha-complemento+.in-ficha-complemento{border-top:1px solid #dee2e6;margin-top:12px;padding-top:8px;}
-      @media(max-width:767px){.in-ficha-grid{grid-template-columns:minmax(0,1fr);gap:14px;}
-      }")),
+    .crm_estilos_ui(),
     shiny::uiOutput(ns("alcance_crm")),
     shiny::tags$div(class = "in-ficha-grid",
       .in_ficha_caja(ns, "antiguedad", "Antigüedad y relación comercial", shiny::uiOutput(ns("antiguedad-tabla"))),

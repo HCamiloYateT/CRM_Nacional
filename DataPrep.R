@@ -14,6 +14,9 @@ REQUIRED_PACKAGES <- c("racafeCore", "racafeBD", "racafeDrive", "tidyverse",
                        "lubridate", "openxlsx2", "readxl", "rfm", "CLVTools",
                        "future", "furrr", "gdata", "janitor", "tictoc")
 racafeCore::Loadpkg(REQUIRED_PACKAGES)
+if (utils::packageVersion("racafeCore") < "1.0.1") {
+  stop("Actualice racafeCore a 1.0.1 o posterior antes de preparar los datos.", call. = FALSE)
+}
 
 # Funciones ----
 

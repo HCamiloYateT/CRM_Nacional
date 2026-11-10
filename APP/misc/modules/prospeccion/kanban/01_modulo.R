@@ -17,20 +17,11 @@
 KanbanEmbudoUI <- function(id) {
   ns <- NS(id)
   racafeForms::racafeForm(variant = "plain",
-    tags$head(tags$script(HTML(JS_KANBAN_EMBUDO))),
+    racafeModulos::MenuAccionesDependencies(),
     useShinyjs(),
     racafeForms::racafeFormRow(columns = 3, responsive = "auto",
       uiOutput(ns("Asesor_ui")), uiOutput(ns("Linea_ui")), uiOutput(ns("Segmento_ui"))),
-    racafeForms::racafePanel(title = NULL, uiOutput(ns("kanban_board"))),
-    tags$script(HTML(
-      "document.addEventListener('click', function(e){
-    document.querySelectorAll('.rc-panel-acciones').forEach(function(p){
-    if(!p.contains(e.target) && !e.target.closest('.rc-boton-acciones')){
-    p.style.display='none';
-    }
-    });
-   });"
-    ))
+    racafeForms::racafePanel(title = NULL, uiOutput(ns("kanban_board")))
   )
 }
 KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE) {
@@ -130,16 +121,9 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE) {
                      else "Mostrando todas — clic para ver solo alertas")
         } else NULL
         
-        div(class = "kpb-col",
-            div(class = "kpb-col-header", style = paste0("background:", COLOR_ETAPA_EMBUDO[[etapa_col]], ";"),
-                div(class = "kpb-col-header-inner",
-                    tags$span(class = "kpb-col-titulo", etapa_col),
-                    div(class = "kpb-col-badges",
-                        tags$span(class = "kpb-col-count", as.character(n_col)),
-                        toggle_alertas,
-                        badges_extra,
-                        boton_extra))),
-            div(class = "kpb-col-body", cuerpo))
+        racafeModulos::ColumnaKanbanUI(etapa_col, cuerpo, cantidad = n_col,
+          color = COLOR_ETAPA_EMBUDO[[etapa_col]], badges = tagList(toggle_alertas, badges_extra),
+          acciones = boton_extra)
       }
       
       boton_nuevo_contacto <- shiny::tagAppendAttributes(
@@ -156,7 +140,7 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE) {
                   paste0(metricas$pct_contacto_cliente, "% Contacto"))
       )
       
-      div(id = ns("kpb_board"), `data-kanban-ns` = ns(""), class = "kpb-board",
+      racafeModulos::TableroKanbanUI(id = "kpb_board", ns = ns,
           construir_columna("CONTACTO", boton_extra = boton_nuevo_contacto),
           construir_columna("LEAD"),
           construir_columna("PROSPECTO"),

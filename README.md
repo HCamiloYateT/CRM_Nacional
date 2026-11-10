@@ -5,16 +5,26 @@ permanecen en CRM Nacional. No se instalan paquetes ni se ejecutan migraciones d
 
 ## Actualizar dependencias antes de desplegar
 
-Se requieren racafeForms >= 0.7.0, racafeShiny >= 1.4.1 y racafeModulos >= 0.5.1.
+Se requieren racafeCore >= 1.0.1, racafeGraph >= 1.0.1, racafeForecast >= 1.0.1,
+racafeForms >= 0.8.0, racafeShiny >= 1.5.0 y racafeModulos >= 0.6.0.
 
 ```r
 install.packages("remotes")
-remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeForms")
-remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = "racafeShiny")
-remotes::install_github("HCamiloYateT/racafeModulos", ref = "a13fd7e06b628c8ef72c4e1c201a3d9084c78aa8")
+for (paquete in c("racafeCore", "racafeGraph", "racafeForecast", "racafeForms", "racafeShiny")) {
+  remotes::install_github("HCamiloYateT/Libreria-Racafe", subdir = paquete,
+                          ref = "refactor/componentes-crm", upgrade = "never")
+}
+remotes::install_github("HCamiloYateT/racafeModulos", ref = "refactor/componentes-crm", upgrade = "never")
 ```
 
-Instalar las librerías antes de actualizar los scripts del CRM. racafeShiny 1.3.1 conserva los nombres antiguos de
+Instalar las librerías antes de actualizar los scripts del CRM. Una vez integrados los PR de las librerías,
+puede usarse `ref = "main"`. La UI y el ETL verifican las versiones mínimas antes de usar las nuevas APIs.
+Los recursos de Compartido se fijan a la revisión compatible indicada en `APP/global.R`.
+Integrar primero [Libreria-Racafe #121](https://github.com/HCamiloYateT/Libreria-Racafe/pull/121),
+[racafeModulos #37](https://github.com/HCamiloYateT/racafeModulos/pull/37) y
+[Compartido #78](https://github.com/HCamiloYateT/Compartido/pull/78), e instalar las versiones anteriores.
+
+racafeShiny 1.3.1 conserva los nombres antiguos de
 CajaValor como alias opcionales; el resumen ejecutivo llama directamente a racafeModulos.
 
 ## Integración con la exportación actual

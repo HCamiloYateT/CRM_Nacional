@@ -22,20 +22,6 @@ COLOR_ETAPA_EMBUDO <- c("CONTACTO" = "#c8c8c8",
                         "DESCARTADO" = "#1a1a1a"
                         )
 # Delega el click de un boton de tarjeta del kanban al input Shiny AccionSeleccionada del namespace
-JS_KANBAN_EMBUDO <- "
-$(document).on('click', '[data-kanban-action]', function(e) {
-  e.stopPropagation();
-  var $btn = $(this);
-  var $board = $btn.closest('[data-kanban-ns]');
-  if ($board.length === 0) return;
-  var ns_prefix = $board.data('kanban-ns');
-  Shiny.setInputValue(
-    ns_prefix + 'AccionSeleccionada',
-    { codigo: $btn.data('cod-contacto'), accion: $btn.data('kanban-action'), ts: Date.now() },
-    { priority: 'event' }
-  );
-});
-"
 ## Acciones por Etapa ----
 .ACCIONES_ETAPA_EMBUDO <- list(
   CONTACTO = c("Editar", "Relacionamiento", "Promover", "Descartar", "CrearOportunidad"),

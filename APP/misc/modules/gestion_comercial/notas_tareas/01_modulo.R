@@ -28,7 +28,7 @@ TableroTareasUI <- function(id) {
   shiny::tags$div(class = "crm-tareas-form", racafeForms::racafeForm(variant = "plain",
     racafeForms::racafeActionBar(left = shiny::tagList(
       shiny::tagAppendAttributes(racafeForms::racafeButton("crear", "Nueva tarea o nota", icon = "plus", ns = ns),
-        `data-crm-crear-tarea` = "true"),
+        `data-rf-controlbar-tab` = "Crear tareas"),
       racafeForms::racafeButton("actualizar", "Actualizar", icon = "arrows-rotate", variant = "secondary", ns = ns))),
     racafeForms::racafeFormRow(columns = 3, responsive = "auto",
       racafeForms::racafeInputText("buscar", "Buscar", placeholder = "Título, descripción o actividad", ns = ns),
@@ -74,58 +74,10 @@ TableroTareas <- function(id, usuario, datos, abrir, refrescar, es_admin = funct
       if (is.null(fuente)) return(racafeForms::racafeFormMessage("No fue posible cargar las tareas.", type = "error"))
       if (!nrow(fuente)) return(racafeForms::racafeFormMessage(
         "No hay tareas ni notas para los filtros seleccionados.", type = "empty"))
-      columnas <- lapply(.TSK_PRIORIDADES, function(prioridad) {
-        filas <- fuente[fuente$Prioridad == prioridad, , drop = FALSE]
-        tarjetas <- lapply(seq_len(nrow(filas)), function(i) {
-          fila <- filas[i, , drop = FALSE]
-          actividades <- .tareas_actividades(fila)
-          texto <- trimws(as.character(fila$Descripcion[[1]]))
-          if (is.na(texto) || !nzchar(texto)) texto <- "Sin descripción"
-          if (nchar(texto) > 180) texto <- paste0(substr(texto, 1, 177), "…")
-          boton <- racafeForms::racafeButton(paste0("abrir_", fila$cons[[1]]), "Ver detalle", icon = "arrow-right",
-            variant = "secondary", size = "xs", ns = session$ns)
-          # Un solo evento por tablero conserva la clave y evita observers por tarjeta.
-          boton <- shiny::tagAppendAttributes(boton, onclick = paste0("Shiny.setInputValue(",
-            jsonlite::toJSON(session$ns("abrir"), auto_unbox = TRUE), ",",
-            jsonlite::toJSON(as.character(fila$cons[[1]]), auto_unbox = TRUE), ",{priority:'event'});"))
-          responsables <- as.character(fila$Responsable[[1]])
-          responsables <- if (is.na(responsables)) character() else {
-            unique(trimws(strsplit(responsables, "|", fixed = TRUE)[[1]]))
-          }
-          responsables <- responsables[nzchar(responsables)]
-          if (!length(responsables)) responsables <- "Sin responsable"
-          badges <- lapply(responsables, function(nombre) {
-            shiny::tagAppendAttributes(racafeForms::racafeStatusBadge(nombre, "neutral", size = "xs"),
-              title = paste("Responsable:", nombre))
-          })
-          n_actividades <- length(actividades$textos)
-          racafeForms::racafeCard(padding = "compact",
-            shiny::tags$details(class = "crm-tarea-detalle",
-              shiny::tags$summary(
-                shiny::tags$strong(as.character(fila$titulo[[1]])),
-                shiny::tags$span(class = "crm-tarea-badges", badges)),
-              shiny::tags$div(class = "crm-tarea-expandido",
-                shiny::tags$div(class = "crm-tarea-badges",
-                  racafeForms::racafeStatusBadge(
-                    if (identical(as.character(fila$Tipo[[1]]), "list")) "Tarea" else "Nota", "neutral", size = "xs"),
-                  racafeForms::racafeStatusBadge(if (n_actividades) {
-                    paste0("Actividades: ", sum(actividades$cumplidas), "/", n_actividades)
-                  } else "Sin actividades", "neutral", size = "xs"),
-                  if (isTRUE(as.integer(fila$Cumplido[[1]]) == 1L)) {
-                    racafeForms::racafeStatusBadge("Cumplida", "success", size = "xs")
-                  },
-                  if (isTRUE(as.integer(fila$Archivado[[1]]) == 1L)) {
-                    racafeForms::racafeStatusBadge("Archivada", "neutral", size = "xs")
-                  }),
-                shiny::tags$p(texto),
-                racafeForms::racafeInfoItem("Vencimiento", racafeForms::racafeDateLabel(fila$FechaCumplimiento[[1]])),
-                boton)))
-        })
-        shiny::tags$section(class = "crm-tareas-columna",
-          shiny::tags$header(shiny::tags$strong(prioridad), racafeForms::racafeDataBadge("Registros", nrow(filas))),
-          if (!length(tarjetas)) .crm_nota("Sin registros en esta prioridad.") else shiny::tagList(tarjetas))
-      })
-      shiny::tags$div(class = "crm-tareas-tablero", columnas)
+      racafeModulos::TableroTareasTarjetas(fuente, .TSK_PRIORIDADES, actividades_fn = .tareas_actividades,
+        ns = session$ns, campos = c(id = "cons", titulo = "titulo", descripcion = "Descripcion",
+          prioridad = "Prioridad", responsable = "Responsable", tipo = "Tipo", cumplido = "Cumplido",
+          archivado = "Archivado", vencimiento = "FechaCumplimiento"), nota_fn = .crm_nota)
     })
     shiny::observeEvent(input$abrir, {
       fuente <- seleccion()
