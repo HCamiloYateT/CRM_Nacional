@@ -82,6 +82,12 @@ obtener_clientes_sin_contacto <- function(clientes, contactos) {
   invisible(TRUE)
 }
 
+# Fechas SQL sin sufijo de zona horaria ----
+.crm_literal_historia <- function(con, x) {
+  if (inherits(x, "POSIXt")) x <- format(x, format = "%Y-%m-%d %H:%M:%S", tz = "America/Bogota")
+  as.character(DBI::dbQuoteLiteral(con, x))
+}
+
 # Registro transaccional de clientes históricos ----
 .crm_registrar_cliente_historico <- function(cliente, usuario, generar_codigo) {
   con <- racafeBD::ConectarBD()
@@ -108,7 +114,7 @@ obtener_clientes_sin_contacto <- function(clientes, contactos) {
       UsuarioMod = usuario, FechaHoraModi = Sys.time(), EsReconstruido = TRUE,
       FuenteRegistro = "CLIENTE_HISTORICO", FechaFuente = fecha, FechaImputada = imputada)
       columnas <- paste(DBI::dbQuoteIdentifier(con, names(fila)), collapse = ", ")
-      valores <- vapply(fila, function(x) as.character(DBI::dbQuoteLiteral(con, x[[1]])), character(1))
+      valores <- vapply(fila, function(x) .crm_literal_historia(con, x[[1]]), character(1))
       DBI::dbExecute(con, paste0("INSERT INTO ", DBI::dbQuoteIdentifier(con, "CRMNALCONTACTO"),
         " (", columnas, ") VALUES (", paste(valores, collapse = ", "), ")"))
       attr(fila, "Creado") <- TRUE
@@ -152,7 +158,7 @@ obtener_clientes_sin_contacto <- function(clientes, contactos) {
     for (i in seq_len(nrow(plan))) {
       fecha <- plan$FechaFuente[i]
       imputada <- is.na(fecha) && isTRUE(obligatoria)
-      literal <- function(x) as.character(DBI::dbQuoteLiteral(con, x))
+      literal <- function(x) .crm_literal_historia(con, x)
       sql <- paste0("UPDATE CRMNALCONTACTO SET EsReconstruido = TRUE, FuenteRegistro = 'CLIENTE_HISTORICO', ",
         "EtapaPreDescarte = 'CLIENTE', FechaFuente = ", literal(fecha),
         ", FechaImputada = ", literal(imputada), ", FechaHoraCrea = ", literal(if (imputada) Sys.time() else fecha),
