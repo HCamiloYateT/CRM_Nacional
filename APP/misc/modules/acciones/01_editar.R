@@ -5,11 +5,10 @@
 IdentificacionUI <- function(id) {
   ns <- NS(id)
   .accion_formulario_ui(id,
-    uiOutput(ns("Titulo")),
     box(title = "Identificación", width = 12, collapsible = FALSE,
         .crm_select(id = ns("CampoAutorizaDatos"),
                                 label = Obligatorio("Autoriza Tratamiento de Datos"), choices = c("SI", "NO"),
-                                selected = "SI", multiple = FALSE, empty = FALSE),
+                                selected = NULL, multiple = FALSE, empty = FALSE),
         fluidRow(
           column(6, racafeForms::racafeInputText(id = ns("CampoNit"), label = h6("NIT"), width = "100%")),
           column(6, racafeForms::racafeInputText(id = ns("CampoRazonSocial"), label = h6("Razón Social"),
@@ -31,175 +30,70 @@ IdentificacionUI <- function(id) {
 }
 Identificacion <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
-    ns <- session$ns
     contador_actualizaciones <- reactiveVal(0)
-    
-    # Funciones ----
-    # Normalizacion de texto (squish + upper), igual que CrearContacto
-    .NormalizarRazonSocial <- function(texto) {
-      if (EsVacio(texto)) return(NA_character_)
-      str_squish(texto) %>% str_to_upper()
-    }
-    
-    # Datos ----
+    .confirmar_guardado <- .accion_guardado(input, session, codigo_contacto, usuario)
     datos_contacto <- reactive({
-      req(codigo_contacto())
-      CargarDatos("CRMNALCONTACTO") %>%
-        filter(CodContacto == codigo_contacto())
+      contador_actualizaciones(); req(codigo_contacto())
+      CargarDatos("CRMNALCONTACTO", condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(codigo_contacto())))
     })
-    
-    # Fuente unica para validacion de unicidad: se consultaba dos veces
-    # (una por cada renderUI en vivo -.ValidarNit-, otra al confirmar
-    # guardado en .ValidarCamposFormulario). Ahora ambos consumidores
-    # derivan del mismo reactive, cacheado por el ciclo reactivo
-    contactos_otros <- reactive({
-      req(codigo_contacto())
-      CargarDatos("CRMNALCONTACTO") %>%
-        filter(CodContacto != codigo_contacto())
-    })
-    
-    nits_marlot <- reactive({
-      CargarDatos("CRMNALMARLOT")$CLIENTE
-    })
-    
-    # Validaciones ----
-    # Validacion de campos obligatorios y unicidad de NIT antes de guardar
-    .ValidarCamposFormulario <- function() {
-      nit_ingresado <- input$CampoNit %||% ""
-      nit_original <- datos_contacto()$PerCod
-      nit_cambio <- !EsVacio(nit_ingresado) && nit_ingresado != nit_original
-      
-      c("Debe diligenciar Razón Social, NIT o ambos" =
-          EsVacio(input$CampoRazonSocial) && EsVacio(nit_ingresado),
-        "El NIT debe ser un valor numérico válido" =
-          !EsVacio(nit_ingresado) && !EsEnteroPositivo(nit_ingresado),
-        "El NIT ya existe como contacto activo" =
-          nit_cambio && nit_ingresado %in% contactos_otros()$PerCod,
-        "El NIT ya existe en CRMNALMARLOT" =
-          nit_cambio && nit_ingresado %in% nits_marlot()
-      )
+    .normalizar <- function(x) {
+      x <- stringr::str_to_upper(stringr::str_squish(x %||% ""))
+      if (EsVacio(x)) NA_character_ else x
     }
-    
-    # Outputs Textos ----
-    output$Titulo <- renderUI({
-      req(nrow(datos_contacto()) > 0)
-      h4(.titulo_identificacion(datos_contacto()$PerCod, datos_contacto()$PerRazSoc))
-    })
-    
-    # Validaciones en vivo, defensivas ante fallos de consulta (CargarDatos)
-    output$ValidacionRazonSocial <- renderUI({
-      tryCatch({
-        .ValidarRazonSocial(razon_social_ingresada = input$CampoRazonSocial %||% "",
-                            codigo_contacto_actual = codigo_contacto())
-      }, error = function(error) {
-        FormatearTexto(paste0("* Error de validación: ", conditionMessage(error)),
-                       negrita = TRUE, color = COLOR_ERROR, tamano_pct = 0.75)
-      })
-    })
-    
-    output$ValidacionNit <- renderUI({
-      tryCatch({
-        .ValidarNit(nit_ingresado = input$CampoNit %||% "", codigo_contacto_actual = codigo_contacto())
-      }, error = function(error) {
-        FormatearTexto(paste0("* Error de validación: ", conditionMessage(error)),
-                       negrita = TRUE, color = COLOR_ERROR, tamano_pct = 0.75)
-      })
-    })
-    
-    output$OrigenTexto <- renderUI({
-      req(nrow(datos_contacto()) > 0)
-      detalle_origen <- datos_contacto()$DetOrigen[[1]]
-      texto_origen <- paste0(
-        "Origen: ", datos_contacto()$Origen[[1]],
-        if (!EsVacio(detalle_origen)) paste0(" - ", detalle_origen) else ""
-      )
-      FormatearTexto(texto_origen, negrita = TRUE, tamano_pct = 0.85, color = "#374151")
-    })
-    
-    # Observadores de Inputs ----
-    # Precarga del formulario, incluye AutorizaTD
+    .validar_campos <- function() {
+      nit <- trimws(input$CampoNit %||% "")
+      actual <- datos_contacto()
+      original <- if (nrow(actual)) as.character(actual$PerCod[[1]]) else ""
+      cambio <- !EsVacio(nit) && !identical(nit, original)
+      # Las consultas de unicidad se realizan únicamente si cambia un NIT válido.
+      otros <- if (cambio && EsEnteroPositivo(nit)) CargarDatos("CRMNALCONTACTO",
+        condicion = sprintf("PerCod = '%s' AND CodContacto <> '%s'", .rc_escapar_sql(nit),
+          .rc_escapar_sql(codigo_contacto()))) else data.frame()
+      marlot <- if (cambio && EsEnteroPositivo(nit)) CargarDatos("CRMNALMARLOT",
+        condicion = sprintf("PerCod = '%s'", .rc_escapar_sql(nit))) else data.frame()
+      c("Debe diligenciar Razón Social, NIT o ambos" = EsVacio(input$CampoRazonSocial) && EsVacio(nit),
+        "Debe diligenciar Razón Social, NIT o ambos" = EsVacio(input$CampoRazonSocial) && EsVacio(nit),
+        "El NIT debe ser un número entero positivo" = !EsVacio(nit) && !EsEnteroPositivo(nit),
+        "El NIT ya existe como contacto" = nrow(otros) > 0,
+        "El NIT ya existe en el registro comercial" = nrow(marlot) > 0,
+        "Seleccione la autorización de tratamiento" = !isTRUE(input$CampoAutorizaDatos %in% c("SI", "NO")))
+    }
+    validacion <- .accion_validacion(input, session, codigo_contacto,
+      c("CampoNit", "CampoRazonSocial", "CampoNit", "CampoNit", "CampoNit", "CampoAutorizaDatos"),
+      .validar_campos)
     observeEvent(list(datos_contacto(), input$FormularioListo), {
       req(input$FormularioListo)
-      if (nrow(datos_contacto()) > 0) {
-        updateTextInput(session = session, inputId = "CampoRazonSocial",
-                        value = datos_contacto()$PerRazSoc)
-        updateTextInput(session = session, inputId = "CampoNit",
-                        value = datos_contacto()$PerCod)
-        .crm_update_select(session = session, selected = datos_contacto()$AutorizaTD,
-                                id = "CampoAutorizaDatos")
-      }
+      x <- datos_contacto()
+      updateTextInput(session, "CampoNit", value = if (nrow(x)) .normalizar(x$PerCod[[1]]) else "")
+      updateTextInput(session, "CampoRazonSocial", value = if (nrow(x)) .normalizar(x$PerRazSoc[[1]]) else "")
+      .crm_update_select(session, "CampoAutorizaDatos", selected = if (nrow(x)) x$AutorizaTD[[1]] else character())
     })
-    
-    # Observadores -----
+    output$OrigenTexto <- renderUI({
+      x <- datos_contacto(); req(nrow(x))
+      racafeForms::racafeNoticeList(paste("Origen:", x$Origen[[1]], x$DetOrigen[[1]]))
+    })
     observeEvent(input$BotonGuardar, {
-      condiciones_validacion <- .ValidarCamposFormulario()
-      if (any(condiciones_validacion)) {
-        for (nombre_condicion in names(condiciones_validacion)) {
-          if (condiciones_validacion[[nombre_condicion]]) {
-            racafeForms::racafeNotify(duration = 4, type = "error", title = nombre_condicion,
-                                    session = shiny::getDefaultReactiveDomain())
-          }
-        }
+      if (!validacion$validate()) return(invisible(NULL))
+      original <- datos_contacto(); req(nrow(original) == 1L)
+      campos <- c("PerCod", "PerRazSoc", "AutorizaTD")
+      nuevos <- list(PerCod = .normalizar(input$CampoNit), PerRazSoc = .normalizar(input$CampoRazonSocial),
+        AutorizaTD = input$CampoAutorizaDatos)
+      if (all(vapply(campos, function(campo) identical(.normalizar(original[[campo]][[1]]),
+          .normalizar(nuevos[[campo]])), logical(1)))) {
+        racafeForms::racafeNotify(session, title = "No hay cambios para guardar", type = "info")
         return(invisible(NULL))
       }
-      
-      coincidencia_exacta <- .BuscarContactoPorRazonSocial(
-        razon_social_ingresada = input$CampoRazonSocial,
-        codigo_contacto_actual = codigo_contacto()
-      )
-      
-      texto_confirmacion <- if (!is.null(coincidencia_exacta)) {
-        paste0("Ya existe un contacto con esta razón social (NIT: ",
-               coincidencia_exacta$nit %||% "sin NIT",
-               "). ¿Desea continuar y guardar de todas formas?")
-      } else {
-        "¿Desea guardar los cambios de este contacto?"
-      }
-      
-      # Reutiliza el modal centralizado de racafeShiny, igual que CrearContacto,
-      # en vez de la variante local .ConstruirModalConfirmacionContacto / MostrarModalConClase
-      .accion_modal_confirmacion(
-        ns = ns, titulo = "Confirmar guardado", texto = texto_confirmacion,
-        id_cancelar = "BotonCancelarGuardado", id_confirmar = "BotonConfirmarGuardado",
-        label_confirmar = "Guardar Cambios", icono_confirmar = "floppy-disk"
-      )
+      # Conserva todas las columnas y marcas históricas existentes.
+      fila <- original
+      for (campo in campos) fila[[campo]] <- nuevos[[campo]]
+      fila$UsuarioMod <- usuario(); fila$FechaHoraModi <- Sys.time()
+      .confirmar_guardado({
+        ReemplazarDatos(fila, "CRMNALCONTACTO", llaves = list(CodContacto = codigo_contacto()))
+        contador_actualizaciones(isolate(contador_actualizaciones()) + 1L)
+        validacion$reset()
+        racafeForms::racafeNotify(session, title = "Contacto modificado exitosamente", type = "success")
+      }, titulo = "Guardar identificación", tablas = "CRMNALCONTACTO", validar = validacion$validate)
     })
-    
-    observeEvent(input$BotonCancelarGuardado, {
-      removeModal()
-    })
-    
-    observeEvent(input$BotonConfirmarGuardado, {
-      if (!.accion_validar(.ValidarCamposFormulario())) return(invisible(NULL))
-      # Fila con los datos actualizados; AutorizaTD es editable
-      fila_actualizada <- data.frame(
-        CodContacto   = codigo_contacto(),
-        UsuarioCrea   = datos_contacto()$UsuarioCrea,
-        FechaHoraCrea = datos_contacto()$FechaHoraCrea,
-        UsuarioMod    = usuario(), FechaHoraModi = Sys.time(),
-        AutorizaTD    = input$CampoAutorizaDatos,
-        PerRazSoc     = .NormalizarRazonSocial(input$CampoRazonSocial), PerCod = input$CampoNit,
-        Origen        = datos_contacto()$Origen, DetOrigen = datos_contacto()$DetOrigen,
-        Estado        = datos_contacto()$Estado,
-        stringsAsFactors = FALSE
-      ) %>%
-        mutate(across(where(is.character) & !c("PerRazSoc"),
-                      ~ str_to_upper(ifelse(. == "", NA_character_, .))))
-      
-      tryCatch({
-        ReemplazarDatos(fila_actualizada, "CRMNALCONTACTO", llaves = list(CodContacto = codigo_contacto()))
-        removeModal()
-        racafeForms::racafeNotify(duration = 4, type = "success", title = "Contacto modificado exitosamente",
-                                session = shiny::getDefaultReactiveDomain())
-        contador_actualizaciones(contador_actualizaciones() + 1)
-      }, error = function(error) {
-        removeModal()
-        .ManejarErrorAccion(error = error, operacion = "guardar el contacto",
-                            usuario = usuario(), codigo_contacto = codigo_contacto())
-      })
-    })
-    
-    # Retorno ----
     list(actualizaciones = reactive(contador_actualizaciones()))
   })
 }
@@ -289,6 +183,33 @@ Directorio <- function(id, usuario, codigo_contacto) {
     contador_actualizacion_personas          <- reactiveVal(0)
     redes_temporales_persona_nueva           <- reactiveVal(list())
     
+    validacion_correo <- .accion_validacion(input, session, codigo_contacto, "CampoCorreoEmpresarial",
+      function() c("Ingrese un correo válido" = .accion_correo_invalido(input$CampoCorreoEmpresarial)))
+    validacion_telefono <- .accion_validacion(input, session, codigo_contacto, "CampoTelefonoNuevo",
+      function() c("Ingrese un teléfono válido de 7 a 15 dígitos" = EsVacio(input$CampoTelefonoNuevo) ||
+        .accion_telefono_invalido(input$CampoTelefonoNuevo)))
+    validacion_red <- .accion_validacion(input, session, codigo_contacto, c("CampoTipoRed", "CampoUsuarioRed"),
+      function() c("Seleccione el tipo de red" = EsVacio(input$CampoTipoRed),
+        "Ingrese el usuario o enlace" = EsVacio(input$CampoUsuarioRed)))
+    validacion_red_persona <- .accion_validacion(input, session, codigo_contacto,
+      c("CampoTipoRedPersona", "CampoUsuarioRedPersona"), function() c(
+        "Seleccione el tipo de red" = EsVacio(input$CampoTipoRedPersona),
+        "Ingrese el usuario o enlace" = EsVacio(input$CampoUsuarioRedPersona)))
+    validacion_persona <- .accion_validacion(input, session, codigo_contacto,
+      c("CampoNombre", "CampoCorreoPersona", "CampoTelefonoPersona"), function() c(
+        "El nombre es obligatorio" = EsVacio(input$CampoNombre),
+        "Ingrese un correo válido" = .accion_correo_invalido(input$CampoCorreoPersona),
+        "Ingrese un teléfono válido" = .accion_telefono_invalido(input$CampoTelefonoPersona)))
+    observeEvent(list(codigo_contacto(), input$FormularioListo), {
+      req(input$FormularioListo)
+      for (campo in c("CampoTelefonoNuevo", "CampoUsuarioRed", "CampoNombre", "CampoCargo",
+          "CampoTelefonoPersona", "CampoCorreoPersona", "CampoUsuarioRedPersona")) {
+        updateTextInput(session, campo, value = "")
+      }
+      for (campo in c("CampoTipoRed", "CampoTipoRedPersona")) .crm_update_select(session, campo, selected = character())
+      redes_temporales_persona_nueva(list())
+      shinyjs::hide("PanelNuevaPersona")
+    })
     # Empresarial ----
     
     ## Correo ----
@@ -303,13 +224,12 @@ Directorio <- function(id, usuario, codigo_contacto) {
     observeEvent(list(codigo_contacto(), input$FormularioListo), {
       req(input$FormularioListo)
       datos <- datos_correo_empresa()
-      correo_actual <- if (nrow(datos) > 0) datos$CorreoGeneral[[1]] else ""
+      correo_actual <- if (nrow(datos) > 0 && !EsVacio(datos$CorreoGeneral[[1]])) datos$CorreoGeneral[[1]] else ""
       updateTextInput(session, "CampoCorreoEmpresarial", value = correo_actual)
     }, ignoreInit = FALSE)
     observeEvent(input$BotonGuardarDatosEmpresariales, {
       req(codigo_contacto())
-      if (!.accion_validar(c("El correo no es válido" =
-          .accion_correo_invalido(input$CampoCorreoEmpresarial)))) return(invisible(NULL))
+      if (!validacion_correo$validate()) return(invisible(NULL))
       .confirmar_guardado({
         tryCatch({
           guardar_info_empresarial_directorio(codigo_contacto(), input$CampoCorreoEmpresarial, usuario())
@@ -320,7 +240,7 @@ Directorio <- function(id, usuario, codigo_contacto) {
           .ManejarErrorAccion(error = error, operacion = "guardar los datos empresariales",
                               usuario = usuario(), codigo_contacto = codigo_contacto())
         })
-      }, titulo = "Guardar datos empresariales")
+      }, titulo = "Guardar datos empresariales", tablas = "CRMNALDIRECTORIOEMPRESARIAL", validar = validacion_correo$validate)
     })
 
     observadores_telefonos <- new.env(parent = emptyenv())
@@ -352,15 +272,7 @@ Directorio <- function(id, usuario, codigo_contacto) {
     ### Observers ----
     observeEvent(input$BotonAgregarTelefono, {
       req(codigo_contacto())
-      if (!.accion_validar(c("Ingrese un teléfono válido de 7 a 15 dígitos" =
-          EsVacio(input$CampoTelefonoNuevo) || .accion_telefono_invalido(input$CampoTelefonoNuevo)))) {
-        return(invisible(NULL))
-      }
-      if (trimws(input$CampoTelefonoNuevo %||% "") == "") {
-        racafeForms::racafeNotify(type = "warning", duration = 3, title = "Ingrese un número de teléfono",
-                                session = shiny::getDefaultReactiveDomain())
-        return(invisible(NULL))
-      }
+      if (!validacion_telefono$validate()) return(invisible(NULL))
       if (nrow(datos_telefonos()) >= .MAX_TELEFONOS_GENERAL) {
         racafeForms::racafeNotify(type = "warning", duration = 4,
                                 title = paste0("Máximo ", .MAX_TELEFONOS_GENERAL, " teléfonos"),
@@ -371,7 +283,7 @@ Directorio <- function(id, usuario, codigo_contacto) {
         registrar_telefono_directorio(codigo_contacto(), input$CampoTelefonoNuevo, usuario())
         updateTextInput(session, "CampoTelefonoNuevo", value = "")
         contador_actualizacion_telefonos_empresa(isolate(contador_actualizacion_telefonos_empresa()) + 1)
-      }, titulo = "Añadir teléfono")
+      }, titulo = "Añadir teléfono", tablas = "CRMNALDIRECTORIOTELEFONO", validar = validacion_telefono$validate)
     })
     # Enlazar dinamicamente los botones de eliminar telefono 
     observe({
@@ -385,10 +297,11 @@ Directorio <- function(id, usuario, codigo_contacto) {
         clave <- as.character(id_tel)
         if (exists(clave, envir = observadores_telefonos, inherits = FALSE)) return(invisible(NULL))
         observadores_telefonos[[clave]] <- observeEvent(input[[paste0("BotonEliminarTelefono_", id_tel)]], {
+          req(id_tel %in% datos_telefonos()$IdTelefono)
           .confirmar_guardado({
             eliminar_telefono_directorio(id_tel)
             contador_actualizacion_telefonos_empresa(isolate(contador_actualizacion_telefonos_empresa()) + 1)
-          }, titulo = "Eliminar teléfono")
+          }, titulo = "Eliminar teléfono", tablas = "CRMNALDIRECTORIOTELEFONO")
         }, ignoreInit = TRUE)
       })
     })
@@ -423,26 +336,22 @@ Directorio <- function(id, usuario, codigo_contacto) {
     observeEvent(modulo_tabla_redes_empresa$seleccion(), {
       seleccion_actual <- modulo_tabla_redes_empresa$seleccion()
       req(seleccion_actual, seleccion_actual$col == "Eliminar")
+      req(seleccion_actual$fila$IdRed[[1]] %in% datos_redes()$IdRed)
       .confirmar_guardado({
         eliminar_red_social_directorio(seleccion_actual$fila$IdRed[[1]])
         contador_actualizacion_redes_empresa(isolate(contador_actualizacion_redes_empresa()) + 1)
         racafeForms::racafeNotify(duration = 3, type = "success", title = "Red social eliminada",
                                 session = shiny::getDefaultReactiveDomain())
-      }, titulo = "Eliminar red social")
+      }, titulo = "Eliminar red social", tablas = "CRMNALDIRECTORIORED")
     })
     observeEvent(input$BotonAgregarRed, {
       req(codigo_contacto())
-      if (input$CampoTipoRed == "" || trimws(input$CampoUsuarioRed %||% "") == "") {
-        racafeForms::racafeNotify(type = "warning", duration = 3,
-                                title = "Seleccione el tipo de red y el usuario/enlace",
-                                session = shiny::getDefaultReactiveDomain())
-        return(invisible(NULL))
-      }
+      if (!validacion_red$validate()) return(invisible(NULL))
       .confirmar_guardado({
         registrar_red_social_directorio(codigo_contacto(), input$CampoTipoRed, input$CampoUsuarioRed)
         updateTextInput(session, "CampoUsuarioRed", value = "")
         contador_actualizacion_redes_empresa(isolate(contador_actualizacion_redes_empresa()) + 1)
-      }, titulo = "Añadir red social")
+      }, titulo = "Añadir red social", tablas = "CRMNALDIRECTORIORED", validar = validacion_red$validate)
     })
     
     # Personal ----
@@ -476,12 +385,13 @@ Directorio <- function(id, usuario, codigo_contacto) {
     observeEvent(modulo_tabla_personas$seleccion(), {
       seleccion_actual <- modulo_tabla_personas$seleccion()
       req(seleccion_actual, seleccion_actual$col == "Eliminar")
+      req(seleccion_actual$fila$IdPersona[[1]] %in% datos_personas()$IdPersona)
       .confirmar_guardado({
         eliminar_persona_directorio(seleccion_actual$fila$IdPersona[[1]])
         contador_actualizacion_personas(isolate(contador_actualizacion_personas()) + 1)
         racafeForms::racafeNotify(duration = 3, type = "success", title = "Persona eliminada",
                                 session = shiny::getDefaultReactiveDomain())
-      }, titulo = "Eliminar persona")
+      }, titulo = "Eliminar persona", tablas = "CRMNALDIRECTORIOPERSONA")
     })
     
     # Abrir / cerrar panel de nueva persona
@@ -499,12 +409,7 @@ Directorio <- function(id, usuario, codigo_contacto) {
     
     # Agregar red temporal a la lista en memoria (aun no se guarda en BD)
     observeEvent(input$BotonAgregarRedPersona, {
-      if (input$CampoTipoRedPersona == "" || trimws(input$CampoUsuarioRedPersona %||% "") == "") {
-        racafeForms::racafeNotify(type = "warning", duration = 3,
-                                title = "Seleccione el tipo de red y el usuario/enlace",
-                                session = shiny::getDefaultReactiveDomain())
-        return(invisible(NULL))
-      }
+      if (!validacion_red_persona$validate()) return(invisible(NULL))
       redes_actuales <- redes_temporales_persona_nueva()
       redes_actuales[[length(redes_actuales) + 1]] <- list(
         tipo = input$CampoTipoRedPersona, usuario = input$CampoUsuarioRedPersona
@@ -524,34 +429,34 @@ Directorio <- function(id, usuario, codigo_contacto) {
         )
       }))
     })
-    # Enlazar dinamicamente los botones de quitar red temporal 
+    observadores_redes <- new.env(parent = emptyenv())
+    session$onSessionEnded(function() lapply(as.list(observadores_redes), function(obs) obs$destroy()))
     observe({
-      n <- length(redes_temporales_persona_nueva())
-      req(n > 0)
-      lapply(seq_len(n), function(indice_red) {
-        observeEvent(input[[paste0("BotonQuitarRed_", indice_red)]], {
-          redes_actuales <- redes_temporales_persona_nueva()
-          redes_actuales[[indice_red]] <- NULL
-          redes_temporales_persona_nueva(redes_actuales)
-        }, ignoreInit = TRUE, once = TRUE)
+      claves <- as.character(seq_along(redes_temporales_persona_nueva()))
+      for (clave in setdiff(ls(observadores_redes), claves)) {
+        observadores_redes[[clave]]$destroy(); rm(list = clave, envir = observadores_redes)
+      }
+      lapply(claves, function(clave) {
+        if (exists(clave, observadores_redes, inherits = FALSE)) return(invisible(NULL))
+        observadores_redes[[clave]] <- observeEvent(input[[paste0("BotonQuitarRed_", clave)]], {
+          redes <- redes_temporales_persona_nueva()
+          indice <- as.integer(clave)
+          if (indice <= length(redes)) redes[[indice]] <- NULL
+          redes_temporales_persona_nueva(redes)
+        }, ignoreInit = TRUE)
       })
     })
-    
+
     # Guardar persona nueva junto con sus redes temporales -----
     observeEvent(input$BotonGuardarPersona, {
-      if (!.accion_validar(c("El correo de la persona no es válido" = .accion_correo_invalido(input$CampoCorreoPersona),
-          "El teléfono de la persona no es válido" = .accion_telefono_invalido(input$CampoTelefonoPersona)))) return(invisible(NULL))
-      if (trimws(input$CampoNombre %||% "") == "") {
-        racafeForms::racafeNotify(type = "error", duration = 4, title = "El nombre es obligatorio",
-                                session = shiny::getDefaultReactiveDomain())
-        return(invisible(NULL))
-      }
+      if (!validacion_persona$validate()) return(invisible(NULL))
+      redes_confirmadas <- redes_temporales_persona_nueva()
       .confirmar_guardado({
         identificador_persona_nueva <- registrar_persona_directorio(
           codigo_contacto(), input$CampoNombre, input$CampoCargo,
           input$CampoTelefonoPersona, input$CampoCorreoPersona, usuario()
         )
-        for (red_temporal in redes_temporales_persona_nueva()) {
+        for (red_temporal in redes_confirmadas) {
           registrar_red_social_persona_directorio(identificador_persona_nueva, red_temporal$tipo,
                                                   red_temporal$usuario)
         }
@@ -565,7 +470,7 @@ Directorio <- function(id, usuario, codigo_contacto) {
         contador_actualizacion_personas(isolate(contador_actualizacion_personas()) + 1)
         racafeForms::racafeNotify(duration = 3, type = "success", title = "Persona de contacto agregada",
                                 session = shiny::getDefaultReactiveDomain())
-      }, titulo = "Añadir persona")
+      }, titulo = "Añadir persona", tablas = "CRMNALDIRECTORIOPERSONA", validar = validacion_persona$validate)
     })
   })
 }
@@ -597,6 +502,11 @@ BuscadorDireccionUI <- function(id) {
                column(6, racafeForms::racafeInputText("Municipio", "Municipio / Ciudad", ns = ns))),
              uiOutput(ns("ListaSugerencias"))
     ),
+    fluidRow(
+      column(6, racafeForms::racafeInputNumeric("Latitud", "Latitud", value = NA_real_,
+        min = -90, max = 90, decimals = 6, ns = ns)),
+      column(6, racafeForms::racafeInputNumeric("Longitud", "Longitud", value = NA_real_,
+        min = -180, max = 180, decimals = 6, ns = ns))),
     uiOutput(ns("Resultado")),
     uiOutput(ns("Diagnostico"))
   )
@@ -619,7 +529,7 @@ BuscadorDireccion <- function(id, pais_iso2 = "CO", valores_iniciales = reactive
         return(invisible(NULL))
       }
       
-      resp <- google_autocompletar_direccion(texto, pais_iso2 = input$Pais)
+      resp <- .accion_geocodificar(texto = texto, pais = input$Pais)
       estado_autocompletado(resp)
       sugerencias_visibles(TRUE)
     }, ignoreInit = TRUE)
@@ -659,7 +569,12 @@ BuscadorDireccion <- function(id, pais_iso2 = "CO", valores_iniciales = reactive
     observeEvent(list(valores_iniciales(), input$FormularioListo), {
       req(input$FormularioListo)
       valores <- valores_iniciales()
-      req(!is.null(valores))
+      if (is.null(valores)) valores <- list()
+      resultado_lugar(NULL)
+      estado_autocompletado(list(status = NULL, sugerencias = NULL))
+      .crm_update_select(session, "Pais", selected = valores$Pais %||% pais_iso2)
+      racafeForms::racafeUpdateNumeric(session, "Latitud", value = valores$lat %||% NA_real_)
+      racafeForms::racafeUpdateNumeric(session, "Longitud", value = valores$lng %||% NA_real_)
       
       updateTextInput(session, "Departamento", value = valores$Depto %||% "")
       updateTextInput(session, "Municipio", value = valores$Mpio %||% "")
@@ -689,9 +604,11 @@ BuscadorDireccion <- function(id, pais_iso2 = "CO", valores_iniciales = reactive
       updateTextInput(session, "Direccion", value = seleccion$texto)
       sugerencias_visibles(FALSE)
       
-      resp <- google_obtener_detalle_lugar(seleccion$place_id)
+      resp <- .accion_geocodificar(place_id = seleccion$place_id)
       estado_autocompletado(list(status = resp$status, sugerencias = NULL))
       if (resp$status == "OK") {
+        racafeForms::racafeUpdateNumeric(session, "Latitud", value = resp$lat)
+        racafeForms::racafeUpdateNumeric(session, "Longitud", value = resp$lng)
         resultado_lugar(resp)
       } else {
         resultado_lugar(NULL)
@@ -725,8 +642,9 @@ BuscadorDireccion <- function(id, pais_iso2 = "CO", valores_iniciales = reactive
       
       mensaje <- switch(
         resp$status,
+        "SIN_PROVEEDOR" = "Búsqueda de direcciones sin configurar. Puede ingresar dirección y coordenadas manualmente.",
         "ZERO_RESULTS" = "No se encontraron direcciones que coincidan con lo escrito.",
-        "ERROR_CONEXION" = "No fue posible conectarse con Google. Verifica tu conexión a internet.",
+        "ERROR_CONEXION" = "No fue posible conectarse con el servicio configurado. Verifica tu conexión a internet.",
         "REQUEST_DENIED" = "El servicio de búsqueda de direcciones no está disponible en este momento.",
         "INVALID_REQUEST" = "La búsqueda no se pudo procesar. Intenta escribir la dirección nuevamente.",
         "OVER_QUERY_LIMIT" = "Se alcanzó el límite de búsquedas disponibles. Intenta más tarde.",
@@ -753,18 +671,18 @@ BuscadorDireccion <- function(id, pais_iso2 = "CO", valores_iniciales = reactive
     reactive({
       r <- resultado_lugar()
       list(Pais = r$pais %||% input$Pais,
-           Depto = input$Departamento,
-           Mpio = input$Municipio,
+           Depto = input$Departamento %||% NA_character_,
+           Mpio = input$Municipio %||% NA_character_,
            Direccion = input$Direccion,
-           lat = r$lat %||% NA_real_,
-           lng = r$lng %||% NA_real_)
+           lat = input$Latitud %||% NA_real_,
+           lng = input$Longitud %||% NA_real_)
     })
   })
 }
 
 GeografiaUI <- function(id) {
   ns <- NS(id)
-  fluidRow(
+  .accion_formulario_ui(id, fluidRow(
     column(7,
            box(title = "Dirección Principal", width = 12, collapsible = FALSE,
                BuscadorDireccionUI(ns("Direccion")),
@@ -838,7 +756,7 @@ GeografiaUI <- function(id) {
                )
            )
     )
-  )
+  ))
 }
 Geografia <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
@@ -903,15 +821,39 @@ Geografia <- function(id, usuario, codigo_contacto) {
         select(Eliminar, Nombre, Tipo, Depto, Mpio, Direccion, Principal, IdSucursal)
     })
     
-    modulo_direccion_sucursal <- BuscadorDireccion(id = "DireccionSucursal", pais_iso2 = "CO")
+    modulo_direccion_sucursal <- BuscadorDireccion(id = "DireccionSucursal", pais_iso2 = "CO",
+      valores_iniciales = reactive({ codigo_contacto(); list() }))
     
+    .errores_direccion <- function(x) {
+      lat <- x$lat; lng <- x$lng
+      lat_vacia <- !length(lat) || is.na(lat); lng_vacia <- !length(lng) || is.na(lng)
+      c("Seleccione el país" = EsVacio(x$Pais), "La dirección es obligatoria" = EsVacio(x$Direccion),
+        "Ingrese latitud entre -90 y 90 y complete ambas coordenadas" =
+          (!lat_vacia && (!is.finite(lat) || abs(lat) > 90)) || (lat_vacia != lng_vacia),
+        "Ingrese longitud entre -180 y 180 y complete ambas coordenadas" =
+          (!lng_vacia && (!is.finite(lng) || abs(lng) > 180)) || (lat_vacia != lng_vacia))
+    }
+    validacion_ubicacion <- .accion_validacion(input, session, codigo_contacto,
+      paste0("Direccion-", c("Pais", "Direccion", "Latitud", "Longitud")),
+      function() .errores_direccion(modulo_direccion_principal()))
+    validacion_sede <- .accion_validacion(input, session, codigo_contacto,
+      c("CampoNombreSucursal", "CampoTipoSede", paste0("DireccionSucursal-",
+        c("Pais", "Direccion", "Latitud", "Longitud"))), function() c(
+        "El nombre es obligatorio" = EsVacio(input$CampoNombreSucursal),
+        "Seleccione el tipo de sede" = EsVacio(input$CampoTipoSede),
+        .errores_direccion(modulo_direccion_sucursal())))
+    observeEvent(list(codigo_contacto(), input$FormularioListo), {
+      shinyjs::hide("PanelNuevaSucursal")
+      updateTextInput(session, "CampoNombreSucursal", value = "")
+      .crm_update_select(session, "CampoTipoSede", selected = character())
+      racafeForms::racafeUpdateSwitch(session, "CampoEsPrincipal", value = FALSE)
+    })
     # Observadores de Inputs ----
     
     observeEvent(input$BotonGuardarUbicacion, {
       req(codigo_contacto())
       direccion_actual <- modulo_direccion_principal()
-      if (!.accion_validar(c("El país es obligatorio" = EsVacio(direccion_actual$Pais),
-          "La dirección es obligatoria" = EsVacio(direccion_actual$Direccion)))) return(invisible(NULL))
+      if (!validacion_ubicacion$validate()) return(invisible(NULL))
       .confirmar_guardado({
         tryCatch({
           guardar_ubicacion_contacto(
@@ -928,7 +870,7 @@ Geografia <- function(id, usuario, codigo_contacto) {
             usuario = usuario(), codigo_contacto = codigo_contacto()
           )
         })
-      }, titulo = "Guardar ubicación")
+      }, titulo = "Guardar ubicación", tablas = "CRMNALUBICACION", validar = validacion_ubicacion$validate)
     })
     
     modulo_tabla_sucursales <- racafeModulos::TablaReactable(
@@ -959,6 +901,7 @@ Geografia <- function(id, usuario, codigo_contacto) {
     observeEvent(modulo_tabla_sucursales$seleccion(), {
       seleccion_actual <- modulo_tabla_sucursales$seleccion()
       req(seleccion_actual, seleccion_actual$col == "Eliminar")
+      req(seleccion_actual$fila$IdSucursal[[1]] %in% datos_sucursales_tabla()$IdSucursal)
       .confirmar_guardado({
         tryCatch({
           eliminar_sucursal_contacto(seleccion_actual$fila$IdSucursal[[1]])
@@ -971,7 +914,7 @@ Geografia <- function(id, usuario, codigo_contacto) {
             usuario = usuario(), codigo_contacto = codigo_contacto()
           )
         })
-      }, titulo = "Eliminar sede")
+      }, titulo = "Eliminar sede", tablas = "CRMNALSUCURSALES")
     })
     
     observeEvent(input$BotonAnadirSucursal, {
@@ -984,30 +927,15 @@ Geografia <- function(id, usuario, codigo_contacto) {
     
     observeEvent(input$BotonGuardarSucursal, {
       req(codigo_contacto())
-      if (EsVacio(input$CampoNombreSucursal)) {
-        racafeForms::racafeNotify(type = "error", duration = 4, title = "El nombre de la sede es obligatorio",
-                                session = shiny::getDefaultReactiveDomain())
-        return(invisible(NULL))
-      }
-      if (EsVacio(input$CampoTipoSede)) {
-        racafeForms::racafeNotify(type = "error", duration = 4, title = "El tipo de sede es obligatorio",
-                                session = shiny::getDefaultReactiveDomain())
-        return(invisible(NULL))
-      }
       direccion_sucursal_actual <- modulo_direccion_sucursal()
-      if (!.accion_validar(c("El país de la sede es obligatorio" = EsVacio(direccion_sucursal_actual$Pais),
-          "La dirección de la sede es obligatoria" = EsVacio(direccion_sucursal_actual$Direccion)))) {
-        return(invisible(NULL))
-      }
+      if (!validacion_sede$validate()) return(invisible(NULL))
       .confirmar_guardado({
         tryCatch({
-          registrar_sucursal_contacto(
-            codigo_contacto(), input$CampoNombreSucursal, direccion_sucursal_actual$Pais,
-            direccion_sucursal_actual$Depto, direccion_sucursal_actual$Mpio,
-            direccion_sucursal_actual$Direccion, direccion_sucursal_actual$lat,
-            direccion_sucursal_actual$lng, input$CampoEsPrincipal, usuario(),
-            tipo = input$CampoTipoSede
-          )
+          registrar_sucursal_contacto(cod_contacto = codigo_contacto(), nombre = input$CampoNombreSucursal,
+            tipo = input$CampoTipoSede, depto = direccion_sucursal_actual$Depto,
+            mpio = direccion_sucursal_actual$Mpio, direccion = direccion_sucursal_actual$Direccion,
+            lat = direccion_sucursal_actual$lat, lng = direccion_sucursal_actual$lng,
+            es_principal = input$CampoEsPrincipal, usr = usuario())
           shinyjs::hide("PanelNuevaSucursal")
           updateTextInput(session, "CampoNombreSucursal", value = "")
           .crm_update_select(session = session, selected = character(0), id = "CampoTipoSede")
@@ -1020,7 +948,7 @@ Geografia <- function(id, usuario, codigo_contacto) {
             usuario = usuario(), codigo_contacto = codigo_contacto()
           )
         })
-      }, titulo = "Añadir sede")
+      }, titulo = "Añadir sede", tablas = "CRMNALSUCURSALES", validar = validacion_sede$validate)
     })
     
     # Mapa: ya no vuelve a consultar CargarDatos(); reutiliza los dos
@@ -1056,7 +984,7 @@ Geografia <- function(id, usuario, codigo_contacto) {
       }
       
       mapa <- leaflet::leaflet() %>%
-        leaflet::addTiles()
+        leaflet::addProviderTiles("CartoDB.Positron")
       
       if (nrow(puntos_principal) == 0 && nrow(puntos_sucursales) == 0) {
         return(mapa %>% leaflet::setView(lng = -74.1, lat = 4.6, zoom = 5))
@@ -1099,11 +1027,11 @@ PotencialUI <- function(id) {
         fluidRow(
           column(4,
                  .crm_select(id = ns("CampoTostador"), label = h6("¿Es tostador?"),
-                                         choices = .choices_potencial$si_no, selected = "NO", multiple = FALSE,
+                                         choices = .choices_potencial$si_no, selected = NULL, multiple = FALSE,
                                          empty = FALSE)),
           column(4,
                  .crm_select(id = ns("CampoAlianza"), label = h6("¿Tiene alianza con tostadora?"),
-                                         choices = .choices_potencial$si_no, selected = "NO", multiple = FALSE,
+                                         choices = .choices_potencial$si_no, selected = NULL, multiple = FALSE,
                                          empty = FALSE),
                  conditionalPanel(condition = paste0("input['", ns("CampoAlianza"), "'] == 'SI'"),
                                   racafeForms::racafeInputText(id = ns("CampoDetalleAlianza"), label = h6("¿Con cuál?"),
@@ -1112,7 +1040,7 @@ PotencialUI <- function(id) {
           ),
           column(4,
                  .crm_select(id = ns("CampoMaquila"), label = h6("¿Maquila?"),
-                                         choices = .choices_potencial$si_no, selected = "NO", multiple = FALSE,
+                                         choices = .choices_potencial$si_no, selected = NULL, multiple = FALSE,
                                          empty = FALSE),
                  conditionalPanel(condition = paste0("input['", ns("CampoMaquila"), "'] == 'SI'"),
                                   racafeForms::racafeInputText(id = ns("CampoDetalleMaquila"),
@@ -1148,7 +1076,7 @@ PotencialUI <- function(id) {
                                          value = NA, min = 0, width = "100%")),
           column(3,
                  .crm_select(id = ns("CampoUnidadConsumo"), label = h6("Unidad"),
-                                         choices = .accion_opciones("pot_unidad_consumo", .choices_potencial$unidad_consumo), selected = "SACOS/MES",
+                                         choices = .accion_opciones("pot_unidad_consumo", .choices_potencial$unidad_consumo), selected = NULL,
                                          multiple = FALSE, empty = FALSE))
         ),
         h6("Certificaciones de Interés"),
@@ -1165,87 +1093,71 @@ PotencialUI <- function(id) {
 Potencial <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
     .confirmar_guardado <- .accion_guardado(input, session, codigo_contacto, usuario)
-    opciones_productos <- unname(unlist(Choices()$producto, use.names = FALSE))
-    anteriores <- CargarDatos("CRMNALPOTENCIAL")$CalidadesPreferidas
-    opciones_productos <- sort(unique(toupper(c(opciones_productos,
-      unlist(strsplit(anteriores[!is.na(anteriores)], "|", fixed = TRUE))))))
-    opciones_productos <- opciones_productos[!is.na(opciones_productos) & nzchar(opciones_productos) &
-      opciones_productos != "AGREGAR..."]
+    datos_potencial <- reactive({ req(codigo_contacto()); cargar_potencial_contacto(codigo_contacto()) })
+    opciones_productos <- reactive({
+      .pr_fuentes()$revision()
+      productos <- .pr_cargar("CRMNALPRODS")
+      x <- as.character(productos$Producto)
+      if ("Excluir" %in% names(productos)) x <- x[is.na(productos$Excluir) | productos$Excluir != "SI"]
+      sort(unique(toupper(x[!is.na(x) & nzchar(trimws(x)) & !x %in% c("SIN DATO", "AGREGAR...")])))
+    })
     calidades <- racafeModulos::ListaDesplegableAgregable("CampoCalidades", label = NULL,
-      choices = opciones_productos, selected = character(), multiple = TRUE, uppercase = TRUE)
-    observeEvent(list(codigo_contacto(), input$FormularioListo, input$CalidadesListo), {
+      choices = isolate(opciones_productos()), selected = character(), multiple = TRUE, uppercase = TRUE)
+    validacion <- .accion_validacion(input, session, codigo_contacto,
+      c("CampoConsumoEsperado", "CampoUnidadConsumo", "CampoAniosOperacion", "CampoDetalleAlianza", "CampoDetalleMaquila"),
+      function() c("El consumo debe ser un número no negativo" =
+        !EsVacio(input$CampoConsumoEsperado) && !isTRUE(is.finite(input$CampoConsumoEsperado) && input$CampoConsumoEsperado >= 0),
+        "Seleccione la unidad del consumo" = isTRUE(input$CampoConsumoEsperado > 0) && EsVacio(input$CampoUnidadConsumo),
+        "Los años deben ser un número no negativo" = !EsVacio(input$CampoAniosOperacion) &&
+          !isTRUE(is.finite(input$CampoAniosOperacion) && input$CampoAniosOperacion >= 0),
+        "Indique la alianza" = identical(input$CampoAlianza, "SI") && EsVacio(input$CampoDetalleAlianza),
+        "Indique el detalle de maquila" = identical(input$CampoMaquila, "SI") && EsVacio(input$CampoDetalleMaquila)))
+    observeEvent(list(datos_potencial(), input$FormularioListo, input$CalidadesListo, opciones_productos()), {
       req(input$FormularioListo)
       req(codigo_contacto())
-      datos_potencial <- cargar_potencial_contacto(codigo_contacto())
-      if (nrow(datos_potencial) == 0) {
-        return(invisible(NULL))
+      x <- datos_potencial()
+      valor <- function(campo, defecto = "") {
+        if (!nrow(x) || !campo %in% names(x) || EsVacio(x[[campo]][[1]])) defecto else x[[campo]][[1]]
       }
-      .crm_update_select(session = session,
-                              selected = ifelse(datos_potencial$EsTostador[[1]] == 1, "SI", "NO"), id = "CampoTostador")
-      .crm_update_select(session = session,
-                              selected = ifelse(datos_potencial$AlianzaTostadora[[1]] == 1, "SI", "NO"),
-                              id = "CampoAlianza")
-      updateTextInput(session, "CampoDetalleAlianza", value = datos_potencial$DetalleAlianza[[1]] %||% "")
-      .crm_update_select(session = session,
-                              selected = ifelse(datos_potencial$Maquila[[1]] == 1, "SI", "NO"), id = "CampoMaquila")
-      updateTextInput(session, "CampoDetalleMaquila", value = datos_potencial$DetalleMaquila[[1]] %||% "")
-      racafeForms::racafeUpdateNumeric(session = session,
-                              value = suppressWarnings(as.numeric(datos_potencial$AniosOperacion[[1]])),
-                              id = "CampoAniosOperacion")
-      .crm_update_select(session = session, selected = datos_potencial$TipoCompra[[1]] %||% "",
-                              id = "CampoTipoCompra")
-      .crm_update_select(session = session, selected = datos_potencial$FrecuenciaCompra[[1]] %||% "",
-                              id = "CampoFrecuenciaCompra")
-      
-      calidades_previas <- if (!EsVacio(datos_potencial$CalidadesPreferidas[[1]])) {
-        strsplit(datos_potencial$CalidadesPreferidas[[1]], "|", fixed = TRUE)[[1]]
-      } else {
-        NULL
+      si_no <- function(campo) {
+        x <- valor(campo, NA_real_)
+        if (is.na(x)) character() else if (as.numeric(x) == 1) "SI" else "NO"
       }
-      if (!is.null(input$CalidadesListo)) racafeForms::racafeUpdateSelect(session, "CampoCalidades-sel",
-        selected = toupper(calidades_previas))
-      racafeForms::racafeUpdateNumeric(session = session,
-                              value = suppressWarnings(as.numeric(datos_potencial$ConsumoEsperado[[1]])),
-                              id = "CampoConsumoEsperado")
-      .crm_update_select(session = session, selected = datos_potencial$UnidadConsumo[[1]] %||% "SACOS/MES",
-                              id = "CampoUnidadConsumo")
-      
-      certificaciones_previas <- if (!EsVacio(datos_potencial$CertificacionesInteres[[1]])) {
-        strsplit(datos_potencial$CertificacionesInteres[[1]], "|", fixed = TRUE)[[1]]
-      } else {
-        NULL
-      }
-      .crm_update_select(session, "CampoCertificaciones", selected = certificaciones_previas)
-      updateTextAreaInput(session, "CampoObservaciones", value = datos_potencial$Observaciones[[1]] %||% "")
+      .crm_update_select(session, "CampoTostador", selected = si_no("EsTostador"))
+      .crm_update_select(session, "CampoAlianza", selected = si_no("AlianzaTostadora"))
+      .crm_update_select(session, "CampoMaquila", selected = si_no("Maquila"))
+      for (campo in c("DetalleAlianza", "DetalleMaquila")) updateTextInput(session, paste0("Campo", campo), value = valor(campo))
+      for (campo in c("AniosOperacion", "ConsumoEsperado")) racafeForms::racafeUpdateNumeric(session,
+        paste0("Campo", campo), value = as.numeric(valor(campo, NA_real_)))
+      for (campo in c("TipoCompra", "FrecuenciaCompra", "UnidadConsumo")) .crm_update_select(session,
+        paste0("Campo", campo), selected = valor(campo, character()))
+      seleccion <- toupper(strsplit(valor("CalidadesPreferidas"), "|", fixed = TRUE)[[1]])
+      if (!is.null(input$CalidadesListo)) calidades$actualizar(
+        choices = unique(c(opciones_productos(), seleccion)), selected = seleccion)
+      .crm_update_select(session, "CampoCertificaciones",
+        selected = strsplit(valor("CertificacionesInteres"), "|", fixed = TRUE)[[1]])
+      updateTextAreaInput(session, "CampoObservaciones", value = valor("Observaciones"))
     })
-    
+
     observeEvent(input$BotonGuardarPotencial, {
       req(codigo_contacto())
       calidades_actuales <- calidades$seleccion()
-      consumo <- input$CampoConsumoEsperado
-      anios <- input$CampoAniosOperacion
-      consumo_invalido <- length(consumo) > 1L ||
-        (length(consumo) == 1L && !is.na(consumo) && (!is.finite(consumo) || consumo < 0))
-      anios_invalidos <- length(anios) > 1L ||
-        (length(anios) == 1L && !is.na(anios) && (!is.finite(anios) || anios < 0))
-      if (!.accion_validar(c("El consumo no puede ser negativo" = consumo_invalido,
-          "Seleccione la unidad del consumo" = isTRUE(consumo > 0) && EsVacio(input$CampoUnidadConsumo),
-          "Los años de operación no pueden ser negativos" = anios_invalidos))) return(invisible(NULL))
+      if (!validacion$validate()) return(invisible(NULL))
       .confirmar_guardado({
         tryCatch({
           guardar_potencial_contacto(
             cod_contacto = codigo_contacto(),
-            es_tostador = as.numeric(identical(input$CampoTostador, "SI")),
-            alianza = as.numeric(identical(input$CampoAlianza, "SI")),
+            es_tostador = if (EsVacio(input$CampoTostador)) NA_real_ else as.numeric(input$CampoTostador == "SI"),
+            alianza = if (EsVacio(input$CampoAlianza)) NA_real_ else as.numeric(input$CampoAlianza == "SI"),
             detalle_alianza = input$CampoDetalleAlianza,
-            maquila = as.numeric(identical(input$CampoMaquila, "SI")),
+            maquila = if (EsVacio(input$CampoMaquila)) NA_real_ else as.numeric(input$CampoMaquila == "SI"),
             detalle_maquila = input$CampoDetalleMaquila,
-            anios_operacion = input$CampoAniosOperacion,
-            tipo_compra = input$CampoTipoCompra,
+            anios_operacion = input$CampoAniosOperacion %||% NA_real_,
+            tipo_compra = input$CampoTipoCompra %||% NA_character_,
             calidades_preferidas = calidades_actuales,
-            consumo_esperado = input$CampoConsumoEsperado,
-            unidad_consumo = input$CampoUnidadConsumo,
-            frecuencia_compra = input$CampoFrecuenciaCompra,
+            consumo_esperado = input$CampoConsumoEsperado %||% NA_real_,
+            unidad_consumo = input$CampoUnidadConsumo %||% NA_character_,
+            frecuencia_compra = input$CampoFrecuenciaCompra %||% NA_character_,
             certificaciones_interes = input$CampoCertificaciones,
             observaciones = input$CampoObservaciones,
             usr = usuario()
@@ -1260,7 +1172,7 @@ Potencial <- function(id, usuario, codigo_contacto) {
             codigo_contacto = codigo_contacto()
           )
         })
-      }, titulo = "Guardar potencial")
+      }, titulo = "Guardar potencial", tablas = "CRMNALPOTENCIAL", validar = validacion$validate)
     })
   })
 }
@@ -1269,15 +1181,16 @@ Potencial <- function(id, usuario, codigo_contacto) {
 
 EditarUI <- function(id) {
   ns <- NS(id)
-  bs4Dash::tabsetPanel(
+  tagList(uiOutput(ns("Encabezado")), bs4Dash::tabsetPanel(
     tabPanel("Identificación", Saltos(), IdentificacionUI(ns("Identificacion"))),
     tabPanel("Directorio", Saltos(), DirectorioUI(ns("Directorio"))),
     tabPanel("Geografía", Saltos(), GeografiaUI(ns("Geografia"))),
     tabPanel("Potencial", Saltos(), PotencialUI(ns("Potencial")))
-  )
+  ))
 }
 Editar <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
+    .accion_encabezado(output, codigo_contacto)
     modulo_identificacion <- Identificacion(id = "Identificacion", usuario = usuario, codigo_contacto = codigo_contacto)
     Directorio(id = "Directorio", usuario = usuario, codigo_contacto = codigo_contacto)
     Geografia(id = "Geografia", usuario = usuario, codigo_contacto = codigo_contacto)

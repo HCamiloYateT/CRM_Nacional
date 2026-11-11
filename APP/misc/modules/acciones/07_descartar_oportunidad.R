@@ -1,14 +1,15 @@
 # Descarte confirmado desde contacto o tablero ----
 DescartarOportunidadUI <- function(id) {
   ns <- shiny::NS(id)
-  racafeForms::racafeForm(variant = "plain", shiny::uiOutput(ns("ResumenOportunidad")),
+  .accion_formulario_ui(id, racafeForms::racafeForm(variant = "plain", shiny::uiOutput(ns("ResumenOportunidad")),
     .crm_select("DES_Razon", "Razón de descarte", choices = .RAZONES_DESCARTE_OPORTUNIDAD,
       selected = NULL, ns = ns),
     racafeForms::racafeInputTextArea("DES_Comentario", "Comentario adicional", rows = 3, ns = ns),
-    racafeForms::racafeButton("DES_Solicitar", "Descartar oportunidad", icon = "ban", ns = ns))
+    racafeForms::racafeButton("DES_Solicitar", "Descartar oportunidad", icon = "ban", ns = ns)))
 }
 DescartarOportunidad <- function(id, usuario, id_oportunidad) {
   moduleServer(id, function(input, output, session) {
+    .confirmacion <- .accion_confirmacion(input, session, id_oportunidad, usuario)
     ns  <- session$ns
     ret <- reactiveVal(0)
     
@@ -33,14 +34,16 @@ DescartarOportunidad <- function(id, usuario, id_oportunidad) {
       if (EsVacio(comentario)) input$DES_Razon else paste0(input$DES_Razon, " | ", comentario)
     })
     
+    observeEvent(list(id_oportunidad(), input$FormularioListo), {
+      req(input$FormularioListo)
+      .crm_update_select(session, "DES_Razon", selected = character())
+      updateTextAreaInput(session, "DES_Comentario", value = "")
+    })
+    validacion <- .accion_validacion(input, session, id_oportunidad, "DES_Razon",
+      function() c("Seleccione la razón de descarte" = EsVacio(input$DES_Razon)))
     observeEvent(input$DES_Solicitar, {
-      cond <- c("La razón de descarte es obligatoria" = EsVacio(input$DES_Razon))
-      if (any(cond)) {
-        sapply(names(cond[cond]), function(msg) racafeForms::racafeNotify(duration = 4, type = "error", title = msg,
-                                session = shiny::getDefaultReactiveDomain()))
-        return(invisible(NULL))
-      }
-      .accion_modal_confirmacion(
+      if (!validacion$validate()) return(invisible(NULL))
+      .confirmacion$abrir(
         ns = ns, titulo = "Confirmar descarte de oportunidad",
         texto = paste0("¿Deseas descartar esta oportunidad? Motivo: ", motivo_final()),
         id_cancelar = "DES_Cancelar", id_confirmar = "DES_Confirmar",
@@ -48,9 +51,10 @@ DescartarOportunidad <- function(id, usuario, id_oportunidad) {
       )
     })
     
-    observeEvent(input$DES_Cancelar, { removeModal() })
+    observeEvent(input$DES_Cancelar, { .confirmacion$cancelar("DES_Confirmar"); removeModal() })
     
     observeEvent(input$DES_Confirmar, {
+      if (!.confirmacion$aceptar("DES_Confirmar", validacion$validate)) return(invisible(NULL))
       tryCatch({
         descartar_oportunidad(id_oportunidad(), motivo_final(), usuario())
         removeModal()

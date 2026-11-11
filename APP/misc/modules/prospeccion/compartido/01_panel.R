@@ -518,6 +518,8 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
     })
     
     output$ModalContenido <- .crm_render_ui({
+      codigo_seleccionado()
+      input$AccionSeleccionada
       req(
         accion_seleccionada()
       )

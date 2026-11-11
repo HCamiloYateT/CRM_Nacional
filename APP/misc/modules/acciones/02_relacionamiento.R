@@ -2,9 +2,8 @@
 # Modulo Principal ----
 RelacionamientoUI <- function(id) {
   ns <- NS(id)
-  tagList(
-    uiOutput(ns("Titulo")),
-    uiOutput(ns("EstadoActual")),
+  .accion_formulario_ui(id,
+    uiOutput(ns("Encabezado")),
     # Relacionamiento ----
     box(title = "Relacionamiento", width = 12, collapsible = FALSE,
         fluidRow(
@@ -56,6 +55,8 @@ RelacionamientoUI <- function(id) {
 }
 Relacionamiento <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
+    .confirmacion <- .accion_confirmacion(input, session, codigo_contacto, usuario)
+    .accion_encabezado(output, codigo_contacto)
     ns <- session$ns
     
     gestion_trigger      <- reactiveVal(0)
@@ -63,6 +64,11 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
     rv_obs <- reactiveValues(cumplir = list(), confirma = list())
     trigger_refresco <- reactiveVal(0)
     
+    observeEvent(list(codigo_contacto(), input$FormularioListo), {
+      req(input$FormularioListo)
+      for (campo in c("GES_Tipo", "REC_Asesor", "REC_Canal")) .crm_update_select(session, campo, selected = character())
+      for (campo in c("GES_Comentario", "REC_Mensaje")) updateTextAreaInput(session, campo, value = "")
+    })
     # Datos base del contacto — filtrado en SQL, no full scan de CRMNALCONTACTO ----
     data_contacto <- reactive({
       req(codigo_contacto())
@@ -124,24 +130,22 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
       }))
     })
     
+    validacion_gestion <- .accion_validacion(input, session, codigo_contacto,
+      c("GES_Tipo", "GES_Comentario"), function() c(
+        "Seleccione el tipo de gestión" = EsVacio(input$GES_Tipo),
+        "El comentario es obligatorio" = EsVacio(input$GES_Comentario)))
     observeEvent(input$GES_Guardar, {
-      cond <- c("El tipo de gestión es obligatorio" = EsVacio(input$GES_Tipo),
-                "El comentario es obligatorio" = EsVacio(input$GES_Comentario))
-      if (any(cond)) {
-        sapply(names(cond), function(x) {
-          if (cond[[x]]) racafeForms::racafeNotify(session, title = x, type = "error", duration = 4)
-        })
-        return(invisible(NULL))
-      }
-      .accion_modal_confirmacion(
+      if (!validacion_gestion$validate()) return(invisible(NULL))
+      .confirmacion$abrir(
         ns = ns, titulo = "Confirmar gestión",
         texto = paste0("¿Desea registrar esta gestión de tipo '", input$GES_Tipo, "'?"),
         id_cancelar = "GES_CancelarGuardado", id_confirmar = "GES_ConfirmarGuardado",
         label_confirmar = "Registrar", icono_confirmar = "floppy-disk"
       )
     })
-    observeEvent(input$GES_CancelarGuardado, { removeModal() })
+    observeEvent(input$GES_CancelarGuardado, { .confirmacion$cancelar("GES_ConfirmarGuardado"); removeModal() })
     observeEvent(input$GES_ConfirmarGuardado, {
+      if (!.confirmacion$aceptar("GES_ConfirmarGuardado", validacion_gestion$validate)) return(invisible(NULL))
       tryCatch({
         registrar_relacionamiento(codigo_contacto(), input$GES_Tipo, input$GES_Comentario, usuario())
         removeModal()
@@ -227,7 +231,7 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
             fila_actual <- listar_recordatorio(codigo_contacto()) %>% filter(IdRecordatorio == id_rec)
             if (nrow(fila_actual) == 0 || isTRUE(fila_actual$Enviado[1] == 1)) return(invisible(NULL))
             
-            .accion_modal_confirmacion(
+            .confirmacion$abrir(
               ns = ns, titulo = "Confirmar cumplimiento",
               texto = paste0("¿Confirma que el recordatorio para ", fila_actual$Asesor[1], " fue atendido?"),
               id_cancelar = paste0("REC_CumplirCancelar_", id_rec),
@@ -246,6 +250,7 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
           
           obs_cancelar  <- observeEvent(input[[cancelar_id]], { removeModal() }, ignoreInit = TRUE)
           obs_confirmar <- observeEvent(input[[confirmar_id]], {
+            if (!.confirmacion$aceptar(confirmar_id)) return(invisible(NULL))
             .rc_marcar_cumplido(id_rec)
             removeModal()
           }, ignoreInit = TRUE)
@@ -257,21 +262,16 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
       })
     })
     
+    validacion_recordatorio <- .accion_validacion(input, session, codigo_contacto,
+      c("REC_Asesor", "REC_Canal", "REC_Fecha", "REC_Fecha", "REC_Mensaje"), function() c(
+        "Seleccione el asesor" = EsVacio(input$REC_Asesor),
+        "Seleccione el canal" = EsVacio(input$REC_Canal),
+        "Seleccione una fecha y hora futura" = !isTRUE(input$REC_Fecha > Sys.time()),
+        "El horario permitido es de 07:00 a 17:59" = !isTRUE(lubridate::hour(input$REC_Fecha) %in% 7:17),
+        "El mensaje es obligatorio" = EsVacio(input$REC_Mensaje)))
     observeEvent(input$REC_Programar, {
-      cond <- c("El Asesor es obligatorio" = EsVacio(input$REC_Asesor),
-                "El Canal es obligatorio" = EsVacio(input$REC_Canal),
-                "La fecha y hora son obligatorias" = is.null(input$REC_Fecha),
-                "El horario permitido es de 07:00 a 17:59" =
-                  !is.null(input$REC_Fecha) && !lubridate::hour(input$REC_Fecha) %in% 7:17,
-                "La fecha debe ser futura" = !is.null(input$REC_Fecha) && input$REC_Fecha < Sys.time(),
-                "El mensaje es obligatorio" = EsVacio(input$REC_Mensaje))
-      if (any(cond)) {
-        sapply(names(cond), function(x) {
-          if (cond[[x]]) racafeForms::racafeNotify(session, title = x, type = "error", duration = 4)
-        })
-        return(invisible(NULL))
-      }
-      .accion_modal_confirmacion(
+      if (!validacion_recordatorio$validate()) return(invisible(NULL))
+      .confirmacion$abrir(
         ns = ns, titulo = "Confirmar recordatorio",
         texto = paste0("¿Desea programar este recordatorio para ", input$REC_Asesor,
                        " el ", format(input$REC_Fecha, "%d/%m/%Y %H:%M"), "?"),
@@ -279,8 +279,9 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
         label_confirmar = "Programar", icono_confirmar = "calendar"
       )
     })
-    observeEvent(input$REC_CancelarProgramar, { removeModal() })
+    observeEvent(input$REC_CancelarProgramar, { .confirmacion$cancelar("REC_ConfirmarProgramar"); removeModal() })
     observeEvent(input$REC_ConfirmarProgramar, {
+      if (!.confirmacion$aceptar("REC_ConfirmarProgramar", validacion_recordatorio$validate)) return(invisible(NULL))
       tryCatch({
         registrar_recordatorio(codigo_contacto(), input$REC_Asesor, input$REC_Fecha,
                                input$REC_Canal, input$REC_Mensaje, usuario())

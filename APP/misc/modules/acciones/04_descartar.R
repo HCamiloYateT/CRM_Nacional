@@ -3,7 +3,7 @@
 FormularioDescartarUI <- function(id, etapa) {
   ns       <- NS(id)
   etiqueta <- .ETIQUETA_DESCARTE_ETAPA[[etapa]] %||% "Registro"
-  tagList(
+  .accion_formulario_ui(id,
     box(title = paste("Descartar", etiqueta), width = 12, collapsible = FALSE,
         .crm_select(id = ns("DES_Razon"), label = Obligatorio("Razón de Descarte"),
                                 choices = .RAZONES_DESCARTE[[etapa]], selected = NULL, multiple = FALSE, empty = FALSE),
@@ -16,6 +16,7 @@ FormularioDescartarUI <- function(id, etapa) {
 }
 FormularioDescartar <- function(id, usuario, cod_contacto, etapa, data_contacto = NULL) {
   moduleServer(id, function(input, output, session) {
+    .confirmacion <- .accion_confirmacion(input, session, cod_contacto, usuario)
     ns       <- session$ns
     ret      <- reactiveVal(0)
     etiqueta <- .ETIQUETA_DESCARTE_ETAPA[[etapa]] %||% "registro"
@@ -31,7 +32,7 @@ FormularioDescartar <- function(id, usuario, cod_contacto, etapa, data_contacto 
     }
     
     detalle_config <- reactive({
-      req(input$DES_Razon)
+      if (EsVacio(input$DES_Razon)) return(list(tipo = "texto", label = "Detalle"))
       if (identical(input$DES_Razon, "OTRAS")) {
         list(tipo = "texto", label = "Especifique la razón",
              placeholder = "Describa el motivo del descarte")
@@ -112,7 +113,7 @@ FormularioDescartar <- function(id, usuario, cod_contacto, etapa, data_contacto 
     
     motivo_final <- reactive({
       cfg   <- detalle_config()
-      otro  <- .opcion_otro(choices_lista())
+      otro  <- if (identical(cfg$tipo, "lista")) .opcion_otro(choices_lista()) else NULL
       items <- input$DES_Detalle %||% character(0)
       # Sustituye la etiqueta generica "Otro X" por "Otro X: <detalle escrito>"
       detalle <- if (identical(cfg$tipo, "lista") && !is.null(otro) && otro %in% items) {
@@ -141,15 +142,15 @@ FormularioDescartar <- function(id, usuario, cod_contacto, etapa, data_contacto 
       )
     }
     
+    validacion <- .accion_validacion(input, session, cod_contacto,
+      c("DES_Razon", "DES_Detalle", "DES_DetalleOtro"), validar_campos_descarte)
+    observeEvent(list(cod_contacto(), input$FormularioListo), {
+      req(input$FormularioListo)
+      .crm_update_select(session, "DES_Razon", selected = character())
+    })
     observeEvent(input$DES_Solicitar, {
-      cond <- validar_campos_descarte()
-      if (any(cond)) {
-        sapply(names(cond), function(x) {
-          if (cond[[x]]) racafeForms::racafeNotify(session, title = x, type = "error", duration = 4)
-        })
-        return(invisible(NULL))
-      }
-      .accion_modal_confirmacion(
+      if (!validacion$validate()) return(invisible(NULL))
+      .confirmacion$abrir(
         ns = ns, titulo = paste("Confirmar descarte de", etiqueta),
         texto = paste0("¿Deseas descartar este ", tolower(etiqueta), "? Motivo: ", motivo_final()),
         id_cancelar = "DES_Cancelar", id_confirmar = "DES_Confirmar",
@@ -157,9 +158,10 @@ FormularioDescartar <- function(id, usuario, cod_contacto, etapa, data_contacto 
       )
     })
     
-    observeEvent(input$DES_Cancelar, { removeModal() })
+    observeEvent(input$DES_Cancelar, { .confirmacion$cancelar("DES_Confirmar"); removeModal() })
     
     observeEvent(input$DES_Confirmar, {
+      if (!.confirmacion$aceptar("DES_Confirmar", validacion$validate)) return(invisible(NULL))
       tryCatch({
         # Razon1/Razon2/Razon3 se pasan explicitas (en vez de dejar que
         # descartar_generico() infiera una unica razon del texto de
@@ -188,16 +190,17 @@ FormularioDescartar <- function(id, usuario, cod_contacto, etapa, data_contacto 
 DescartarUI <- function(id) {
   ns <- NS(id)
   tagList(
-    uiOutput(ns("Titulo")),
-    uiOutput(ns("EstadoActual")),
+    uiOutput(ns("Encabezado")),
     uiOutput(ns("Contenido"))
   )
 }
 Descartar <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
+    .confirmacion <- .accion_confirmacion(input, session, codigo_contacto, usuario)
     ns <- session$ns
     
     trigger_refresco <- reactiveVal(0)
+    .accion_encabezado(output, codigo_contacto, function() { trigger_refresco(); .pr_fuentes()$revision() })
     
     data_contacto <- reactive({
       req(codigo_contacto())

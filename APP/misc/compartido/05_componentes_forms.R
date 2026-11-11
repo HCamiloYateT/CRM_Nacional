@@ -28,8 +28,7 @@
   argumentos <- list(...)
   sin_seleccion <- is.null(argumentos$selected) || !length(argumentos$selected) ||
     all(is.na(argumentos$selected) | argumentos$selected == "")
-  obligatorio <- !isTRUE(argumentos$multiple) && sin_seleccion &&
-    (isTRUE(argumentos$required) || "selected" %in% names(argumentos))
+  obligatorio <- !isTRUE(argumentos$multiple) && sin_seleccion
   if (obligatorio) argumentos$selected <- character()
   control <- do.call(racafeForms::racafeInputSelect,
     c(list(id = id, label = label, choices = .crm_choices(choices), empty = FALSE,
@@ -37,7 +36,19 @@
   control
 }
 .crm_update_select <- function(session, id, ..., choices = NULL) {
-  racafeForms::racafeUpdateSelect(session, id, choices = .crm_choices(choices), ...)
+  argumentos <- list(...)
+  if ("selected" %in% names(argumentos) &&
+      (is.null(argumentos$selected) || all(is.na(argumentos$selected) | argumentos$selected == ""))) {
+    argumentos$selected <- character()
+  }
+  # Bootstrap-select recrea el picker al actualizar: el título de placeholder no debe borrar un valor real.
+  if ("selected" %in% names(argumentos)) {
+    opciones <- argumentos$options %||% list()
+    opciones$title <- if (!length(argumentos$selected)) "Seleccione..." else ""
+    argumentos$options <- opciones
+  }
+  do.call(racafeForms::racafeUpdateSelect,
+    c(list(session = session, id = id, choices = .crm_choices(choices)), argumentos))
 }
 
 # Los nombres comerciales se presentan sin cambiar valores ni códigos del ETL ----

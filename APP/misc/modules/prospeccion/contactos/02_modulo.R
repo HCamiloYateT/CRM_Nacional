@@ -290,7 +290,7 @@ DetalleContacto <- function(id, usuario) {
     observeEvent(contacto_mod$n(), {
       req(contacto_mod$codigo())
       removeModal()
-      { .pr_invalidar(); refresh_trigger(isolate(refresh_trigger()) + 1) }
+      { refresh_trigger(isolate(refresh_trigger()) + 1) }
     })
     
     # Descarga ----
