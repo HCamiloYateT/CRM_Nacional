@@ -56,8 +56,12 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       destino <- solicitud()
       if (!is.null(destino) && !identical(destino, shiny::isolate(solicitud_atendida()))) {
         codigos <- strsplit(ifelse(is.na(x$Codigo), "", as.character(x$Codigo)), "|", fixed = TRUE)
-        coincidencias <- which(vapply(codigos, function(ids) destino$codigo %in% ids, logical(1)))
-        if (!length(coincidencias)) coincidencias <- which(as.character(x$NIT) %in% destino$nit)
+        coincidencias <- integer()
+        if (length(destino$codigo) == 1L && !is.na(destino$codigo) && nzchar(destino$codigo)) {
+          coincidencias <- which(vapply(codigos, function(ids) destino$codigo %in% ids, logical(1)))
+        }
+        por_nit <- which(!is.na(x$NIT) & as.character(x$NIT) %in% destino$nit)
+        if (length(por_nit)) coincidencias <- por_nit
         if (length(coincidencias)) seleccion <- x$Clave[coincidencias[1]] else {
           shiny::showNotification("La entidad no está disponible para el alcance actual.", type = "warning")
         }

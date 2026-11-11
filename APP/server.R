@@ -1,6 +1,13 @@
 server <- function(input, output, session) {
   .crm_iniciar_loader(input)
   consulta_solicitada <- reactiveVal(NULL)
+  observeEvent(session$clientData$url_search, {
+    destino <- .kb_parametros_consulta(session$clientData$url_search)
+    if (!is.null(destino)) {
+      consulta_solicitada(destino)
+      bs4Dash::updateTabItems(session, "menu_principal", selected = "IN_Consulta")
+    }
+  }, once = TRUE, ignoreInit = FALSE)
   
   # Datos reactivos ----
   usuario <- reactive({
