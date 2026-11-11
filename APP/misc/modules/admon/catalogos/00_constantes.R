@@ -12,6 +12,11 @@
   cot_empaque = c("Blanco #6", "Premarcado #7", "Premarcado #7 Arte del cliente"),
   cot_divisa = c("Peso Colombiano", "Dólares"),
   formapago = c("PAGO ANTICIPADO", "CONTADO CONTRA ENTREGA"),
+  pot_tipo_compra = c("VERDE", "TOSTADO", "AMBOS"),
+  pot_frecuencia_compra = c("SEMANAL", "QUINCENAL", "MENSUAL", "TRIMESTRAL", "ESPORADICA"),
+  pot_unidad_consumo = c("SACOS/MES", "KG/MES", "TON/MES"),
+  pot_certificaciones = c("ORGANICO", "RAINFOREST ALLIANCE", "FAIR TRADE", "UTZ", "NINGUNA"),
+  directorio_red_social = c("WHATSAPP", "LINKEDIN", "INSTAGRAM", "FACEBOOK", "X", "THREADS", "TELEGRAM", "SITIO WEB"),
   tipo_nota = c("NOTA DE REUNIÓN" = "text", "TAREA" = "list")
 )
 .admon_choices_actualizacion <- shiny::reactiveVal(0L)

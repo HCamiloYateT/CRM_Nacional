@@ -4,7 +4,7 @@
 ## Identificacion ----
 IdentificacionUI <- function(id) {
   ns <- NS(id)
-  tagList(
+  .accion_formulario_ui(id,
     uiOutput(ns("Titulo")),
     box(title = "Identificación", width = 12, collapsible = FALSE,
         .crm_select(id = ns("CampoAutorizaDatos"),
@@ -118,7 +118,8 @@ Identificacion <- function(id, usuario, codigo_contacto) {
     
     # Observadores de Inputs ----
     # Precarga del formulario, incluye AutorizaTD
-    observeEvent(datos_contacto(), {
+    observeEvent(list(datos_contacto(), input$FormularioListo), {
+      req(input$FormularioListo)
       if (nrow(datos_contacto()) > 0) {
         updateTextInput(session = session, inputId = "CampoRazonSocial",
                         value = datos_contacto()$PerRazSoc)
@@ -206,7 +207,7 @@ Identificacion <- function(id, usuario, codigo_contacto) {
 ## Directorio ----
 DirectorioUI <- function(id) {
   ns <- NS(id)
-  tagList(
+  .accion_formulario_ui(id,
     # Datos Empresariales ----
     box(title = "Datos Empresariales", width = 12, collapsible = FALSE,
         racafeForms::racafeInputText(id = ns("CampoCorreoEmpresarial"), label = h6("Correo"), width = "100%"),
@@ -223,7 +224,7 @@ DirectorioUI <- function(id) {
         tags$hr(style = "border-color: grey;"),
         h6("Redes Sociales"),
         fluidRow(
-          column(5, .crm_select(id = ns("CampoTipoRed"), label = NULL, choices = .TIPOS_RED_SOCIAL,
+          column(5, .crm_select(id = ns("CampoTipoRed"), label = NULL, choices = .accion_opciones("directorio_red_social", .TIPOS_RED_SOCIAL),
                                   selected = NULL, multiple = FALSE, empty = FALSE)),
           column(6, racafeForms::racafeInputText(id = ns("CampoUsuarioRed"), label = NULL,
                                   placeholder = "Enlace o usuario de la cuenta", width = "100%")),
@@ -258,7 +259,7 @@ DirectorioUI <- function(id) {
               h6("Redes Sociales"),
               fluidRow(
                 column(5, .crm_select(id = ns("CampoTipoRedPersona"), label = NULL,
-                                        choices = .TIPOS_RED_SOCIAL, selected = NULL, multiple = FALSE, empty = FALSE)),
+                                        choices = .accion_opciones("directorio_red_social", .TIPOS_RED_SOCIAL), selected = NULL, multiple = FALSE, empty = FALSE)),
                 column(5, racafeForms::racafeInputText(id = ns("CampoUsuarioRedPersona"), label = NULL,
                                         placeholder = "Usuario o enlace", width = "100%")),
                 column(2, racafeForms::racafeButton(id = ns("BotonAgregarRedPersona"), label = NULL, size = "xs",
@@ -299,7 +300,8 @@ Directorio <- function(id, usuario, codigo_contacto) {
       cargar_info_empresarial_directorio(codigo_actual)
     })
     ### Observers ----
-    observeEvent(codigo_contacto(), {
+    observeEvent(list(codigo_contacto(), input$FormularioListo), {
+      req(input$FormularioListo)
       datos <- datos_correo_empresa()
       correo_actual <- if (nrow(datos) > 0) datos$CorreoGeneral[[1]] else ""
       updateTextInput(session, "CampoCorreoEmpresarial", value = correo_actual)
@@ -350,6 +352,10 @@ Directorio <- function(id, usuario, codigo_contacto) {
     ### Observers ----
     observeEvent(input$BotonAgregarTelefono, {
       req(codigo_contacto())
+      if (!.accion_validar(c("Ingrese un teléfono válido de 7 a 15 dígitos" =
+          EsVacio(input$CampoTelefonoNuevo) || .accion_telefono_invalido(input$CampoTelefonoNuevo)))) {
+        return(invisible(NULL))
+      }
       if (trimws(input$CampoTelefonoNuevo %||% "") == "") {
         racafeForms::racafeNotify(type = "warning", duration = 3, title = "Ingrese un número de teléfono",
                                 session = shiny::getDefaultReactiveDomain())
@@ -533,8 +539,8 @@ Directorio <- function(id, usuario, codigo_contacto) {
     
     # Guardar persona nueva junto con sus redes temporales -----
     observeEvent(input$BotonGuardarPersona, {
-      if (!.accion_validar(c("El correo de la persona no es válido" =
-          .accion_correo_invalido(input$CampoCorreoPersona)))) return(invisible(NULL))
+      if (!.accion_validar(c("El correo de la persona no es válido" = .accion_correo_invalido(input$CampoCorreoPersona),
+          "El teléfono de la persona no es válido" = .accion_telefono_invalido(input$CampoTelefonoPersona)))) return(invisible(NULL))
       if (trimws(input$CampoNombre %||% "") == "") {
         racafeForms::racafeNotify(type = "error", duration = 4, title = "El nombre es obligatorio",
                                 session = shiny::getDefaultReactiveDomain())
@@ -566,7 +572,7 @@ Directorio <- function(id, usuario, codigo_contacto) {
 ## Geografia ----
 BuscadorDireccionUI <- function(id) {
   ns <- NS(id)
-  tagList(
+  .accion_formulario_ui(id,
     tags$head(
       # selectize.js renderiza su control con una altura distinta a la de
       # un input de texto normal; se iguala aqui para que ambos campos
@@ -586,6 +592,9 @@ BuscadorDireccionUI <- function(id) {
                                                      placeholder = "Empiece a escribir la dirección...", width = "100%")
                       )
              ),
+             fluidRow(
+               column(6, racafeForms::racafeInputText("Departamento", "Departamento / Estado", ns = ns)),
+               column(6, racafeForms::racafeInputText("Municipio", "Municipio / Ciudad", ns = ns))),
              uiOutput(ns("ListaSugerencias"))
     ),
     uiOutput(ns("Resultado")),
@@ -601,7 +610,7 @@ BuscadorDireccion <- function(id, pais_iso2 = "CO", valores_iniciales = reactive
     ultima_seleccion <- reactiveVal(NULL)
     
     # Captura del texto -----
-    texto_debounced <- reactive(input$Direccion) %>% debounce(500)
+    texto_debounced <- reactive(input$Direccion) %>% debounce(1000)
     observeEvent(texto_debounced(), {
       texto <- texto_debounced()
       req(nzchar(trimws(texto %||% "")))
@@ -647,10 +656,13 @@ BuscadorDireccion <- function(id, pais_iso2 = "CO", valores_iniciales = reactive
     # valores ya guardados en BD, sin volver a consultar Google. La
     # 'ultima_seleccion' se fija ANTES del updateTextInput para que el
     # debounce del cambio programatico no reabra la lista de sugerencias
-    observeEvent(valores_iniciales(), {
+    observeEvent(list(valores_iniciales(), input$FormularioListo), {
+      req(input$FormularioListo)
       valores <- valores_iniciales()
       req(!is.null(valores))
       
+      updateTextInput(session, "Departamento", value = valores$Depto %||% "")
+      updateTextInput(session, "Municipio", value = valores$Mpio %||% "")
       ultima_seleccion(valores$Direccion %||% "")
       updateTextInput(session, "Direccion", value = valores$Direccion %||% "")
       sugerencias_visibles(FALSE)
@@ -730,14 +742,20 @@ BuscadorDireccion <- function(id, pais_iso2 = "CO", valores_iniciales = reactive
       )
     })
     
+    observeEvent(resultado_lugar(), {
+      r <- resultado_lugar()
+      updateTextInput(session, "Departamento", value = r$depto %||% "")
+      updateTextInput(session, "Municipio", value = r$mpio %||% "")
+    }, ignoreNULL = TRUE)
+
     # Retorno del modulo — misma firma que el Direccion anterior (Nominatim),
     # asi que Geografia no necesita cambios en como consume este resultado
     reactive({
       r <- resultado_lugar()
-      list(Pais = r$pais %||% NA_character_,
-           Depto = r$depto %||% NA_character_,
-           Mpio = r$mpio %||% NA_character_,
-           Direccion = r$direccion_formateada %||% input$Direccion,
+      list(Pais = r$pais %||% input$Pais,
+           Depto = input$Departamento,
+           Mpio = input$Municipio,
+           Direccion = input$Direccion,
            lat = r$lat %||% NA_real_,
            lng = r$lng %||% NA_real_)
     })
@@ -1038,7 +1056,7 @@ Geografia <- function(id, usuario, codigo_contacto) {
       }
       
       mapa <- leaflet::leaflet() %>%
-        leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron)
+        leaflet::addTiles()
       
       if (nrow(puntos_principal) == 0 && nrow(puntos_sucursales) == 0) {
         return(mapa %>% leaflet::setView(lng = -74.1, lat = 4.6, zoom = 5))
@@ -1076,7 +1094,7 @@ Geografia <- function(id, usuario, codigo_contacto) {
 ## Potencial ----
 PotencialUI <- function(id) {
   ns <- NS(id)
-  tagList(
+  .accion_formulario_ui(id,
     box(title = "Potencial de Negocio", width = 12, collapsible = FALSE,
         fluidRow(
           column(4,
@@ -1110,33 +1128,32 @@ PotencialUI <- function(id) {
           ),
           column(4,
                  .crm_select(id = ns("CampoTipoCompra"), label = h6("Tipo de Compra"),
-                                         choices = .choices_potencial$tipo_compra, selected = NULL, multiple = FALSE,
+                                         choices = .accion_opciones("pot_tipo_compra", .choices_potencial$tipo_compra), selected = NULL, multiple = FALSE,
                                          empty = FALSE)
           ),
           column(4,
                  .crm_select(id = ns("CampoFrecuenciaCompra"), label = h6("Frecuencia de Compra"),
-                                         choices = .choices_potencial$frecuencia_compra, selected = NULL,
+                                         choices = .accion_opciones("pot_frecuencia_compra", .choices_potencial$frecuencia_compra), selected = NULL,
                                          multiple = FALSE, empty = FALSE)
           )
         ),
         fluidRow(
           column(6,
                  h6("Orígenes / Calidades Preferidos"),
-                 selectizeInput(ns("CampoCalidades"), label = NULL, choices = NULL, multiple = TRUE,
-                                options = list(create = TRUE, persist = TRUE, placeholder = "Escriba y presione Enter para agregar")
-                 )
+                 tags$div(`data-crm-form-ready` = ns("CalidadesListo"),
+                   racafeModulos::ListaDesplegableAgregableUI(ns("CampoCalidades")))
           ),
           column(3,
                  racafeForms::racafeInputNumeric(id = ns("CampoConsumoEsperado"), label = h6("Consumo Esperado"),
                                          value = NA, min = 0, width = "100%")),
           column(3,
                  .crm_select(id = ns("CampoUnidadConsumo"), label = h6("Unidad"),
-                                         choices = .choices_potencial$unidad_consumo, selected = "SACOS/MES",
+                                         choices = .accion_opciones("pot_unidad_consumo", .choices_potencial$unidad_consumo), selected = "SACOS/MES",
                                          multiple = FALSE, empty = FALSE))
         ),
         h6("Certificaciones de Interés"),
         .crm_select("CampoCertificaciones", label = NULL, multiple = TRUE,
-                                       choices = .choices_potencial$certificaciones, ns = ns,
+                                       choices = .accion_opciones("pot_certificaciones", .choices_potencial$certificaciones), ns = ns,
                                        empty_label = "Seleccione una o varias"),
         racafeForms::racafeInputTextArea(id = ns("CampoObservaciones"), label = h6("Observaciones"), value = "",
                                 width = "100%", rows = 3),
@@ -1148,7 +1165,16 @@ PotencialUI <- function(id) {
 Potencial <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
     .confirmar_guardado <- .accion_guardado(input, session, codigo_contacto, usuario)
-    observeEvent(codigo_contacto(), {
+    opciones_productos <- unname(unlist(Choices()$producto, use.names = FALSE))
+    anteriores <- CargarDatos("CRMNALPOTENCIAL")$CalidadesPreferidas
+    opciones_productos <- sort(unique(toupper(c(opciones_productos,
+      unlist(strsplit(anteriores[!is.na(anteriores)], "|", fixed = TRUE))))))
+    opciones_productos <- opciones_productos[!is.na(opciones_productos) & nzchar(opciones_productos) &
+      opciones_productos != "AGREGAR..."]
+    calidades <- racafeModulos::ListaDesplegableAgregable("CampoCalidades", label = NULL,
+      choices = opciones_productos, selected = character(), multiple = TRUE, uppercase = TRUE)
+    observeEvent(list(codigo_contacto(), input$FormularioListo, input$CalidadesListo), {
+      req(input$FormularioListo)
       req(codigo_contacto())
       datos_potencial <- cargar_potencial_contacto(codigo_contacto())
       if (nrow(datos_potencial) == 0) {
@@ -1172,11 +1198,12 @@ Potencial <- function(id, usuario, codigo_contacto) {
                               id = "CampoFrecuenciaCompra")
       
       calidades_previas <- if (!EsVacio(datos_potencial$CalidadesPreferidas[[1]])) {
-        strsplit(datos_potencial$CalidadesPreferidas[[1]], "\\|")[[1]]
+        strsplit(datos_potencial$CalidadesPreferidas[[1]], "|", fixed = TRUE)[[1]]
       } else {
         NULL
       }
-      updateSelectizeInput(session, "CampoCalidades", choices = calidades_previas, selected = calidades_previas, server = FALSE)
+      if (!is.null(input$CalidadesListo)) racafeForms::racafeUpdateSelect(session, "CampoCalidades-sel",
+        selected = toupper(calidades_previas))
       racafeForms::racafeUpdateNumeric(session = session,
                               value = suppressWarnings(as.numeric(datos_potencial$ConsumoEsperado[[1]])),
                               id = "CampoConsumoEsperado")
@@ -1184,7 +1211,7 @@ Potencial <- function(id, usuario, codigo_contacto) {
                               id = "CampoUnidadConsumo")
       
       certificaciones_previas <- if (!EsVacio(datos_potencial$CertificacionesInteres[[1]])) {
-        strsplit(datos_potencial$CertificacionesInteres[[1]], "\\|")[[1]]
+        strsplit(datos_potencial$CertificacionesInteres[[1]], "|", fixed = TRUE)[[1]]
       } else {
         NULL
       }
@@ -1194,14 +1221,16 @@ Potencial <- function(id, usuario, codigo_contacto) {
     
     observeEvent(input$BotonGuardarPotencial, {
       req(codigo_contacto())
+      calidades_actuales <- calidades$seleccion()
       consumo <- input$CampoConsumoEsperado
       anios <- input$CampoAniosOperacion
-      if (!.accion_validar(c(
-          "El consumo debe ser un número mayor o igual a cero" =
-            length(consumo) != 1L || !is.finite(consumo) || consumo < 0,
+      consumo_invalido <- length(consumo) > 1L ||
+        (length(consumo) == 1L && !is.na(consumo) && (!is.finite(consumo) || consumo < 0))
+      anios_invalidos <- length(anios) > 1L ||
+        (length(anios) == 1L && !is.na(anios) && (!is.finite(anios) || anios < 0))
+      if (!.accion_validar(c("El consumo no puede ser negativo" = consumo_invalido,
           "Seleccione la unidad del consumo" = isTRUE(consumo > 0) && EsVacio(input$CampoUnidadConsumo),
-          "Los años de operación deben ser mayores o iguales a cero" =
-            length(anios) != 1L || !is.finite(anios) || anios < 0))) return(invisible(NULL))
+          "Los años de operación no pueden ser negativos" = anios_invalidos))) return(invisible(NULL))
       .confirmar_guardado({
         tryCatch({
           guardar_potencial_contacto(
@@ -1213,7 +1242,7 @@ Potencial <- function(id, usuario, codigo_contacto) {
             detalle_maquila = input$CampoDetalleMaquila,
             anios_operacion = input$CampoAniosOperacion,
             tipo_compra = input$CampoTipoCompra,
-            calidades_preferidas = input$CampoCalidades,
+            calidades_preferidas = calidades_actuales,
             consumo_esperado = input$CampoConsumoEsperado,
             unidad_consumo = input$CampoUnidadConsumo,
             frecuencia_compra = input$CampoFrecuenciaCompra,

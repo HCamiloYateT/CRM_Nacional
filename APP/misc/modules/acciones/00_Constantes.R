@@ -40,6 +40,7 @@ google_key <- Sys.getenv("GOOGLE_MAPS_KEY")
   "Sitio Web" = list(clase = "fas fa-globe",     color = "#6c757d")
 )
 # Tipos de red social disponibles (nombres de .ICONOS_RED_SOCIAL)
+names(.ICONOS_RED_SOCIAL) <- toupper(names(.ICONOS_RED_SOCIAL))
 .TIPOS_RED_SOCIAL <- names(.ICONOS_RED_SOCIAL)
 # Limite maximo de personas de contacto por directorio
 .MAX_PERSONAS_CONTACTO <- 10

@@ -25,10 +25,12 @@
 # Funciones Embudo ----
 
 ## Generales ----
-derivar_etapa_actual <- function(contactos = NULL, historial = NULL) {
+derivar_etapa_actual <- function(contactos = NULL, historial = NULL, clientes_historicos = NULL) {
   if (is.null(contactos)) contactos <- CargarDatos("CRMNALCONTACTO")
   if (!"EtapaPreDescarte" %in% names(contactos)) contactos$EtapaPreDescarte <- NA_character_
   contactos <- .crm_marcas_historia(contactos)
+  if (is.null(clientes_historicos)) clientes_historicos <- .pr_historico_clientes()
+  nits_clientes <- .crm_nit_historia(clientes_historicos$CliNitPpal)
   if (is.null(historial)) historial <- tryCatch({
     CargarDatos("CRMNALHISTORIALETAPA") %>% mutate(FechaHora = as_datetime(FechaHora))
   }, error = function(e) data.frame(CodContacto = character(), EtapaNueva = character(),
@@ -45,8 +47,9 @@ derivar_etapa_actual <- function(contactos = NULL, historial = NULL) {
     mutate(
       EtapaPreDescarte = ifelse(is.na(EtapaPreDescarte), "CONTACTO", EtapaPreDescarte),
       Etapa = case_when(
+        .crm_nit_historia(PerCod) %in% nits_clientes ~ "CLIENTE",
+        EsReconstruido ~ "SIN ETAPA OBSERVADA",
         Estado == "DESCARTADO" ~ "DESCARTADO",
-        is.na(EtapaUltimaTransicion) & EsReconstruido ~ "CLIENTE",
         is.na(EtapaUltimaTransicion) ~ "CONTACTO",
         TRUE ~ EtapaUltimaTransicion
       )
@@ -153,7 +156,7 @@ obtener_ultimo_motivo_descarte <- function() {
 }
 # Acciones por etapa
 .acciones_por_etapa <- function(etapa) {
-  claves <- .ACCIONES_ETAPA_EMBUDO[[etapa]] %||% character(0)
+  claves <- unique(c(.ACCIONES_ETAPA_EMBUDO[[etapa]] %||% character(0), "Consultar"))
   setNames(vapply(claves, function(clave) .CONFIG_ACCIONES_EMBUDO[[clave]]$etiqueta, character(1)), claves)
 }
 
@@ -620,7 +623,7 @@ cargar_pipeline_embudo <- function(cargar = .pr_cargar) {
 }
 # Acciones disponibles en el kanban, segun etapa del contacto
 .acciones_por_etapa_kanban <- function(etapa) {
-  c(names(.acciones_por_etapa(etapa)), "Consultar")
+  unique(c(names(.acciones_por_etapa(etapa)), "Consultar"))
 }
 # Renderiza la tarjeta HTML de un contacto en el kanban, segun su etapa
 .render_tarjeta_embudo <- function(fila, ns = identity) {
@@ -635,7 +638,7 @@ cargar_pipeline_embudo <- function(cargar = .pr_cargar) {
   }
   solo_consulta <- isTRUE(fila$EsSoloFacturacion)
   acciones <- if (solo_consulta) character() else .acciones_por_etapa(fila$Etapa)
-  acciones <- c(acciones, Consultar = "Consulta individual en otra pestaña")
+  acciones["Consultar"] <- "Consulta individual"
   config <- c(.CONFIG_ACCIONES_EMBUDO, list(Consultar = list(icono = "address-card", color = "#495057")))
   menu <- racafeModulos::MenuAccionesUI(as.character(fila$CodContacto), acciones, config = config, ns = ns)
   menu$children[[1]] <- shiny::tagAppendAttributes(menu$children[[1]], `aria-label` = "Acciones", class = "pr-action-trigger")
@@ -644,15 +647,8 @@ cargar_pipeline_embudo <- function(cargar = .pr_cargar) {
   nit <- texto("PerCod", "")
   menu <- htmltools::tagQuery(menu)$find(".rm-action-option")$each(function(boton, i) {
     if (!identical(boton$attribs$`data-rm-action`, "Consultar")) return(boton)
-    boton$name <- "a"
-    boton$attribs[c("type", "data-rm-action", "data-rm-input", "data-rm-code")] <- NULL
-    boton$attribs$href <- .kb_url_consulta(codigo, nit)
-    boton$attribs$target <- "_blank"
-    boton$attribs$rel <- "noopener noreferrer"
-    boton$attribs$`aria-label` <- "Consulta individual en otra pestaña"
-    boton$attribs$`data-kb-consultar` <- "true"
-    boton$attribs$`data-kb-nit` <- nit
-    boton$attribs$`data-kb-codigo` <- if (length(codigo) && !is.na(codigo)) codigo else ""
+    boton$attribs$`data-crm-nit` <- nit
+    boton$attribs$`data-rm-code` <- if (length(codigo) && !is.na(codigo)) codigo else ""
     boton
   })$allTags()
   lineas <- if ("DetalleLineas" %in% names(fila)) fila$DetalleLineas[[1]] else list()
@@ -2145,4 +2141,26 @@ tokenizar_motivos_libres <- function(cod_contacto_vec, historial_dat) {
         )
     }
   )
+}
+
+# CRMNALSEGR conserva a quienes facturaron alguna vez; la inactividad no borra esa condición ----
+.pr_historico_clientes <- function(cargar = .pr_cargar) {
+  x <- cargar("CRMNALSEGR")
+  if (!all(c("CliNitPpal", "LinNegCod", "FecProceso") %in% names(x))) {
+    stop("CRMNALSEGR no contiene el esquema de clientes históricos esperado.")
+  }
+  x$CliNitPpal <- .crm_nit_historia(x$CliNitPpal)
+  x$FecProceso <- as.Date(x$FecProceso)
+  x <- x[!is.na(x$CliNitPpal), , drop = FALSE]
+  x <- x %>% arrange(desc(FecProceso)) %>% distinct(CliNitPpal, LinNegCod, .keep_all = TRUE)
+  # SegmentoRacafe es actividad (CLIENTE / A RECUPERAR), no el segmento comercial de tamaño.
+  catalogo <- .com_clientes(cargar("CRMNALCLIENTE"), Sys.Date())
+  indice <- match(paste(x$CliNitPpal, x$LinNegCod),
+    paste(.crm_nit_historia(catalogo$CliNitPpal), catalogo$LinNegCod))
+  x$Asesor <- as.character(catalogo$Asesor[indice])
+  x$Segmento <- as.character(catalogo$Segmento[indice])
+  x$PerRazSoc <- as.character(catalogo$PerRazSoc[indice])
+  x$CLLinNegNo <- ifelse(x$LinNegCod == 10000, "CONVENCIONALES",
+    ifelse(x$LinNegCod == 21000, "A LA MEDIDA", as.character(x$LinNegCod)))
+  x
 }

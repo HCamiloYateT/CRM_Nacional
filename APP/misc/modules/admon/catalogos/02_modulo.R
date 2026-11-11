@@ -29,7 +29,9 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
       origen = "Orígenes → Detalles del origen",
       raz_descarte = "Razones de descarte", formapago = "Formas de pago del cotizador",
       cot_presentacion = "Presentaciones del cotizador", cot_empaque = "Empaques del cotizador",
-      cot_divisa = "Divisas del cotizador", tipo_nota = "Tipos de nota o tarea"
+      pot_tipo_compra = "Potencial: tipos de compra", pot_frecuencia_compra = "Potencial: frecuencia de compra",
+      pot_unidad_consumo = "Potencial: unidades", pot_certificaciones = "Potencial: certificaciones",
+      directorio_red_social = "Directorio: redes sociales", cot_divisa = "Divisas del cotizador", tipo_nota = "Tipos de nota o tarea"
     )
     excluidos <- c("categoria", "producto", "detalle_origen", "paises", "deptos",
                    "direccion_via", "direccion_cardinalidad")

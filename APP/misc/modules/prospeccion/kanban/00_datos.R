@@ -19,7 +19,7 @@
 }
 
 # Clientes y atributos observados en la facturación del alcance seleccionado ----
-.kb_facturacion <- function(pipeline, hechos, filtros, usuario, admin, presupuestos = data.frame()) {
+.kb_facturacion <- function(pipeline, hechos, filtros, usuario, admin, presupuestos = data.frame(), historicos = .pr_historico_clientes()) {
   requeridas <- c("FecFact", "EstadoFinanciero", "CLCliNit", "CliNitPpal")
   if (!all(requeridas %in% names(hechos))) stop("Actualice la fuente de facturación del Kanban.")
   facturas <- .gc_filtrar_dimensiones(hechos, filtros)
@@ -91,6 +91,34 @@
         PptoSacos = importe(if (!is.na(m)) metas$SSPpto[[m]] * fraccion else NA_real_),
         PptoMargen = importe(if (!is.na(m)) metas$MNFCCPpto[[m]] * fraccion else NA_real_, TRUE))
     }))
+    tarjetas[[length(tarjetas) + 1L]] <- fila
+  }
+  # Incorporar clientes históricos sin ventas en el año seleccionado, sin generar contactos ni conversiones.
+  h <- historicos
+  for (par in list(c("Asesor", "asesor"), c("Segmento", "segmento"), c("CLLinNegNo", "linneg"))) {
+    valor <- h[[par[[1]]]]
+    opciones <- filtros[[par[[2]]]]
+    h <- h[length(opciones) > 0L & (is.na(valor) | !nzchar(valor) | valor %in% opciones), , drop = FALSE]
+  }
+  if (!isTRUE(admin)) h <- h[toupper(trimws(h$Asesor)) %in% toupper(trimws(usuario)), , drop = FALSE]
+  for (nit in setdiff(unique(.crm_nit_historia(h$CliNitPpal)), names(grupos))) {
+    d <- h[.crm_nit_historia(h$CliNitPpal) %in% nit, , drop = FALSE]
+    indices <- por_nit[[nit]]
+    fila <- if (length(indices) == 1L) x[indices, , drop = FALSE] else x[NA_integer_, , drop = FALSE]
+    if (length(indices) != 1L) {
+      fila$CodContacto <- paste0("HISTORICO:", nit)
+      fila$CodigoCRM <- NA_character_
+      nombre <- d$PerRazSoc[!is.na(d$PerRazSoc) & nzchar(d$PerRazSoc)]
+      fila$PerRazSoc <- if (length(nombre)) nombre[[1]] else paste("CLIENTE", nit)
+      fila$EsSoloFacturacion <- TRUE
+    }
+    fila$PerCod <- nit
+    fila$Etapa <- "CLIENTE"
+    fila$Asesor <- juntar(d$Asesor)
+    fila$Segmento <- juntar(d$Segmento)
+    fila$LinNegocio <- juntar(d$CLLinNegNo)
+    fila$DetalleLineas <- list(list())
+    usados <- c(usados, x$CodContacto[indices])
     tarjetas[[length(tarjetas) + 1L]] <- fila
   }
   # Los clientes provienen de los NIT facturados; no del subconjunto que ya tenía etapa CRM CLIENTE.

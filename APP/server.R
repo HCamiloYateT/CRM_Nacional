@@ -276,14 +276,29 @@ server <- function(input, output, session) {
     function() CarteraComercial("CarteraComercial", cartera_financiera_r, clientes_raw_cache, nit_ppal,
       filtros, es_admin))
   
+  consulta_modal_solicitada <- reactiveVal(NULL)
+  consulta_modal_iniciada <- FALSE
+  abrir_consulta_modal <- function(codigo, nit = "") {
+    if (length(codigo) != 1L || is.na(codigo) || nchar(codigo) > 200L) codigo <- ""
+    nit <- .crm_nit_historia(nit)
+    if (!nzchar(codigo) && (length(nit) != 1L || is.na(nit))) return(invisible(NULL))
+    if (!consulta_modal_iniciada) {
+      ConsultaIndividual("ConsultaIndividualModal", maestro_base_comercial, clientes_raw_cache, filtros,
+        usuario, es_admin, nit_ppal, cartera_financiera_r, notas_datos,
+        directorio = reactive(n_cliente), estados = data_cohortes, solicitud = consulta_modal_solicitada)
+      consulta_modal_iniciada <<- TRUE
+    }
+    consulta_modal_solicitada(list(codigo = codigo, nit = nit, solicitud = Sys.time()))
+    showModal(racafeForms::racafeModal(title = "Consulta individual", size = "ventana", easy_close = TRUE,
+      ConsultaIndividualUI("ConsultaIndividualModal")))
+  }
+  observeEvent(input$PR_Consultar, abrir_consulta_modal(input$PR_Consultar$codigo, input$PR_Consultar$nit))
+
   ### Prospección ----
   CargarTabUnaVez("PR_Kanban", "ui_PR_Kanban", function() KanbanEmbudoUI("Kanban"),
                   function() KanbanEmbudo("Kanban", usuario, filtros, es_admin, hechos = maestro_base_comercial,
                     presupuestos = clientes_raw_cache, actualizacion = reactive(input$FT_Actualizar),
-                    al_consultar = function(codigo, nit) {
-                      consulta_solicitada(list(codigo = codigo, nit = nit, solicitud = Sys.time()))
-                      bs4Dash::updateTabItems(session, "menu_principal", selected = "IN_Consulta")
-                    }))
+                    al_consultar = abrir_consulta_modal))
   
   CargarTabUnaVez("PR_Contactos", "ui_PR_Contactos", function() DetalleContactoUI("DetalleContacto"),
                   function() DetalleContacto("DetalleContacto", usuario))
