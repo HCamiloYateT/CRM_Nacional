@@ -83,12 +83,12 @@ EmbudoConversionUI <- function(id) {
         tabPanel(
           "Usuario",
           Saltos(),
-          .crm_tabla_legacy_ui(ns("tabla_usuario"))
+          .crm_tabla_ui(ns("tabla_usuario"))
         ),
         tabPanel(
           "Origen",
           Saltos(),
-          .crm_tabla_legacy_ui(ns("tabla_origen")),
+          .crm_tabla_ui(ns("tabla_origen")),
           tags$hr(),
           shinyjs::hidden(
             tags$div(
@@ -98,24 +98,24 @@ EmbudoConversionUI <- function(id) {
                 tamano_pct = 0.8,
                 color = "#64748B"
               ),
-              .crm_tabla_legacy_ui(ns("tabla_det_origen"))
+              .crm_tabla_ui(ns("tabla_det_origen"))
             )
           )
         ),
         tabPanel(
           "Línea de Negocio",
           Saltos(),
-          .crm_tabla_legacy_ui(ns("tabla_lin_negocio"))
+          .crm_tabla_ui(ns("tabla_lin_negocio"))
         ),
         tabPanel(
           "Segmento",
           Saltos(),
-          .crm_tabla_legacy_ui(ns("tabla_segmento"))
+          .crm_tabla_ui(ns("tabla_segmento"))
         ),
         tabPanel(
           "Asesor",
           Saltos(),
-          .crm_tabla_legacy_ui(ns("tabla_asesor"))
+          .crm_tabla_ui(ns("tabla_asesor"))
         )
       ),
       tags$hr(),
@@ -169,7 +169,7 @@ EmbudoConversionUI <- function(id) {
       fluidRow(
         column(
           5,
-          reactable::reactableOutput(ns("tabla_geo"))
+          .crm_tabla_ui(ns("tabla_geo"))
         ),
         column(
           7,
@@ -200,7 +200,7 @@ EmbudoConversion <- function(id) {
     
     # Construye el universo completo utilizado en las tablas historicas.
     universo_historico <- reactive({
-      base_contactos <- CargarDatos("CRMNALCONTACTO")
+      base_contactos <- .pr_cargar("CRMNALCONTACTO")
       
       historial <- .cargar_embudo_seguro(
         "CRMNALHISTORIALETAPA",
@@ -232,8 +232,8 @@ EmbudoConversion <- function(id) {
     
     # Construye la estructura que alimenta el treemap de descartes.
     descartes_treemap_r <- reactive({
-      contactos <- CargarDatos("CRMNALCONTACTO") %>%
-        derivar_etapa_actual() %>%
+      contactos <- .pr_cargar("CRMNALCONTACTO") %>%
+        derivar_etapa_actual(historial = .pr_cargar("CRMNALHISTORIALETAPA")) %>%
         select(
           CodContacto,
           EtapaActual = Etapa,
@@ -242,7 +242,7 @@ EmbudoConversion <- function(id) {
           DetOrigen
         )
       
-      descartes <- CargarDatos("CRMNALDESCARTE") %>%
+      descartes <- .pr_cargar("CRMNALDESCARTE") %>%
         mutate(
           FechaHoraModi = as_datetime(FechaHoraModi)
         ) %>%
@@ -310,7 +310,7 @@ EmbudoConversion <- function(id) {
       datos_usuario_r, "Dim"
     )
     
-    .crm_tabla_legacy(
+    .crm_tabla_servidor(
       id = "tabla_usuario", data = datos_usuario_r, columnas = NULL,
       col_specs = .col_specs_dimension_embudo(
         estilo_total_usuario, "Usuario"
@@ -330,7 +330,7 @@ EmbudoConversion <- function(id) {
       datos_origen_r, "Dim"
     )
     
-    modulo_tabla_origen <- .crm_tabla_legacy(
+    modulo_tabla_origen <- .crm_tabla_servidor(
       id = "tabla_origen", data = datos_origen_r, columnas = NULL,
       col_specs = .col_specs_dimension_embudo(
         estilo_total_origen, "Origen"
@@ -372,7 +372,7 @@ EmbudoConversion <- function(id) {
       datos_det_origen_r, "Dim"
     )
     
-    .crm_tabla_legacy(
+    .crm_tabla_servidor(
       id = "tabla_det_origen", data = datos_det_origen_r,
       columnas = NULL,
       col_specs = .col_specs_dimension_embudo(
@@ -393,7 +393,7 @@ EmbudoConversion <- function(id) {
       datos_lin_negocio_r, "Dim"
     )
     
-    .crm_tabla_legacy(
+    .crm_tabla_servidor(
       id = "tabla_lin_negocio", data = datos_lin_negocio_r,
       columnas = NULL,
       col_specs = .col_specs_dimension_embudo(
@@ -414,7 +414,7 @@ EmbudoConversion <- function(id) {
       datos_segmento_r, "Dim"
     )
     
-    .crm_tabla_legacy(
+    .crm_tabla_servidor(
       id = "tabla_segmento", data = datos_segmento_r,
       columnas = NULL,
       col_specs = .col_specs_dimension_embudo(
@@ -435,7 +435,7 @@ EmbudoConversion <- function(id) {
       datos_asesor_r, "Dim"
     )
     
-    .crm_tabla_legacy(
+    .crm_tabla_servidor(
       id = "tabla_asesor", data = datos_asesor_r,
       columnas = NULL,
       col_specs = .col_specs_dimension_embudo(
@@ -448,26 +448,10 @@ EmbudoConversion <- function(id) {
     
     ### Georreferenciacion ----
     # Construye la tabla de contactos por departamento y municipio.
-    output$tabla_geo <- reactable::renderReactable({
-      reactable::reactable(
-        geo()$resumen_depto,
-        sortable = TRUE,
-        compact = TRUE,
-        searchable = TRUE,
-        columns = list(
-          Depto = reactable::colDef(
-            name = "Departamento"
-          ),
-          Mpio = reactable::colDef(
-            name = "Municipio"
-          ),
-          Contactos = reactable::colDef(
-            name = "Contactos"
-          )
-        )
-      )
-    })
-    
+    .crm_tabla_servidor("tabla_geo", data = reactive(geo()$resumen_depto),
+      col_labels = list(Depto = "DEPARTAMENTO", Mpio = "MUNICIPIO", Contactos = "CONTACTOS"),
+      searchable = TRUE, modo_seleccion = "ninguno")
+
     # Muestra en el mapa los contactos con coordenadas validas.
     output$mapa_geo <- leaflet::renderLeaflet({
       puntos <- geo()$puntos_mapa

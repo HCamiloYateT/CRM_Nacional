@@ -38,22 +38,13 @@ KanbanEmbudoUI <- function(id) {
       id = ns(paste0("cuerpo_", etapa)), `aria-hidden` = if (cerrada) "true" else "false")$allTags()
     div(class = paste("kpb-slot", if (cerrada) "kb-collapsed" else ""), `data-kb-stage` = etapa, columna)
   })
-  escala <- tagAppendAttributes(racafeForms::racafeButton("escalas_color", NULL, icon = "palette",
-    title = "Escalas de color", variant = "secondary", ns = ns),
-    class = "dropdown-toggle", `data-toggle` = "dropdown", `aria-haspopup` = "true", `aria-expanded` = "false")
-  leyenda <- div(class = "dropdown-menu dropdown-menu-right kb-scale-menu",
-    tags$strong("ETAPA DE LA ENTIDAD"), lapply(ETAPAS_EMBUDO, function(etapa) {
-      div(tags$span(class = "kb-scale-swatch", style = paste0("background:", COLOR_ETAPA_EMBUDO[[etapa]])), etapa)
-    }))
   racafeForms::racafeForm(variant = "plain", racafeModulos::MenuAccionesDependencies(), useShinyjs(),
-    racafeForms::racafeActionBar(left = racafeForms::racafeButton("actualizar", NULL,
-      icon = "arrows-rotate", title = "Actualizar tablero", variant = "secondary", ns = ns),
-      right = div(class = "dropdown", escala, leyenda)),
-    .crm_nota("Clientes: NIT de facturación distintos dentro del periodo y los filtros seleccionados."),
     racafeModulos::TableroKanbanUI(id = "kpb_board", ns = ns, columnas))
 }
+
 KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
-                         hechos = function() data.frame(), al_consultar = function(codigo, nit) NULL) {
+                         hechos = function() data.frame(), presupuestos = function() data.frame(),
+                         actualizacion = function() NULL, al_consultar = function(codigo, nit) NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     refresh_trigger <- reactiveVal(0L)
@@ -63,22 +54,19 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
     destino_arrastre <- reactiveVal(NULL)
     pipeline_raw <- reactive({
       refresh_trigger()
+      actualizacion()
       cargar_pipeline_embudo()
     })
     # Filtrar o buscar no vuelve a consultar tablas ni ejecutar conversiones.
-    pipeline_filtrado <- reactive(.kb_facturacion(pipeline_raw(), hechos(), filtros(), usuario(), es_admin()))
-    observeEvent(input$actualizar, {
-      tryCatch({
-        detectar_conversion_leads(usuario(), codigos = isolate(pipeline_filtrado()$CodContacto))
-        refresh_trigger(isolate(refresh_trigger()) + 1L)
-      }, error = function(e) showNotification(conditionMessage(e), type = "error"))
-    })
+    pipeline_filtrado <- reactive(.kb_facturacion(pipeline_raw(), hechos(), filtros(), usuario(), es_admin(), presupuestos()))
     for (etapa in ETAPAS_EMBUDO) local({
       clave <- etapa
       limite <- reactiveVal(50L)
       alerta <- reactiveVal(FALSE)
       busqueda <- debounce(reactive(input[[paste0("buscar_", clave)]]), 250)
       filas_base <- reactive({ x <- pipeline_filtrado(); x[x$Etapa == clave, , drop = FALSE] })
+      # La caché pertenece a la etapa y se renueva al cambiar datos o alcance; no comparte permisos entre sesiones.
+      tarjetas <- reactive({ filas_base(); new.env(parent = emptyenv()) })
       filas <- reactive({
         x <- .kb_buscar(filas_base(), busqueda())
         if (isTRUE(alerta())) x <- x[x$EstadoGestion %in% "critical", , drop = FALSE]
@@ -103,7 +91,14 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
         x <- filas()
         visibles <- head(x, limite())
         if (!nrow(x)) return(.crm_nota("Sin registros para esta columna y los filtros actuales."))
-        tagList(lapply(seq_len(nrow(visibles)), function(i) .render_tarjeta_embudo(visibles[i, ], ns)),
+        cache <- tarjetas()
+        tagList(lapply(seq_len(nrow(visibles)), function(i) {
+          codigo <- as.character(visibles$CodContacto[[i]])
+          if (!exists(codigo, envir = cache, inherits = FALSE)) {
+            cache[[codigo]] <- as.character(.render_tarjeta_embudo(visibles[i, ], ns))
+          }
+          htmltools::HTML(cache[[codigo]])
+        }),
           if (nrow(x) > nrow(visibles)) racafeForms::racafeButton(paste0("mas_", clave), NULL,
             icon = "angles-down", title = paste("Mostrar 50 más ·", nrow(visibles), "de", nrow(x)),
             variant = "secondary", size = "xs", ns = ns))
@@ -124,7 +119,7 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
       CrearOportunidad = list(ui = function() CrearOportunidadUI(ns("CrearOportunidad")))
     )
     
-    trigger_refresco_kanban <- function() refresh_trigger(isolate(refresh_trigger()) + 1)
+    trigger_refresco_kanban <- function() { .pr_invalidar(); refresh_trigger(isolate(refresh_trigger()) + 1) }
     
     # codigo/disparador de Reactivar, deliberadamente AISLADOS de
     # codigo_seleccionado(): este ultimo cambia con cualquier accion

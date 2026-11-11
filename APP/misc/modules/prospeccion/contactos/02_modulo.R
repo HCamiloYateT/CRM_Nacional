@@ -17,7 +17,7 @@ DetalleCreacionMensualUI <- function(id) {
     ),
     .crm_plot_output(ns("serie"), height = "280px"),
     br(),
-    .crm_tabla_legacy_ui(ns("tabla"))
+    .crm_tabla_ui(ns("tabla"))
   )
 }
 DetalleCreacionMensual <- function(id, datos) {
@@ -45,6 +45,7 @@ DetalleCreacionMensual <- function(id, datos) {
       fmt <- if (identical(input$modo_tiempo, "anio")) "%Y" else "%Y-%m"
       
       datos_filtrados() %>%
+        filter(!is.na(FechaHoraCrea)) %>%
         mutate(Periodo = format(FechaHoraCrea, fmt)) %>%
         count(Periodo, name = "NumContactos") %>%
         mutate(Pct = round(NumContactos / sum(NumContactos) * 100, 1)) %>%
@@ -53,13 +54,13 @@ DetalleCreacionMensual <- function(id, datos) {
     
     output$serie <- .crm_render_plotly({
       dat <- serie_periodo()
-      if (nrow(dat) == 0) return(plotly::config(plotly::plotly_empty(type = "scatter"), displayModeBar = FALSE))
+      if (nrow(dat) == 0) return(plotly::config(plotly::plotly_empty(type = "scatter", mode = "markers"), displayModeBar = FALSE))
       dat <- dat %>%
         mutate(NumContactosFmt = format(NumContactos, big.mark = ",", scientific = FALSE))
       
       plotly::plot_ly(
         dat, x = ~Periodo, y = ~NumContactos, type = "scatter", mode = "lines+markers",
-        line = list(color = "#1C398E", width = 2), marker = list(color = "#1C398E", size = 7),
+        line = list(color = "#DA291C", width = 2), marker = list(color = "#DA291C", size = 7),
         text = ~paste0(NumContactosFmt, " contactos (", Pct, "%)"),
         hovertemplate = paste0("<b>%{x}</b><br>%{text}<extra></extra>")
       ) %>%
@@ -67,7 +68,7 @@ DetalleCreacionMensual <- function(id, datos) {
           margin = list(l = 40, r = 20, t = 10, b = 40),
           xaxis  = list(title = ""), yaxis = list(title = "Contactos"),
           paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)",
-          hoverlabel = list(bgcolor = "#1A3C5E", font = list(color = "white", size = 12))
+          hoverlabel = list(bgcolor = "#495057", font = list(color = "white", size = 12))
         ) %>%
         plotly::config(displayModeBar = FALSE)
     })
@@ -83,12 +84,12 @@ DetalleCreacionMensual <- function(id, datos) {
     })
     
     .estilo_total_periodo <- function(value, index) {
-      if (datos_tabla_r()$Periodo[[index]] == "TOTAL") {
+      if (identical(as.character(datos_tabla_r()$Periodo[[index]]), "TOTAL")) {
         list(fontWeight = "bold", background = "#f8f9fa")
       } else list()
     }
     
-    .crm_tabla_legacy(id = "tabla", data = datos_tabla_r, columnas = NULL,
+    .crm_tabla_servidor(id = "tabla", data = datos_tabla_r, columnas = NULL,
                     col_specs = list(Periodo      = reactable::colDef(name = "Periodo", minWidth = 100, style = .estilo_total_periodo),
                                      NumContactos = reactable::colDef(name = "N° Contactos", minWidth = 100, style = .estilo_total_periodo),
                                      Pct          = reactable::colDef(name = "% del Total", minWidth = 90,
@@ -124,8 +125,7 @@ DetalleContactoUI <- function(id) {
              .pr_panel(title = "Indicadores de Contactos", width = 12,
                  collapsible = TRUE, collapsed = FALSE,
                  .crm_caja_output(ns("kpi_total")), br(),
-                 .crm_caja_output(ns("kpi_creacion_prom")), br(),
-                 .crm_caja_output(ns("kpi_30"))
+                 .crm_caja_output(ns("kpi_creacion_prom"))
              )
       ),
       column(8,
@@ -134,17 +134,17 @@ DetalleContactoUI <- function(id) {
                  .crm_tabs(
                    tabPanel("Usuario",
                             Saltos(),
-                            .crm_tabla_legacy_ui(ns("tabla_usuario"))
+                            .crm_tabla_ui(ns("tabla_usuario"))
                    ),
                    tabPanel("Origen",
                             Saltos(),
-                            .crm_tabla_legacy_ui(ns("tabla_origen")),
+                            .crm_tabla_ui(ns("tabla_origen")),
                             tags$hr(),
                             shinyjs::hidden(
                               tags$div(id = ns("BloqueDetOrigen"),
                                        FormatearTexto("Detalle Origen (según fila seleccionada arriba)",
                                                       tamano_pct = 0.8, color = "#64748B"),
-                                       .crm_tabla_legacy_ui(ns("tabla_det_origen"))
+                                       .crm_tabla_ui(ns("tabla_det_origen"))
                               )
                             )
                    )
@@ -154,6 +154,9 @@ DetalleContactoUI <- function(id) {
     ),
     .pr_panel(title = "Detalle de Contactos", width = 12,
         collapsible = TRUE, collapsed = TRUE,
+        .crm_select(ns("dias_sin_relacionamiento"), "DÍAS SIN REGISTRO DE RELACIONAMIENTO",
+          choices = c("TODOS" = "0", "MÁS DE 30 DÍAS" = "30", "MÁS DE 60 DÍAS" = "60"),
+          selected = "0", multiple = FALSE, empty = FALSE),
         PanelEtapaUI(ns("Listado"))
     )
   )
@@ -168,7 +171,8 @@ DetalleContacto <- function(id, usuario) {
     contactos_raw <- reactive({
 
       refresh_trigger()
-      derivar_etapa_actual() %>%
+      filtrar_historia_comercial_real(derivar_etapa_actual(contactos = .pr_cargar("CRMNALCONTACTO"),
+          historial = .pr_cargar("CRMNALHISTORIALETAPA"))) %>%
         filter(Etapa == "CONTACTO", Estado == "ACTIVO") %>%
         mutate(
           FechaHoraCrea   = as_datetime(FechaHoraCrea),
@@ -193,7 +197,7 @@ DetalleContacto <- function(id, usuario) {
     # Creacion de Contactos.
     contactos_creacion_todos <- reactive({
       refresh_trigger()
-      CargarDatos("CRMNALCONTACTO") %>%
+      filtrar_historia_comercial_real(.pr_cargar("CRMNALCONTACTO")) %>%
         mutate(FechaHoraCrea = as_datetime(FechaHoraCrea))
     })
     creacion_mensual_todos <- reactive({
@@ -212,25 +216,11 @@ DetalleContacto <- function(id, usuario) {
     )
     DetalleCreacionMensual("modal_creacion_mensual", datos = contactos_creacion_todos)
     
-    # Contactos con 30+ días sin registro de relacionamiento
-    .pr_caja("kpi_30",
-              valor  = reactive({html_valor(
-                mean(contactos_enriquecidos()$DiasSinRelacionamiento >= 30, na.rm = TRUE),
-                formato = "porcentaje", color = "#404040")}),
-              texto  = html_texto("Contactos con 30+ días sin registro de relacionamiento", color = "#404040"),
-              colores = c(fondo = "white"), mostrar_boton = TRUE, icono = "user-clock",
-              titulo_modal = "Contactos con 30+ días sin registro de relacionamiento", icono_modal = "square",
-              contenido_modal = function() PanelEtapaUI(ns("modal_kpi_30"))
-    )
-    PanelEtapa(id = "modal_kpi_30", usuario = usuario, etapa = "CONTACTO", mostrar_titulo = FALSE,
-               filtro_extra = function(df) filter(df, DiasSinRelacionamiento >= 30)
-               )
-    
     # Resumen por dimension ----
     datos_usuario_r <- reactive(.resumen_dimension(contactos_enriquecidos(), "UsuarioCrea"))
     .estilo_total_usuario <- .estilo_fila_total(datos_usuario_r, "UsuarioCrea")
     
-    .crm_tabla_legacy(id = "tabla_usuario",  data = datos_usuario_r,  columnas = NULL,
+    .crm_tabla_servidor(id = "tabla_usuario",  data = datos_usuario_r,  columnas = NULL,
                     col_specs = .col_specs_resumen_contacto("UsuarioCrea", "Usuario (Creación)", .estilo_total_usuario),
                     modo_seleccion = "ninguno", id_col = "UsuarioCrea",
                     sortable = TRUE, searchable = TRUE, page_size = 10, compact = TRUE,
@@ -240,7 +230,7 @@ DetalleContacto <- function(id, usuario) {
     datos_origen_r <- reactive(.resumen_dimension(contactos_enriquecidos(), "Origen"))
     .estilo_total_origen <- .estilo_fila_total(datos_origen_r, "Origen")
     
-    modulo_tabla_origen <- .crm_tabla_legacy(id = "tabla_origen", data = datos_origen_r, columnas = NULL,
+    modulo_tabla_origen <- .crm_tabla_servidor(id = "tabla_origen", data = datos_origen_r, columnas = NULL,
                                            col_specs = .col_specs_resumen_contacto("Origen", "Origen", .estilo_total_origen),
                                            modo_seleccion = "fila", id_col = "Origen",
                                            sortable = TRUE, searchable = TRUE, page_size = 10, compact = TRUE,
@@ -270,7 +260,7 @@ DetalleContacto <- function(id, usuario) {
     })
     .estilo_total_det_origen <- .estilo_fila_total(datos_det_origen_r, "DetOrigen")
     
-    .crm_tabla_legacy(id = "tabla_det_origen", data = datos_det_origen_r, columnas = NULL,
+    .crm_tabla_servidor(id = "tabla_det_origen", data = datos_det_origen_r, columnas = NULL,
                     col_specs = .col_specs_resumen_contacto("DetOrigen", "Detalle Origen", .estilo_total_det_origen),
                     modo_seleccion = "ninguno", id_col = "DetOrigen",
                     sortable = TRUE, searchable = TRUE, page_size = 10, compact = TRUE,
@@ -278,7 +268,14 @@ DetalleContacto <- function(id, usuario) {
     )
     
     # Listado 
-    PanelEtapa(id = "Listado", usuario = usuario, etapa = "CONTACTO", mostrar_titulo = FALSE)
+    PanelEtapa(id = "Listado", usuario = usuario, etapa = "CONTACTO", mostrar_titulo = FALSE,
+      datos_base = contactos_enriquecidos,
+      al_actualizar = function() refresh_trigger(isolate(refresh_trigger()) + 1L),
+      filtro_extra = function(df) {
+        umbral <- suppressWarnings(as.numeric(input$dias_sin_relacionamiento))
+        if (length(umbral) != 1L || is.na(umbral) || umbral == 0) return(df)
+        df[!is.na(df$DiasSinRelacionamiento) & df$DiasSinRelacionamiento > umbral, , drop = FALSE]
+      })
     
     # Alta de contacto ----
     contacto_mod <- CrearContacto(id = "mod_nuevo_contacto", usuario = usuario)
@@ -293,7 +290,7 @@ DetalleContacto <- function(id, usuario) {
     observeEvent(contacto_mod$n(), {
       req(contacto_mod$codigo())
       removeModal()
-      refresh_trigger(isolate(refresh_trigger()) + 1)
+      { .pr_invalidar(); refresh_trigger(isolate(refresh_trigger()) + 1) }
     })
     
     # Descarga ----

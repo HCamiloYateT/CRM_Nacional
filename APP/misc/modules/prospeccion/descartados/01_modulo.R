@@ -32,13 +32,13 @@ DetalleDescartadosUI <- function(id) {
         8,
         .pr_panel(title = "Motivos de Descarte", width = 12,
             collapsible = TRUE, collapsed = FALSE,
-            .crm_tabla_legacy_ui(ns("tabla_razon1")),
+            .crm_tabla_ui(ns("tabla_razon1")),
             shinyjs::hidden(
               tags$div(id = ns("BloqueOtrosRazon1"),
                        tags$hr(),
                        FormatearTexto("Categorías agrupadas en OTROS",
                                       tamano_pct = 0.8, color = "#64748B"),
-                       .crm_tabla_legacy_ui(ns("tabla_otros_razon1")))
+                       .crm_tabla_ui(ns("tabla_otros_razon1")))
             )
         )
       ),
@@ -60,13 +60,13 @@ DetalleDescartados <- function(id, usuario) {
     ### Datos ----
     # Carga el historial de descartes registrado en CRMNALDESCARTE.
     descartes_r <- reactive({
-      CargarDatos("CRMNALDESCARTE")
+      .pr_cargar("CRMNALDESCARTE")
     })
     
     # Obtiene los contactos cuya etapa vigente es DESCARTADO.
     descartados_vigentes_r <- reactive({
-      CargarDatos("CRMNALCONTACTO") %>%
-        derivar_etapa_actual() %>%
+      .pr_cargar("CRMNALCONTACTO") %>%
+        derivar_etapa_actual(historial = .pr_cargar("CRMNALHISTORIALETAPA")) %>%
         filter(Etapa == "DESCARTADO") %>%
         mutate(EtapaPreDescarte = coalesce(EtapaPreDescarte, "CONTACTO"))
     })
@@ -217,7 +217,7 @@ DetalleDescartados <- function(id, usuario) {
     estilo_razon1 <- .estilo_fila_total(datos_razon1_r, "Categoria")
     
     # Construye la tabla principal de razones.
-    modulo_tabla_razon1 <- .crm_tabla_legacy(
+    modulo_tabla_razon1 <- .crm_tabla_servidor(
       id = "tabla_razon1", data = datos_razon1_r, columnas = NULL,
       col_specs = .col_specs_resumen_etapa(estilo_razon1, "Razón"),
       modo_seleccion = "fila", id_col = "Categoria",
@@ -293,7 +293,7 @@ DetalleDescartados <- function(id, usuario) {
       if (nrow(dat) == 0) {
         return(
           plotly::config(
-            plotly::plotly_empty(type = "scatter"),
+            plotly::plotly_empty(type = "scatter", mode = "markers"),
             displayModeBar = FALSE
           )
         )
@@ -302,7 +302,7 @@ DetalleDescartados <- function(id, usuario) {
       plotly::plot_ly(
         data = dat, x = ~X, y = ~Y, type = "scatter", mode = "text",
         text = ~Palabra, hovertext = ~Tooltip, hoverinfo = "text",
-        textfont = list(size = dat$Tamano, color = "#1C398E")
+        textfont = list(size = dat$Tamano, color = "#495057")
       ) %>%
         plotly::layout(
           margin = list(l = 5, r = 5, t = 5, b = 5),
@@ -311,7 +311,7 @@ DetalleDescartados <- function(id, usuario) {
           paper_bgcolor = "rgba(0,0,0,0)",
           plot_bgcolor = "rgba(0,0,0,0)",
           hoverlabel = list(
-            bgcolor = "#1A3C5E",
+            bgcolor = "#495057",
             font = list(color = "white", size = 12)
           )
         ) %>%
@@ -331,7 +331,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Construye la tabla de razones agrupadas.
-    modulo_tabla_otros_razon1 <- .crm_tabla_legacy(
+    modulo_tabla_otros_razon1 <- .crm_tabla_servidor(
       id = "tabla_otros_razon1", data = detalle_otros_razon1_r,
       columnas = NULL,
       col_specs = .col_specs_resumen_etapa(
@@ -386,13 +386,13 @@ DetalleDescartados <- function(id, usuario) {
         )
       } else {
         tagList(
-          .crm_tabla_legacy_ui(ns("tabla_razon2_modal")),
+          .crm_tabla_ui(ns("tabla_razon2_modal")),
           shinyjs::hidden(
             tags$div(
               id = ns("BloqueOtrosRazon2"), tags$hr(),
               FormatearTexto("Categorías agrupadas en OTROS",
                              tamano_pct = 0.8, color = "#64748B"),
-              .crm_tabla_legacy_ui(ns("tabla_otros_razon2"))
+              .crm_tabla_ui(ns("tabla_otros_razon2"))
             )
           )
         )
@@ -476,7 +476,7 @@ DetalleDescartados <- function(id, usuario) {
       
       plotly::plot_ly(
         x = p, type = "histogram",
-        marker = list(color = "#1C398E")
+        marker = list(color = "#DA291C")
       ) %>%
         plotly::layout(
           margin = list(l = 30, r = 20, t = 10, b = 40),
@@ -503,7 +503,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Construye la tabla de razones secundarias.
-    .crm_tabla_legacy(
+    .crm_tabla_servidor(
       id = "tabla_razon2_modal", data = datos_razon2_modal_r,
       columnas = NULL,
       col_specs = .col_specs_resumen_etapa(
@@ -527,7 +527,7 @@ DetalleDescartados <- function(id, usuario) {
     )
     
     # Construye la tabla secundaria de categorias agrupadas.
-    .crm_tabla_legacy(
+    .crm_tabla_servidor(
       id = "tabla_otros_razon2", data = detalle_otros_razon2_r,
       columnas = NULL,
       col_specs = .col_specs_resumen_etapa(

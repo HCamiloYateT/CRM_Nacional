@@ -7,12 +7,12 @@ DetalleAlianzaUI <- function(id) {
     .crm_plot_output(ns("serie"), height = "300px")
   )
 }
-DetalleAlianza <- function(id, nit_aliado, fechas_alianza) {
+DetalleAlianza <- function(id, nit_aliado, fechas_alianza, hechos = function() data) {
   moduleServer(id, function(input, output, session) {
     
     ventas_mensuales_r <- reactive({
       req(nit_aliado())
-      data %>%
+      hechos() %>%
         filter(CliNitPpal == nit_aliado(), !is.na(FecFact)) %>%
         mutate(Mes = lubridate::floor_date(FecFact, "month")) %>%
         group_by(Mes) %>%
@@ -22,7 +22,7 @@ DetalleAlianza <- function(id, nit_aliado, fechas_alianza) {
     cosecha_r <- reactive({
       req(nit_aliado(), fechas_alianza())
       ventas <- ventas_mensuales_r()
-      req(nrow(ventas) > 0)
+      validate(need(nrow(ventas) > 0, "NO HAY COMPRAS PARA EL CLIENTE ALIADO SELECCIONADO."))
       
       purrr::map_dfr(fechas_alianza(), function(t0) {
         t0_mes <- lubridate::floor_date(t0, "month")
@@ -68,7 +68,7 @@ DetalleAlianza <- function(id, nit_aliado, fechas_alianza) {
       dat <- cosecha_r()
       if (nrow(dat) == 0) {
         return(plotly::config(
-          plotly::plotly_empty(type = "scatter"),
+          plotly::plotly_empty(type = "scatter", mode = "markers"),
           displayModeBar = FALSE
         ))
       }
@@ -76,8 +76,8 @@ DetalleAlianza <- function(id, nit_aliado, fechas_alianza) {
       plotly::plot_ly(
         dat, x = ~RelMes, y = ~SacosPYGProm,
         type = "scatter", mode = "lines+markers",
-        line = list(color = "#1C398E", width = 2),
-        marker = list(color = "#1C398E", size = 7),
+        line = list(color = "#DA291C", width = 2),
+        marker = list(color = "#DA291C", size = 7),
         text = ~paste0("Mes relativo ", RelMes, " · ", NumEventos, " evento(s)"),
         hovertemplate = "%{text}<br>Sacos PYG: %{y:,.0f}<extra></extra>"
       ) %>%
@@ -91,7 +91,7 @@ DetalleAlianza <- function(id, nit_aliado, fechas_alianza) {
           paper_bgcolor = "rgba(0,0,0,0)",
           plot_bgcolor = "rgba(0,0,0,0)",
           hoverlabel = list(
-            bgcolor = "#1A3C5E",
+            bgcolor = "#495057",
             font = list(color = "white", size = 12)
           )
         ) %>%
@@ -131,11 +131,11 @@ DetalleProspectosUI <- function(id) {
                  .crm_tabs(
                    tabPanel("Usuario",
                             Saltos(),
-                            .crm_tabla_legacy_ui(ns("tabla_usuario"))
+                            .crm_tabla_ui(ns("tabla_usuario"))
                    ),
                    tabPanel("Origen",
                             Saltos(),
-                            .crm_tabla_legacy_ui(ns("tabla_origen")),
+                            .crm_tabla_ui(ns("tabla_origen")),
                             tags$hr(),
                             shinyjs::hidden(
                               tags$div(id = ns("BloqueDetOrigen"),
@@ -143,13 +143,13 @@ DetalleProspectosUI <- function(id) {
                                          "Detalle Origen (según fila seleccionada arriba)",
                                          tamano_pct = 0.8, color = "#64748B"
                                        ),
-                                       .crm_tabla_legacy_ui(ns("tabla_det_origen"))
+                                       .crm_tabla_ui(ns("tabla_det_origen"))
                               )
                             )
                    ),
                    tabPanel("Alianza",
                             Saltos(),
-                            .crm_tabla_legacy_ui(ns("tabla_alianza"))
+                            .crm_tabla_ui(ns("tabla_alianza"))
                    )
                  )
              )
@@ -173,7 +173,7 @@ DetalleProspectos <- function(id, usuario) {
       
       refresh_trigger()
       
-      contactos <- CargarDatos("CRMNALCONTACTO") %>%
+      contactos <- .pr_cargar("CRMNALCONTACTO") %>%
         select(
           CodContacto,
           UsuarioCreaContacto   = UsuarioCrea,
@@ -181,7 +181,7 @@ DetalleProspectos <- function(id, usuario) {
         ) %>%
         mutate(FechaHoraCreaContacto = as_datetime(FechaHoraCreaContacto))
       
-      derivar_etapa_actual() %>%
+      derivar_etapa_actual(historial = .pr_cargar("CRMNALHISTORIALETAPA")) %>%
         filter(Etapa == "PROSPECTO", Estado == "ACTIVO") %>%
         derivar_fecha_entrada_etapa() %>%
         left_join(contactos, by = "CodContacto") %>%
@@ -226,13 +226,13 @@ DetalleProspectos <- function(id, usuario) {
               titulo_modal = "Prospectos por Alianza — click en una fila para ver análisis de ventas",
               icono_modal = "handshake",
               contenido_modal = function() tagList(
-                .crm_tabla_legacy_ui(ns("tabla_kpi_alianzas")),
+                .crm_tabla_ui(ns("tabla_kpi_alianzas")),
                 tags$hr(),
                 uiOutput(ns("bloque_analisis_alianza"))
               )
     )
     
-    mod_tabla_kpi_alianzas <- .crm_tabla_legacy(
+    mod_tabla_kpi_alianzas <- .crm_tabla_servidor(
       id = "tabla_kpi_alianzas", data = resumen_alianzas_r,
       columnas = NULL,
       col_specs = list(
@@ -259,7 +259,7 @@ DetalleProspectos <- function(id, usuario) {
       
       req(nrow(registros) > 0)
       
-      nit_aliado <- CargarDatos("CRMNALCONTACTO") %>%
+      nit_aliado <- .pr_cargar("CRMNALCONTACTO") %>%
         filter(CodContacto == registros$CodClienteAliado[[1]]) %>%
         pull(PerCod) %>%
         dplyr::first()
@@ -304,7 +304,7 @@ DetalleProspectos <- function(id, usuario) {
       "UsuarioCreaContacto"
     )
     
-    .crm_tabla_legacy(
+    .crm_tabla_servidor(
       id = "tabla_usuario", data = datos_usuario_r, columnas = NULL,
       col_specs = .col_specs_resumen_prospecto(
         "UsuarioCreaContacto",
@@ -327,7 +327,7 @@ DetalleProspectos <- function(id, usuario) {
       "Origen"
     )
     
-    modulo_tabla_origen <- .crm_tabla_legacy(
+    modulo_tabla_origen <- .crm_tabla_servidor(
       id = "tabla_origen", data = datos_origen_r, columnas = NULL,
       col_specs = .col_specs_resumen_prospecto(
         "Origen",
@@ -376,7 +376,7 @@ DetalleProspectos <- function(id, usuario) {
       "DetOrigen"
     )
     
-    .crm_tabla_legacy(
+    .crm_tabla_servidor(
       id = "tabla_det_origen", data = datos_det_origen_r,
       columnas = NULL,
       col_specs = .col_specs_resumen_prospecto(
@@ -398,7 +398,7 @@ DetalleProspectos <- function(id, usuario) {
       })
     .estilo_total_alianza <- .estilo_fila_total(datos_alianza_r, "ClienteAliado")
     
-    .crm_tabla_legacy(id = "tabla_alianza", data = datos_alianza_r, columnas = NULL,
+    .crm_tabla_servidor(id = "tabla_alianza", data = datos_alianza_r, columnas = NULL,
                     col_specs = .col_specs_resumen_prospecto("ClienteAliado", "Alianza", .estilo_total_alianza),
                     modo_seleccion = "ninguno", id_col = "ClienteAliado",
                     sortable = TRUE, searchable = TRUE, page_size = 10, compact = TRUE,

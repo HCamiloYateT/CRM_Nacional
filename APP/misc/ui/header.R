@@ -14,7 +14,16 @@ header <- bs4DashNavbar(status = "white", border = FALSE, sidebarIcon = icon("ba
                                                  shiny::tagAppendAttributes(
                                                    racafeForms::racafeButtonDownload("FT_DescargarClientes",
                                                      label = NULL, icon = "users", size = "xxs", variant = "secondary"),
-                                                   title = "Descargar clientes")
+                                                   title = "Descargar clientes"),
+                                                 div(class = "dropdown",
+                                                   tagAppendAttributes(racafeForms::racafeButton("escalas_color", NULL,
+                                                     icon = "palette", title = "Escalas de color", variant = "secondary",
+                                                     size = "xs"), `data-toggle` = "dropdown", `aria-haspopup` = "true"),
+                                                   div(class = "dropdown-menu kb-scale-menu",
+                                                     tags$strong("ETAPA DE LA ENTIDAD"),
+                                                     lapply(ETAPAS_EMBUDO, function(etapa) div(
+                                                       tags$span(class = "kb-scale-swatch", style = paste0("background:",
+                                                         COLOR_ETAPA_EMBUDO[[etapa]])), etapa))))
                                                  )
                                          ),
                         rightUi = tagList(
