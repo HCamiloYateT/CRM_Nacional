@@ -154,7 +154,9 @@
 
 .in_oportunidades <- function(fuente, entidad) {
   x <- .in_detalle_crm(fuente, entidad, .IN_FUENTES$oportunidades$campos)
-  if (!nrow(x)) return(x)
+  if (!nrow(x)) return(data.frame(Oportunidad = character(), Creacion = as.Date(character()),
+    FechaObjetivo = as.Date(character()), Linea = character(), Categoria = character(), Producto = character(),
+    SacosObjetivo = numeric(), MargenObjetivoKg = numeric(), EstadoActual = character()))
   estado <- toupper(as.character(.gc_columna(x, c("Descartado", "Descartada"))))
   data.frame(Oportunidad = as.character(.gc_columna(x, "IdOportunidad")),
     Creacion = .in_fecha(.gc_columna(x, "FechaHoraCrea")),
@@ -251,7 +253,7 @@
   desde <- if (length(fechas)) min(fechas) else corte
   x <- .prod_preparar(fuente, as.Date(c(desde, corte)))
   if (nivel == "nit") x$NIT <- x$NITFactura
-  cestas <- .mba_cestas(x, "cliente", "producto", filtros)
+  cestas <- .mba_cestas(x, "pedido", "producto", filtros)
   modelo <- .mba_itemsets(cestas$membresia, cestas$cestas$Cesta, soporte = 0, minimo = 2L, longitud = 2L)
   reglas <- .mba_reglas(modelo, confianza = 0.1, lift = 1.01, estadistica = FALSE)
   list(reglas = reglas, base = cestas)

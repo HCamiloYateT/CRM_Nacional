@@ -29,7 +29,8 @@
   x <- x[is.finite(x$PrecioKg) & x$PrecioKg > 0 & is.finite(x$Sacos) & x$Sacos > 0, , drop = FALSE]
   if (!nrow(x)) return(x)
   x$DiferenciaCOP <- abs(x$PrecioKg - precio)
-  x[x$DiferenciaCOP == min(x$DiferenciaCOP), , drop = FALSE] %>% dplyr::arrange(dplyr::desc(FechaPedido))
+  x$DiferenciaPct <- x$DiferenciaCOP / precio
+  x[x$DiferenciaCOP == min(x$DiferenciaCOP), , drop = FALSE] %>% dplyr::arrange(dplyr::desc(FechaPedido), NIT, Pedido, Linea, Marca, NombreComercial)
 }
 .in_mercado_fecha <- function(datos, fecha) {
   if (!is.null(datos$error)) stop("No fue posible consultar los indicadores históricos.")
