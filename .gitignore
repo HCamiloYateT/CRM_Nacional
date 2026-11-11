@@ -1,6 +1,57 @@
-# Datos comerciales privados importados localmente; no publicar saldos ni pagos.
-APP/data/comercial_historico.rds
-APP/data/comercial_historico.RData
-APP/data/data.RData
-# Histórico financiero importado de Excel; se distribuye con los datos del despliegue.
-APP/data/evolucion_historica.rds
+# ==========================================
+# DATOS LOCALES Y PRIVADOS
+# ==========================================
+*.rds
+*.RDS
+*.rda
+*.RData
+*.rdata
+*.RDA
+
+# ==========================================
+# RSTUDIO
+# ==========================================
+.Rproj.user/
+*.Rproj
+.Rhistory
+.RDataTmp
+.Ruserdata
+
+# ==========================================
+# CREDENCIALES Y VARIABLES DE ENTORNO
+# ==========================================
+.Renviron
+.Renviron.*
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa
+id_ed25519
+*.p12
+*.pfx
+credentials.json
+secrets.json
+
+# ==========================================
+# CONFIGURACIONES EXCLUSIVAMENTE LOCALES
+# ==========================================
+config/local/
+config/private/
+config/secrets/
+*.local.yml
+*.local.yaml
+*.local.json
+*.local.R
+
+# ==========================================
+# ARCHIVOS TEMPORALES
+# ==========================================
+.Rcheck/
+.Rproj.user/
+.Rtmp*/
+__pycache__/
+*.log
+*.tmp
+*~
