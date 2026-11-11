@@ -3,12 +3,13 @@
   pedidos = "Pedidos facturados", productos = "Productos comprados")
 ConsultaIndividualUI <- function(id) {
   ns <- shiny::NS(id)
+  .accion_formulario_ui(id,
   racafeForms::racafeForm(variant = "plain",
     racafeForms::racafeActionBar(left = racafeForms::racafeButton("actualizar", "Actualizar",
       icon = "arrows-rotate", variant = "secondary", ns = ns)),
     .crm_select("entidad", "Buscar por nombre o NIT de facturación",
       choices = character(), ns = ns),
-    shiny::uiOutput(ns("identidad")), shiny::uiOutput(ns("visibilidad_tabs")), shiny::uiOutput(ns("contenido")))
+    shiny::uiOutput(ns("identidad")), shiny::uiOutput(ns("visibilidad_tabs")), shiny::uiOutput(ns("contenido"))))
 }
 ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin, nit_mapa,
                                cartera = function() NULL, tareas = function() data.frame(),
@@ -48,7 +49,8 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       .in_catalogo(crm, catalogo_clientes(), fuentes()$etapas$datos, vinculos()$datos, usuario(), es_admin(),
         filtros(), .gc_filtrar_dimensiones(hechos(), filtros()), directorio())
     })
-    shiny::observeEvent(list(catalogo(), solicitud()), {
+    shiny::observeEvent(list(catalogo(), solicitud(), input$FormularioListo), {
+      shiny::req(input$FormularioListo)
       x <- catalogo()
       actual <- shiny::isolate(input$entidad)
       opciones <- stats::setNames(x$Clave, x$Etiqueta)
@@ -63,6 +65,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
         por_nit <- which(!is.na(x$NIT) & as.character(x$NIT) %in% destino$nit)
         if (length(por_nit)) coincidencias <- por_nit
         if (length(coincidencias)) seleccion <- x$Clave[coincidencias[1]] else {
+          seleccion <- character()
           shiny::showNotification("La entidad no está disponible para el alcance actual.", type = "warning")
         }
         solicitud_atendida(destino)

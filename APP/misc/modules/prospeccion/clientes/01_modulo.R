@@ -768,14 +768,14 @@ DetalleClientesUI <- function(id) {
                  ),
                  FormatearTexto(
                    paste0("Los valores corresponden al total de clientes cuya etapa vigente es CLIENTE ",
-                          "y cuyo estado actual es ACTIVO."),
+                          "con independencia de su actividad en el periodo."),
                    tamano_pct = 0.75, color = "#64748B"
                  )))
     ),
     .pr_panel(title = "Detalle de Clientes", width = 12, collapsible = TRUE, collapsed = TRUE,
         PanelEtapaUI(ns("Listado")),
         FormatearTexto(
-          "Se muestran únicamente los clientes cuya etapa vigente es CLIENTE y cuyo estado actual es ACTIVO.",
+          "Se muestran los clientes históricos, incluidos quienes no compran en el periodo.",
           tamano_pct = 0.75, color = "#64748B"
         ))
   )
@@ -788,7 +788,7 @@ DetalleClientes <- function(id, usuario) {
     codigos_clientes_activos_r <- reactive({
       derivar_etapa_actual(contactos = .pr_cargar("CRMNALCONTACTO"),
           historial = .pr_cargar("CRMNALHISTORIALETAPA")) %>%
-        filter(Etapa == "CLIENTE", Estado == "ACTIVO") %>%
+        filter(Etapa == "CLIENTE") %>%
         pull(CodContacto) %>%
         unique()
     })
@@ -866,7 +866,7 @@ DetalleClientes <- function(id, usuario) {
       icono = "user-group",
       colores = c(fondo = "white"),
       mostrar_boton = FALSE,
-      footer = "Clientes cuya etapa vigente es CLIENTE y cuyo estado actual es ACTIVO."
+      footer = "Clientes históricos: la ausencia de compras no elimina su condición de cliente."
     )
     tasa_conversion_contacto_r <- reactive({
       mean(universo_conversion_r()$EsCliente, na.rm = TRUE)

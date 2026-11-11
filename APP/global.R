@@ -127,7 +127,7 @@ for (.paquete in names(.versiones_componentes)) {
 }
 rm(.paquete)
 racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", "tidyverse", "scales", "rlang",
-                      "waiter", "glue", "lubridate", "stringr", "purrr", "gt", "plotly", "writexl"))
+                      "waiter", "glue", "httr2", "lubridate", "stringr", "purrr", "gt", "plotly", "writexl"))
 
 # Versiones de componentes y recursos compartidos ----
 # Resolver APP desde la raíz del repositorio o desde el directorio de la aplicación.
@@ -141,14 +141,14 @@ racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", 
 }
 
 .ruta_app <- .crm_ruta_app()
-.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/1a0ae22b0e6a11ab81d41ecff01a0f5d3614ae16"
+.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/031929489e0f5239c6dfdc98d08f83a8c9843b82"
 .estilos_crm <- shiny::singleton(shiny::includeCSS(paste0(.url_compartido, "/Styles/crm-nacional.css")))
 .recursos_compartidos <- shiny::tagList(
   shiny::tags$span(hidden = "hidden", `data-rf-interactions` = "true"),
   racafeForms::racafeFormsDependencies(),
   racafeModulos::MenuAccionesDependencies(),
   shiny::includeCSS(paste0(.url_compartido, "/Styles/style.css")),
-  lapply(c("scripts", "clipboard.js", "forms.js", "controlbar.js", "interactions.js", "crm-kanban.js"),
+  lapply(c("scripts", "clipboard.js", "forms.js", "controlbar.js", "interactions.js", "crm-kanban.js", "crm-prospeccion.js"),
     function(archivo) {
     shiny::includeScript(paste0(.url_compartido, "/Scripts/", archivo))
   }),

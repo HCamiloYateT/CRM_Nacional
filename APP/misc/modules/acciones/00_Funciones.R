@@ -161,11 +161,11 @@ RegistrarError <- function(error, operacion, usuario = NULL, codigo_contacto = N
   
   nombres_similares <- NULL
   if (nchar(razon_social_mayuscula) >= 3) {
-    similares_ncliente <- NCLIENTE %>%
+    similares_ncliente <- n_cliente %>%
       filter(grepl(razon_social_mayuscula, str_to_upper(PerRazSoc), fixed = TRUE)) %>%
       pull(PerRazSoc) %>% str_to_upper() %>% unique()
     
-    similares_facturacion <- FACT %>%
+    similares_facturacion <- data %>%
       filter(grepl(razon_social_mayuscula, str_to_upper(PerRazSoc), fixed = TRUE)) %>%
       pull(PerRazSoc) %>% str_to_upper() %>% unique()
     
@@ -316,6 +316,7 @@ registrar_red_social_persona_directorio <- function(id_persona, tipo_red, usuari
 }
 # Arma el link HTML (icono + href) de una red social
 .linea_red_social <- function(tipo, usuario) {
+  tipo <- toupper(tipo)
   info <- .ICONOS_RED_SOCIAL[[tipo]] %||% list(clase = "fas fa-link", color = "#6c757d")
   as.character(tags$div(
     style = "margin-bottom:3px; white-space:nowrap;",
@@ -389,31 +390,34 @@ google_autocompletar_direccion <- function(texto, pais_iso2 = "CO") {
     return(list(status = "TEXTO_CORTO", sugerencias = NULL))
   }
   
+  if (!nzchar(Sys.getenv("GOOGLE_MAPS_KEY", Sys.getenv("GOOGLE_API_KEY")))) {
+    return(.direccion_abierta(texto = texto, pais = pais_iso2))
+  }
   respuesta <- tryCatch({
-    request("https://places.googleapis.com/v1/places:autocomplete") %>%
-      req_headers(
+    httr2::request("https://places.googleapis.com/v1/places:autocomplete") %>%
+      httr2::req_headers(
         `Content-Type` = "application/json",
-        `X-Goog-Api-Key` = google_key
+        `X-Goog-Api-Key` = Sys.getenv("GOOGLE_MAPS_KEY", Sys.getenv("GOOGLE_API_KEY"))
       ) %>%
-      req_body_json(list(
+      httr2::req_body_json(list(
         input = texto,
         includedRegionCodes = list(pais_iso2),
         languageCode = "es"
       )) %>%
-      req_error(is_error = function(resp) FALSE) %>%
-      req_perform()
+      httr2::req_error(is_error = function(resp) FALSE) %>%
+      httr2::req_perform()
   }, error = function(e) NULL)
   
   if (is.null(respuesta)) {
     return(list(status = "ERROR_CONEXION", sugerencias = NULL))
   }
-  if (resp_status(respuesta) != 200) {
-    cuerpo_error <- tryCatch(resp_body_json(respuesta), error = function(e) NULL)
-    mensaje <- cuerpo_error$error$status %||% paste("HTTP", resp_status(respuesta))
+  if (httr2::resp_status(respuesta) != 200) {
+    cuerpo_error <- tryCatch(httr2::resp_body_json(respuesta), error = function(e) NULL)
+    mensaje <- cuerpo_error$error$status %||% paste("HTTP", httr2::resp_status(respuesta))
     return(list(status = mensaje, sugerencias = NULL))
   }
   
-  datos <- resp_body_json(respuesta, simplifyVector = FALSE)
+  datos <- httr2::resp_body_json(respuesta, simplifyVector = FALSE)
   if (length(datos$suggestions) == 0) {
     return(list(status = "ZERO_RESULTS", sugerencias = NULL))
   }
@@ -445,26 +449,27 @@ google_obtener_detalle_lugar <- function(place_id) {
     return(list(status = "SIN_PLACE_ID"))
   }
   
+  if (startsWith(place_id, "OSM:")) return(.direccion_abierta(place_id = substring(place_id, 5L)))
   respuesta <- tryCatch({
-    request(paste0("https://places.googleapis.com/v1/places/", place_id)) %>%
-      req_headers(
-        `X-Goog-Api-Key` = google_key,
+    httr2::request(paste0("https://places.googleapis.com/v1/places/", place_id)) %>%
+      httr2::req_headers(
+        `X-Goog-Api-Key` = Sys.getenv("GOOGLE_MAPS_KEY", Sys.getenv("GOOGLE_API_KEY")),
         `X-Goog-FieldMask` = "id,formattedAddress,location,addressComponents"
       ) %>%
-      req_error(is_error = function(resp) FALSE) %>%
-      req_perform()
+      httr2::req_error(is_error = function(resp) FALSE) %>%
+      httr2::req_perform()
   }, error = function(e) NULL)
   
   if (is.null(respuesta)) {
     return(list(status = "ERROR_CONEXION"))
   }
-  if (resp_status(respuesta) != 200) {
-    cuerpo_error <- tryCatch(resp_body_json(respuesta), error = function(e) NULL)
-    mensaje <- cuerpo_error$error$status %||% paste("HTTP", resp_status(respuesta))
+  if (httr2::resp_status(respuesta) != 200) {
+    cuerpo_error <- tryCatch(httr2::resp_body_json(respuesta), error = function(e) NULL)
+    mensaje <- cuerpo_error$error$status %||% paste("HTTP", httr2::resp_status(respuesta))
     return(list(status = mensaje))
   }
   
-  datos <- resp_body_json(respuesta, simplifyVector = FALSE)
+  datos <- httr2::resp_body_json(respuesta, simplifyVector = FALSE)
   componentes <- datos$addressComponents
   
   list(
@@ -1002,4 +1007,41 @@ descartar_oportunidad <- function(id_oportunidad, razon, usr) {
   correo <- trimws(as.character(correo))
   if (!length(correo) || is.na(correo) || !nzchar(correo)) return(FALSE)
   !grepl("^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$", correo)
+}
+
+# Precargar los controles después de su binding en el navegador ----
+.accion_formulario_ui <- function(id, ...) {
+  shiny::tags$div(`data-crm-form-ready` = shiny::NS(id)("FormularioListo"), ...)
+}
+.accion_opciones <- function(clave, defecto = character()) {
+  opciones <- Choices()[[clave]]
+  if (is.null(opciones)) defecto else opciones
+}
+.accion_telefono_invalido <- function(telefono) {
+  telefono <- trimws(as.character(telefono))
+  if (!length(telefono) || is.na(telefono) || !nzchar(telefono)) return(FALSE)
+  digitos <- gsub("[^0-9]", "", telefono)
+  !grepl("^[+0-9() .-]+$", telefono) || nchar(digitos) < 7L || nchar(digitos) > 15L
+}
+
+# Búsqueda pública cuando Places no tiene clave; nunca impide diligenciar la dirección manualmente ----
+.direccion_abierta <- function(texto = NULL, pais = "CO", place_id = NULL) {
+  tryCatch({
+    url <- if (is.null(place_id)) "https://nominatim.openstreetmap.org/search" else
+      "https://nominatim.openstreetmap.org/lookup"
+    consulta <- httr2::request(url) %>% httr2::req_user_agent("CRM-Nacional/1.0 (address lookup)") %>%
+      httr2::req_timeout(10)
+    consulta <- if (is.null(place_id)) consulta %>% httr2::req_url_query(q = texto, format = "jsonv2",
+      addressdetails = 1, countrycodes = tolower(pais), limit = 5) else
+      consulta %>% httr2::req_url_query(osm_ids = place_id, format = "jsonv2", addressdetails = 1)
+    datos <- httr2::resp_body_json(httr2::req_perform(consulta), simplifyVector = FALSE)
+    if (!length(datos)) return(list(status = "ZERO_RESULTS", sugerencias = NULL))
+    if (is.null(place_id)) return(list(status = "OK", sugerencias = dplyr::bind_rows(lapply(datos, function(x) {
+      data.frame(texto = x$display_name, place_id = paste0("OSM:", toupper(substr(x$osm_type, 1, 1)), x$osm_id))
+    }))))
+    x <- datos[[1]]; direccion <- x$address
+    list(status = "OK", direccion_formateada = x$display_name, pais = direccion$country,
+      depto = direccion$state, mpio = direccion$city %||% direccion$town %||% direccion$municipality %||%
+        direccion$village, lat = as.numeric(x$lat), lng = as.numeric(x$lon))
+  }, error = function(e) list(status = "ERROR_CONEXION", sugerencias = NULL))
 }

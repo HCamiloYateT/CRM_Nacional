@@ -43,3 +43,6 @@ COLOR_ETAPA_EMBUDO <- c("CONTACTO" = "#c8c8c8",
   "pero", "si", "ni", "nos", "va", "hay", "era", "eran",
   "son", "ser", "estan", "están", "asi", "así"
 )
+
+.CONFIG_ACCIONES_EMBUDO$Consultar <- list(etiqueta = "Consulta individual", icono = "address-card",
+  color = "#495057", modal = "ventana")
