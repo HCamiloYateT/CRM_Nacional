@@ -21,7 +21,7 @@ Reactivar <- function(id, usuario, codigo_contacto, disparador = codigo_contacto
       
       destino <- .obtener_etapa_pre_descarte(codigo_contacto())
       
-      racafeShiny::MostrarModalConfirmacion(
+      .accion_modal_confirmacion(
         ns = ns,
         titulo = "Confirmar reactivación",
         texto = paste0("Este registro volverá a la etapa: ", destino, ". ¿Desea continuar?"),

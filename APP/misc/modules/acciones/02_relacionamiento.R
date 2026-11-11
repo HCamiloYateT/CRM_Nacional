@@ -133,7 +133,7 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
         })
         return(invisible(NULL))
       }
-      racafeShiny::MostrarModalConfirmacion(
+      .accion_modal_confirmacion(
         ns = ns, titulo = "Confirmar gestión",
         texto = paste0("¿Desea registrar esta gestión de tipo '", input$GES_Tipo, "'?"),
         id_cancelar = "GES_CancelarGuardado", id_confirmar = "GES_ConfirmarGuardado",
@@ -227,7 +227,7 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
             fila_actual <- listar_recordatorio(codigo_contacto()) %>% filter(IdRecordatorio == id_rec)
             if (nrow(fila_actual) == 0 || isTRUE(fila_actual$Enviado[1] == 1)) return(invisible(NULL))
             
-            racafeShiny::MostrarModalConfirmacion(
+            .accion_modal_confirmacion(
               ns = ns, titulo = "Confirmar cumplimiento",
               texto = paste0("¿Confirma que el recordatorio para ", fila_actual$Asesor[1], " fue atendido?"),
               id_cancelar = paste0("REC_CumplirCancelar_", id_rec),
@@ -271,7 +271,7 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
         })
         return(invisible(NULL))
       }
-      racafeShiny::MostrarModalConfirmacion(
+      .accion_modal_confirmacion(
         ns = ns, titulo = "Confirmar recordatorio",
         texto = paste0("¿Desea programar este recordatorio para ", input$REC_Asesor,
                        " el ", format(input$REC_Fecha, "%d/%m/%Y %H:%M"), "?"),

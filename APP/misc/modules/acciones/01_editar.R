@@ -157,7 +157,7 @@ Identificacion <- function(id, usuario, codigo_contacto) {
       
       # Reutiliza el modal centralizado de racafeShiny, igual que CrearContacto,
       # en vez de la variante local .ConstruirModalConfirmacionContacto / MostrarModalConClase
-      racafeShiny::MostrarModalConfirmacion(
+      .accion_modal_confirmacion(
         ns = ns, titulo = "Confirmar guardado", texto = texto_confirmacion,
         id_cancelar = "BotonCancelarGuardado", id_confirmar = "BotonConfirmarGuardado",
         label_confirmar = "Guardar Cambios", icono_confirmar = "floppy-disk"
@@ -169,6 +169,7 @@ Identificacion <- function(id, usuario, codigo_contacto) {
     })
     
     observeEvent(input$BotonConfirmarGuardado, {
+      if (!.accion_validar(.ValidarCamposFormulario())) return(invisible(NULL))
       # Fila con los datos actualizados; AutorizaTD es editable
       fila_actualizada <- data.frame(
         CodContacto   = codigo_contacto(),
@@ -277,6 +278,7 @@ DirectorioUI <- function(id) {
 }
 Directorio <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
+    .confirmar_guardado <- .accion_guardado(input, session, codigo_contacto, usuario)
     ns <- session$ns
     
     # Contadores de actualizzacion de las bases -----
@@ -304,16 +306,23 @@ Directorio <- function(id, usuario, codigo_contacto) {
     }, ignoreInit = FALSE)
     observeEvent(input$BotonGuardarDatosEmpresariales, {
       req(codigo_contacto())
-      tryCatch({
-        guardar_info_empresarial_directorio(codigo_contacto(), input$CampoCorreoEmpresarial, usuario())
-        contador_actualizacion_correo_empresa(isolate(contador_actualizacion_correo_empresa()) + 1)
-        racafeForms::racafeNotify(duration = 3, type = "success", title = "Datos empresariales guardados exitosamente",
-                                session = shiny::getDefaultReactiveDomain())
-      }, error = function(error) {
-        .ManejarErrorAccion(error = error, operacion = "guardar los datos empresariales",
-                            usuario = usuario(), codigo_contacto = codigo_contacto())
-      })
+      if (!.accion_validar(c("El correo no es válido" =
+          .accion_correo_invalido(input$CampoCorreoEmpresarial)))) return(invisible(NULL))
+      .confirmar_guardado({
+        tryCatch({
+          guardar_info_empresarial_directorio(codigo_contacto(), input$CampoCorreoEmpresarial, usuario())
+          contador_actualizacion_correo_empresa(isolate(contador_actualizacion_correo_empresa()) + 1)
+          racafeForms::racafeNotify(duration = 3, type = "success", title = "Datos empresariales guardados exitosamente",
+                                  session = shiny::getDefaultReactiveDomain())
+        }, error = function(error) {
+          .ManejarErrorAccion(error = error, operacion = "guardar los datos empresariales",
+                              usuario = usuario(), codigo_contacto = codigo_contacto())
+        })
+      }, titulo = "Guardar datos empresariales")
     })
+
+    observadores_telefonos <- new.env(parent = emptyenv())
+    session$onSessionEnded(function() lapply(as.list(observadores_telefonos), function(obs) obs$destroy()))
     
     ## Telefono ----
     ### Datos ----
@@ -333,8 +342,8 @@ Directorio <- function(id, usuario, codigo_contacto) {
           style = paste0("display:inline-block; margin:3px 4px; padding:3px 10px; ",
                          "border-radius:10px; background:#EEF2FF; font-size:12px;"),
           icon("phone"), " ", telefonos$Telefono[indice_fila], " ",
-          actionLink(ns(paste0("BotonEliminarTelefono_", telefonos$IdTelefono[indice_fila])),
-                     label = icon("xmark"))
+          racafeForms::racafeButton(paste0("BotonEliminarTelefono_", telefonos$IdTelefono[indice_fila]),
+            label = NULL, icon = "xmark", title = "Eliminar teléfono", ns = ns, size = "xs", variant = "ghost")
         )
       }))
     })
@@ -352,19 +361,29 @@ Directorio <- function(id, usuario, codigo_contacto) {
                                 session = shiny::getDefaultReactiveDomain())
         return(invisible(NULL))
       }
-      registrar_telefono_directorio(codigo_contacto(), input$CampoTelefonoNuevo, usuario())
-      updateTextInput(session, "CampoTelefonoNuevo", value = "")
-      contador_actualizacion_telefonos_empresa(isolate(contador_actualizacion_telefonos_empresa()) + 1)
+      .confirmar_guardado({
+        registrar_telefono_directorio(codigo_contacto(), input$CampoTelefonoNuevo, usuario())
+        updateTextInput(session, "CampoTelefonoNuevo", value = "")
+        contador_actualizacion_telefonos_empresa(isolate(contador_actualizacion_telefonos_empresa()) + 1)
+      }, titulo = "Añadir teléfono")
     })
     # Enlazar dinamicamente los botones de eliminar telefono 
     observe({
       telefonos <- datos_telefonos()
-      req(nrow(telefonos) > 0)
+      vigentes <- as.character(telefonos$IdTelefono)
+      for (clave in setdiff(ls(observadores_telefonos), vigentes)) {
+        observadores_telefonos[[clave]]$destroy()
+        rm(list = clave, envir = observadores_telefonos)
+      }
       lapply(telefonos$IdTelefono, function(id_tel) {
-        observeEvent(input[[paste0("BotonEliminarTelefono_", id_tel)]], {
-          eliminar_telefono_directorio(id_tel)
-          contador_actualizacion_telefonos_empresa(isolate(contador_actualizacion_telefonos_empresa()) + 1)
-        }, ignoreInit = TRUE, once = TRUE)
+        clave <- as.character(id_tel)
+        if (exists(clave, envir = observadores_telefonos, inherits = FALSE)) return(invisible(NULL))
+        observadores_telefonos[[clave]] <- observeEvent(input[[paste0("BotonEliminarTelefono_", id_tel)]], {
+          .confirmar_guardado({
+            eliminar_telefono_directorio(id_tel)
+            contador_actualizacion_telefonos_empresa(isolate(contador_actualizacion_telefonos_empresa()) + 1)
+          }, titulo = "Eliminar teléfono")
+        }, ignoreInit = TRUE)
       })
     })
     
@@ -398,10 +417,12 @@ Directorio <- function(id, usuario, codigo_contacto) {
     observeEvent(modulo_tabla_redes_empresa$seleccion(), {
       seleccion_actual <- modulo_tabla_redes_empresa$seleccion()
       req(seleccion_actual, seleccion_actual$col == "Eliminar")
-      eliminar_red_social_directorio(seleccion_actual$fila$IdRed[[1]])
-      contador_actualizacion_redes_empresa(isolate(contador_actualizacion_redes_empresa()) + 1)
-      racafeForms::racafeNotify(duration = 3, type = "success", title = "Red social eliminada",
-                              session = shiny::getDefaultReactiveDomain())
+      .confirmar_guardado({
+        eliminar_red_social_directorio(seleccion_actual$fila$IdRed[[1]])
+        contador_actualizacion_redes_empresa(isolate(contador_actualizacion_redes_empresa()) + 1)
+        racafeForms::racafeNotify(duration = 3, type = "success", title = "Red social eliminada",
+                                session = shiny::getDefaultReactiveDomain())
+      }, titulo = "Eliminar red social")
     })
     observeEvent(input$BotonAgregarRed, {
       req(codigo_contacto())
@@ -411,9 +432,11 @@ Directorio <- function(id, usuario, codigo_contacto) {
                                 session = shiny::getDefaultReactiveDomain())
         return(invisible(NULL))
       }
-      registrar_red_social_directorio(codigo_contacto(), input$CampoTipoRed, input$CampoUsuarioRed)
-      updateTextInput(session, "CampoUsuarioRed", value = "")
-      contador_actualizacion_redes_empresa(isolate(contador_actualizacion_redes_empresa()) + 1)
+      .confirmar_guardado({
+        registrar_red_social_directorio(codigo_contacto(), input$CampoTipoRed, input$CampoUsuarioRed)
+        updateTextInput(session, "CampoUsuarioRed", value = "")
+        contador_actualizacion_redes_empresa(isolate(contador_actualizacion_redes_empresa()) + 1)
+      }, titulo = "Añadir red social")
     })
     
     # Personal ----
@@ -447,10 +470,12 @@ Directorio <- function(id, usuario, codigo_contacto) {
     observeEvent(modulo_tabla_personas$seleccion(), {
       seleccion_actual <- modulo_tabla_personas$seleccion()
       req(seleccion_actual, seleccion_actual$col == "Eliminar")
-      eliminar_persona_directorio(seleccion_actual$fila$IdPersona[[1]])
-      contador_actualizacion_personas(isolate(contador_actualizacion_personas()) + 1)
-      racafeForms::racafeNotify(duration = 3, type = "success", title = "Persona eliminada",
-                              session = shiny::getDefaultReactiveDomain())
+      .confirmar_guardado({
+        eliminar_persona_directorio(seleccion_actual$fila$IdPersona[[1]])
+        contador_actualizacion_personas(isolate(contador_actualizacion_personas()) + 1)
+        racafeForms::racafeNotify(duration = 3, type = "success", title = "Persona eliminada",
+                                session = shiny::getDefaultReactiveDomain())
+      }, titulo = "Eliminar persona")
     })
     
     # Abrir / cerrar panel de nueva persona
@@ -508,29 +533,33 @@ Directorio <- function(id, usuario, codigo_contacto) {
     
     # Guardar persona nueva junto con sus redes temporales -----
     observeEvent(input$BotonGuardarPersona, {
+      if (!.accion_validar(c("El correo de la persona no es válido" =
+          .accion_correo_invalido(input$CampoCorreoPersona)))) return(invisible(NULL))
       if (trimws(input$CampoNombre %||% "") == "") {
         racafeForms::racafeNotify(type = "error", duration = 4, title = "El nombre es obligatorio",
                                 session = shiny::getDefaultReactiveDomain())
         return(invisible(NULL))
       }
-      identificador_persona_nueva <- registrar_persona_directorio(
-        codigo_contacto(), input$CampoNombre, input$CampoCargo,
-        input$CampoTelefonoPersona, input$CampoCorreoPersona, usuario()
-      )
-      for (red_temporal in redes_temporales_persona_nueva()) {
-        registrar_red_social_persona_directorio(identificador_persona_nueva, red_temporal$tipo,
-                                                red_temporal$usuario)
-      }
+      .confirmar_guardado({
+        identificador_persona_nueva <- registrar_persona_directorio(
+          codigo_contacto(), input$CampoNombre, input$CampoCargo,
+          input$CampoTelefonoPersona, input$CampoCorreoPersona, usuario()
+        )
+        for (red_temporal in redes_temporales_persona_nueva()) {
+          registrar_red_social_persona_directorio(identificador_persona_nueva, red_temporal$tipo,
+                                                  red_temporal$usuario)
+        }
       
-      shinyjs::hide("PanelNuevaPersona")
-      updateTextInput(session, "CampoNombre", value = "")
-      updateTextInput(session, "CampoCargo", value = "")
-      updateTextInput(session, "CampoTelefonoPersona", value = "")
-      updateTextInput(session, "CampoCorreoPersona", value = "")
-      redes_temporales_persona_nueva(list())
-      contador_actualizacion_personas(isolate(contador_actualizacion_personas()) + 1)
-      racafeForms::racafeNotify(duration = 3, type = "success", title = "Persona de contacto agregada",
-                              session = shiny::getDefaultReactiveDomain())
+        shinyjs::hide("PanelNuevaPersona")
+        updateTextInput(session, "CampoNombre", value = "")
+        updateTextInput(session, "CampoCargo", value = "")
+        updateTextInput(session, "CampoTelefonoPersona", value = "")
+        updateTextInput(session, "CampoCorreoPersona", value = "")
+        redes_temporales_persona_nueva(list())
+        contador_actualizacion_personas(isolate(contador_actualizacion_personas()) + 1)
+        racafeForms::racafeNotify(duration = 3, type = "success", title = "Persona de contacto agregada",
+                                session = shiny::getDefaultReactiveDomain())
+      }, titulo = "Añadir persona")
     })
   })
 }
@@ -795,6 +824,7 @@ GeografiaUI <- function(id) {
 }
 Geografia <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
+    .confirmar_guardado <- .accion_guardado(input, session, codigo_contacto, usuario)
     
     # Datos ----
     
@@ -862,21 +892,25 @@ Geografia <- function(id, usuario, codigo_contacto) {
     observeEvent(input$BotonGuardarUbicacion, {
       req(codigo_contacto())
       direccion_actual <- modulo_direccion_principal()
-      tryCatch({
-        guardar_ubicacion_contacto(
-          codigo_contacto(), direccion_actual$Pais, direccion_actual$Depto,
-          direccion_actual$Mpio, direccion_actual$Direccion,
-          direccion_actual$lat, direccion_actual$lng, usuario()
-        )
-        racafeForms::racafeNotify(duration = 3, type = "success", title = "Ubicación guardada exitosamente",
-                                session = shiny::getDefaultReactiveDomain())
-        contador_actualizacion_ubicacion(isolate(contador_actualizacion_ubicacion()) + 1)
-      }, error = function(error) {
-        .ManejarErrorAccion(
-          error = error, operacion = "guardar la ubicación",
-          usuario = usuario(), codigo_contacto = codigo_contacto()
-        )
-      })
+      if (!.accion_validar(c("El país es obligatorio" = EsVacio(direccion_actual$Pais),
+          "La dirección es obligatoria" = EsVacio(direccion_actual$Direccion)))) return(invisible(NULL))
+      .confirmar_guardado({
+        tryCatch({
+          guardar_ubicacion_contacto(
+            codigo_contacto(), direccion_actual$Pais, direccion_actual$Depto,
+            direccion_actual$Mpio, direccion_actual$Direccion,
+            direccion_actual$lat, direccion_actual$lng, usuario()
+          )
+          racafeForms::racafeNotify(duration = 3, type = "success", title = "Ubicación guardada exitosamente",
+                                  session = shiny::getDefaultReactiveDomain())
+          contador_actualizacion_ubicacion(isolate(contador_actualizacion_ubicacion()) + 1)
+        }, error = function(error) {
+          .ManejarErrorAccion(
+            error = error, operacion = "guardar la ubicación",
+            usuario = usuario(), codigo_contacto = codigo_contacto()
+          )
+        })
+      }, titulo = "Guardar ubicación")
     })
     
     modulo_tabla_sucursales <- racafeModulos::TablaReactable(
@@ -907,17 +941,19 @@ Geografia <- function(id, usuario, codigo_contacto) {
     observeEvent(modulo_tabla_sucursales$seleccion(), {
       seleccion_actual <- modulo_tabla_sucursales$seleccion()
       req(seleccion_actual, seleccion_actual$col == "Eliminar")
-      tryCatch({
-        eliminar_sucursal_contacto(seleccion_actual$fila$IdSucursal[[1]])
-        contador_actualizacion_sucursales(isolate(contador_actualizacion_sucursales()) + 1)
-        racafeForms::racafeNotify(duration = 3, type = "success", title = "Sede eliminada",
-                                session = shiny::getDefaultReactiveDomain())
-      }, error = function(error) {
-        .ManejarErrorAccion(
-          error = error, operacion = "eliminar la sede del contacto",
-          usuario = usuario(), codigo_contacto = codigo_contacto()
-        )
-      })
+      .confirmar_guardado({
+        tryCatch({
+          eliminar_sucursal_contacto(seleccion_actual$fila$IdSucursal[[1]])
+          contador_actualizacion_sucursales(isolate(contador_actualizacion_sucursales()) + 1)
+          racafeForms::racafeNotify(duration = 3, type = "success", title = "Sede eliminada",
+                                  session = shiny::getDefaultReactiveDomain())
+        }, error = function(error) {
+          .ManejarErrorAccion(
+            error = error, operacion = "eliminar la sede del contacto",
+            usuario = usuario(), codigo_contacto = codigo_contacto()
+          )
+        })
+      }, titulo = "Eliminar sede")
     })
     
     observeEvent(input$BotonAnadirSucursal, {
@@ -941,26 +977,32 @@ Geografia <- function(id, usuario, codigo_contacto) {
         return(invisible(NULL))
       }
       direccion_sucursal_actual <- modulo_direccion_sucursal()
-      tryCatch({
-        registrar_sucursal_contacto(
-          codigo_contacto(), input$CampoNombreSucursal, direccion_sucursal_actual$Pais,
-          direccion_sucursal_actual$Depto, direccion_sucursal_actual$Mpio,
-          direccion_sucursal_actual$Direccion, direccion_sucursal_actual$lat,
-          direccion_sucursal_actual$lng, input$CampoEsPrincipal, usuario(),
-          tipo = input$CampoTipoSede
-        )
-        shinyjs::hide("PanelNuevaSucursal")
-        updateTextInput(session, "CampoNombreSucursal", value = "")
-        .crm_update_select(session = session, selected = character(0), id = "CampoTipoSede")
-        contador_actualizacion_sucursales(isolate(contador_actualizacion_sucursales()) + 1)
-        racafeForms::racafeNotify(duration = 3, type = "success", title = "Sede agregada exitosamente",
-                                session = shiny::getDefaultReactiveDomain())
-      }, error = function(error) {
-        .ManejarErrorAccion(
-          error = error, operacion = "guardar la sede del contacto",
-          usuario = usuario(), codigo_contacto = codigo_contacto()
-        )
-      })
+      if (!.accion_validar(c("El país de la sede es obligatorio" = EsVacio(direccion_sucursal_actual$Pais),
+          "La dirección de la sede es obligatoria" = EsVacio(direccion_sucursal_actual$Direccion)))) {
+        return(invisible(NULL))
+      }
+      .confirmar_guardado({
+        tryCatch({
+          registrar_sucursal_contacto(
+            codigo_contacto(), input$CampoNombreSucursal, direccion_sucursal_actual$Pais,
+            direccion_sucursal_actual$Depto, direccion_sucursal_actual$Mpio,
+            direccion_sucursal_actual$Direccion, direccion_sucursal_actual$lat,
+            direccion_sucursal_actual$lng, input$CampoEsPrincipal, usuario(),
+            tipo = input$CampoTipoSede
+          )
+          shinyjs::hide("PanelNuevaSucursal")
+          updateTextInput(session, "CampoNombreSucursal", value = "")
+          .crm_update_select(session = session, selected = character(0), id = "CampoTipoSede")
+          contador_actualizacion_sucursales(isolate(contador_actualizacion_sucursales()) + 1)
+          racafeForms::racafeNotify(duration = 3, type = "success", title = "Sede agregada exitosamente",
+                                  session = shiny::getDefaultReactiveDomain())
+        }, error = function(error) {
+          .ManejarErrorAccion(
+            error = error, operacion = "guardar la sede del contacto",
+            usuario = usuario(), codigo_contacto = codigo_contacto()
+          )
+        })
+      }, titulo = "Añadir sede")
     })
     
     # Mapa: ya no vuelve a consultar CargarDatos(); reutiliza los dos
@@ -1105,6 +1147,7 @@ PotencialUI <- function(id) {
 }
 Potencial <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
+    .confirmar_guardado <- .accion_guardado(input, session, codigo_contacto, usuario)
     observeEvent(codigo_contacto(), {
       req(codigo_contacto())
       datos_potencial <- cargar_potencial_contacto(codigo_contacto())
@@ -1151,34 +1194,44 @@ Potencial <- function(id, usuario, codigo_contacto) {
     
     observeEvent(input$BotonGuardarPotencial, {
       req(codigo_contacto())
-      tryCatch({
-        guardar_potencial_contacto(
-          cod_contacto = codigo_contacto(),
-          es_tostador = as.numeric(identical(input$CampoTostador, "SI")),
-          alianza = as.numeric(identical(input$CampoAlianza, "SI")),
-          detalle_alianza = input$CampoDetalleAlianza,
-          maquila = as.numeric(identical(input$CampoMaquila, "SI")),
-          detalle_maquila = input$CampoDetalleMaquila,
-          anios_operacion = input$CampoAniosOperacion,
-          tipo_compra = input$CampoTipoCompra,
-          calidades_preferidas = input$CampoCalidades,
-          consumo_esperado = input$CampoConsumoEsperado,
-          unidad_consumo = input$CampoUnidadConsumo,
-          frecuencia_compra = input$CampoFrecuenciaCompra,
-          certificaciones_interes = input$CampoCertificaciones,
-          observaciones = input$CampoObservaciones,
-          usr = usuario()
-        )
-        racafeForms::racafeNotify(duration = 3, type = "success", title = "Potencial de negocio guardado",
-                                session = shiny::getDefaultReactiveDomain())
-      }, error = function(error) {
-        .ManejarErrorAccion(
-          error = error,
-          operacion = "guardar el potencial de negocio",
-          usuario = usuario(),
-          codigo_contacto = codigo_contacto()
-        )
-      })
+      consumo <- input$CampoConsumoEsperado
+      anios <- input$CampoAniosOperacion
+      if (!.accion_validar(c(
+          "El consumo debe ser un número mayor o igual a cero" =
+            length(consumo) != 1L || !is.finite(consumo) || consumo < 0,
+          "Seleccione la unidad del consumo" = isTRUE(consumo > 0) && EsVacio(input$CampoUnidadConsumo),
+          "Los años de operación deben ser mayores o iguales a cero" =
+            length(anios) != 1L || !is.finite(anios) || anios < 0))) return(invisible(NULL))
+      .confirmar_guardado({
+        tryCatch({
+          guardar_potencial_contacto(
+            cod_contacto = codigo_contacto(),
+            es_tostador = as.numeric(identical(input$CampoTostador, "SI")),
+            alianza = as.numeric(identical(input$CampoAlianza, "SI")),
+            detalle_alianza = input$CampoDetalleAlianza,
+            maquila = as.numeric(identical(input$CampoMaquila, "SI")),
+            detalle_maquila = input$CampoDetalleMaquila,
+            anios_operacion = input$CampoAniosOperacion,
+            tipo_compra = input$CampoTipoCompra,
+            calidades_preferidas = input$CampoCalidades,
+            consumo_esperado = input$CampoConsumoEsperado,
+            unidad_consumo = input$CampoUnidadConsumo,
+            frecuencia_compra = input$CampoFrecuenciaCompra,
+            certificaciones_interes = input$CampoCertificaciones,
+            observaciones = input$CampoObservaciones,
+            usr = usuario()
+          )
+          racafeForms::racafeNotify(duration = 3, type = "success", title = "Potencial de negocio guardado",
+                                  session = shiny::getDefaultReactiveDomain())
+        }, error = function(error) {
+          .ManejarErrorAccion(
+            error = error,
+            operacion = "guardar el potencial de negocio",
+            usuario = usuario(),
+            codigo_contacto = codigo_contacto()
+          )
+        })
+      }, titulo = "Guardar potencial")
     })
   })
 }

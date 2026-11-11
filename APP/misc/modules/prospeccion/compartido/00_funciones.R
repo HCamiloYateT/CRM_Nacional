@@ -244,7 +244,10 @@ generar_codigo_contacto <- function() {
 
 # Celda de acciones (dropdown flotante) del panel
 .celda_dropdown_acciones <- function(codigo, acciones, ns) {
-  as.character(racafeModulos::MenuAccionesUI(codigo, acciones, config = .CONFIG_ACCIONES_EMBUDO, ns = ns))
+  menu <- racafeModulos::MenuAccionesUI(codigo, acciones, config = .CONFIG_ACCIONES_EMBUDO, ns = ns)
+  menu$children[[1]] <- tagAppendAttributes(menu$children[[1]], class = "pr-action-trigger")
+  menu$children[[2]] <- tagAppendAttributes(menu$children[[2]], class = "pr-action-panel")
+  as.character(menu)
 }
 # Definicion reactable de la columna de acciones (dropdown)
 .coldef_dropdown_acciones <- function(acciones, ns) {
@@ -577,10 +580,17 @@ cargar_pipeline_embudo <- function(cargar = .pr_cargar) {
   nombres <- setNames(as.character(contactos$PerRazSoc), as.character(contactos$CodContacto))
   por_nit <- setNames(as.character(contactos$PerRazSoc), .crm_nit_historia(contactos$PerCod))
   aliados <- as.character(alianzas$CodClienteAliado)
-  nombre_nit <- unname(por_nit[.crm_nit_historia(aliados)])
+  nits <- setNames(.crm_nit_historia(contactos$PerCod), as.character(contactos$CodContacto))
+  alianzas$NitAliado <- unname(nits[aliados])
+  faltante <- is.na(alianzas$NitAliado)
+  alianzas$NitAliado[faltante] <- .crm_nit_historia(sub("[[:space:]]*[-|].*$", "", aliados[faltante]))
+  nombre_nit <- unname(por_nit[alianzas$NitAliado])
+  nombre_libre <- sub("^[0-9]+[[:space:]]*[-|][[:space:]]*", "", aliados)
+  nombre_libre[!is.na(.crm_nit_historia(nombre_libre))] <- "ALIADO SIN NOMBRE REGISTRADO"
   alianzas <- alianzas %>% mutate(ClienteAliado = coalesce(unname(nombres[as.character(CodClienteAliado)]),
-    nombre_nit, as.character(CodClienteAliado))) %>% group_by(CodContacto) %>%
-    summarise(NumAlianzas = n(), Alianzas = paste(unique(ClienteAliado), collapse = " | "), .groups = "drop")
+    nombre_nit, nombre_libre)) %>% group_by(CodContacto) %>%
+    summarise(NumAlianzas = n(), Alianzas = paste(unique(ClienteAliado), collapse = " | "),
+      NitsAliados = paste(unique(stats::na.omit(NitAliado)), collapse = " | "), .groups = "drop")
   vinculos <- cargar("CRMNALVINCULONIT") %>% group_by(CodContacto) %>%
     summarise(NitVinculado = if (n_distinct(NitVinculado, na.rm = TRUE) == 1L) {
       first(na.omit(as.character(NitVinculado)))
@@ -628,8 +638,8 @@ cargar_pipeline_embudo <- function(cargar = .pr_cargar) {
   acciones <- c(acciones, Consultar = "Consulta individual en otra pestaña")
   config <- c(.CONFIG_ACCIONES_EMBUDO, list(Consultar = list(icono = "address-card", color = "#495057")))
   menu <- racafeModulos::MenuAccionesUI(as.character(fila$CodContacto), acciones, config = config, ns = ns)
-  menu$children[[1]] <- shiny::tagAppendAttributes(menu$children[[1]], `aria-label` = "Acciones")
-  menu$children[[2]] <- shiny::tagAppendAttributes(menu$children[[2]], class = "kpb-actions-panel")
+  menu$children[[1]] <- shiny::tagAppendAttributes(menu$children[[1]], `aria-label` = "Acciones", class = "pr-action-trigger")
+  menu$children[[2]] <- shiny::tagAppendAttributes(menu$children[[2]], class = "kpb-actions-panel pr-action-panel")
   codigo <- if ("CodigoCRM" %in% names(fila)) as.character(fila$CodigoCRM) else as.character(fila$CodContacto)
   nit <- texto("PerCod", "")
   menu <- htmltools::tagQuery(menu)$find(".rm-action-option")$each(function(boton, i) {
@@ -645,48 +655,51 @@ cargar_pipeline_embudo <- function(cargar = .pr_cargar) {
     boton$attribs$`data-kb-codigo` <- if (length(codigo) && !is.na(codigo)) codigo else ""
     boton
   })$allTags()
+  lineas <- if ("DetalleLineas" %in% names(fila)) fila$DetalleLineas[[1]] else list()
+  tabla_cliente <- if (length(lineas)) tags$table(class = "kb-cliente-tabla",
+    tags$thead(tags$tr(tags$th("INDICADOR"), lapply(lineas, function(x) tags$th(x$Linea)))),
+    tags$tbody(lapply(list(
+      c("SEGMENTO", "Segmento"), c("ÚLTIMA COMPRA", "UltimaCompra"),
+      c("SACOS ACUM.", "Sacos"), c("PPTO. SACOS ACUM.", "PptoSacos"),
+      c("MARGEN ACUM. · COP", "Margen"), c("PPTO. MARGEN ACUM. · COP", "PptoMargen")), function(campo) {
+        tags$tr(tags$th(scope = "row", campo[[1]]), lapply(lineas, function(x) {
+          valor <- x[[campo[[2]]]]
+          if (inherits(valor, "Date")) valor <- format(valor, "%d/%m/%Y")
+          if (is.numeric(valor)) valor <- formatC(valor, format = "f", digits = 1, big.mark = ",")
+          tags$td(valor)
+        }))
+      }))) else .crm_nota("SIN COMPRAS PARA EL ALCANCE SELECCIONADO.")
   campos <- switch(fila$Etapa,
-    CONTACTO = tagList(racafeForms::racafeInfoItem("Origen", texto("Origen")),
-      racafeForms::racafeInfoItem("Creación", fecha("FechaHoraCrea"))),
-    PROSPECTO = tagList(racafeForms::racafeInfoItem("Clientes aliados", texto("Alianzas", "SIN ALIANZAS")),
+    CONTACTO = racafeForms::racafeInfoItem("Creación", fecha("FechaHoraCrea")),
+    PROSPECTO = tagList(racafeForms::racafeInfoItem("Aliado", texto("Alianzas", "SIN ALIANZAS")),
       racafeForms::racafeInfoItem("Origen", texto("Origen"))),
-    LEAD = tagList(racafeForms::racafeInfoItem("Línea", texto("LinNegocio")),
-      racafeForms::racafeInfoItem("Segmento", texto("Segmento")),
-      racafeForms::racafeInfoItem("Desde", fecha("FechaConversionLead"))),
-    CLIENTE = lapply(fila$DetalleLineas[[1]], function(linea) {
-      tags$div(class = "kb-linea", tags$strong(linea$Linea),
-        racafeForms::racafeInfoItem("Segmento", linea$Segmento),
-        racafeForms::racafeInfoItem("Última compra", format(linea$UltimaCompra, "%d/%m/%Y")),
-        racafeForms::racafeInfoItem("Sacos acumulados del año", formatC(linea$Sacos, format = "f", digits = 1)),
-        racafeForms::racafeInfoItem("Presupuesto de sacos acumulado", linea$PptoSacos),
-        racafeForms::racafeInfoItem("Margen acumulado del año · COP", linea$Margen),
-        racafeForms::racafeInfoItem("Presupuesto de margen acumulado · COP", linea$PptoMargen))
-    }),
-    DESCARTADO = tagList(racafeForms::racafeInfoItem("Etapa anterior", texto("EtapaPreDescarte")),
-      racafeForms::racafeInfoItem("Motivo", texto("Razon1", "SIN MOTIVO REGISTRADO")),
+    LEAD = tagList(racafeForms::racafeInfoItem("Segmento", texto("Segmento")),
+      racafeForms::racafeInfoItem("Ingreso a LEAD", fecha("FechaConversionLead"))),
+    CLIENTE = tabla_cliente,
+    DESCARTADO = tagList(
       if (texto("Razon2", "") != "") racafeForms::racafeInfoItem("Detalle", texto("Razon2")),
       if (texto("Razon3", "") != "") racafeForms::racafeInfoItem("Observación", texto("Razon3")),
       racafeForms::racafeInfoItem("Descarte", fecha("FechaDescarte"))))
   contexto <- switch(fila$Etapa,
     CONTACTO = paste("ORIGEN:", texto("Origen")),
-    PROSPECTO = paste("ALIADO:", texto("Alianzas", "SIN ALIANZAS")),
-    LEAD = texto("LinNegocio"), CLIENTE = texto("Segmento"),
+    PROSPECTO = paste("NIT ALIADO:", texto("NitsAliados", "SIN NIT REGISTRADO")),
+    LEAD = texto("LinNegocio"), CLIENTE = paste("NIT:", nit),
     DESCARTADO = paste("DE", texto("EtapaPreDescarte"), "·", texto("Razon1", "SIN MOTIVO REGISTRADO")))
-  responsables <- texto("Asesor", "")
-  if (!nzchar(responsables)) responsables <- texto("UsuarioCrea", "SIN RESPONSABLE")
+  creador <- fila$Etapa == "CONTACTO" || texto("Asesor", "") == ""
+  responsables <- if (creador) texto("UsuarioCrea", "SIN REGISTRO") else texto("Asesor", "SIN ASESOR")
+  rol <- if (creador) "CREADOR: " else "ASESOR: "
   destinos <- if (solo_consulta) character() else .kb_destinos(fila$Etapa, texto("EtapaPreDescarte", "CONTACTO"))
   div(class = "kpb-card kpb-card-compact", draggable = if (solo_consulta) "false" else "true",
     `data-cod-contacto` = fila$CodContacto, `data-kb-source` = fila$Etapa,
     `data-kb-targets` = paste(destinos, collapse = " "),
     `data-kb-search` = toupper(paste(unlist(fila[intersect(c("PerRazSoc", "PerCod", "Asesor", "Segmento",
       "LinNegocio", "Origen", "Alianzas", "Razon1", "Razon2", "Razon3"), names(fila))]), collapse = " ")),
-    style = paste0("border-right:3px solid ", COLOR_ETAPA_EMBUDO[[fila$Etapa]], ";"),
+    style = paste0("border-left:3px solid ", COLOR_ETAPA_EMBUDO[[fila$Etapa]], ";"),
     tags$details(tags$summary(tags$strong(texto("PerRazSoc", "SIN RAZÓN SOCIAL")),
       tags$span(class = "kpb-responsables", lapply(strsplit(responsables, " | ", fixed = TRUE)[[1]],
-        function(x) racafeForms::racafeStatusBadge(x, "neutral", size = "xs"))),
+        function(x) racafeForms::racafeStatusBadge(paste0(rol, x), "neutral", size = "xs"))),
       tags$span(class = "kb-contexto", title = contexto, contexto)),
-      div(class = "kpb-card-body", racafeForms::racafeInfoItem("NIT", nit), campos,
-        if (solo_consulta) .crm_nota("Consulta de facturación disponible; ficha de gestión pendiente de actualizar."))),
+      div(class = "kpb-card-body", if (fila$Etapa != "CLIENTE") racafeForms::racafeInfoItem("NIT", nit), campos)),
     div(class = "kpb-card-menu", menu))
 }
 # Detecta Leads con primera factura y los convierte a Cliente, registrando la transicion

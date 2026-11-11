@@ -31,7 +31,7 @@ FormularioAscenderProspecto <- function(id, usuario, cod_contacto, data_contacto
       }
       # Modal centralizado de racafeShiny, igual que CrearContacto/Identificacion/
       # Relacionamiento, en vez de MostrarModalConClase + modalDialog manual
-      racafeShiny::MostrarModalConfirmacion(
+      .accion_modal_confirmacion(
         ns = ns, titulo = "Confirmar ascenso a Prospecto",
         texto = paste0("¿Deseas ascender este contacto a Prospecto con ", length(input$PRO_Alianzas),
                        " alianza(s) registrada(s)?"),
@@ -104,7 +104,7 @@ FormularioAscenderLead <- function(id, usuario, cod_contacto, data_contacto = NU
         })
         return(invisible(NULL))
       }
-      racafeShiny::MostrarModalConfirmacion(
+      .accion_modal_confirmacion(
         ns = ns, titulo = "Confirmar ascenso a Lead",
         texto = paste0("¿Deseas ascender este contacto a Lead con asesor ", input$ASC_Asesor,
                        ", segmento ", input$ASC_Segmento, " y línea de negocio ", input$ASC_LinNeg, "?"),
@@ -179,7 +179,7 @@ FormularioReclasificarLead <- function(id, usuario, cod_contacto, data_contacto 
         })
         return(invisible(NULL))
       }
-      racafeShiny::MostrarModalConfirmacion(
+      .accion_modal_confirmacion(
         ns = ns, titulo = "Confirmar reclasificación a Lead",
         texto = paste0("¿Deseas reclasificar este Prospecto a Lead con asesor ", input$RLE_Asesor,
                        ", segmento ", input$RLE_Segmento, " y línea de negocio ", input$RLE_LinNeg, "?"),
@@ -251,7 +251,7 @@ FormularioVincularNit <- function(id, usuario, cod_contacto, data_contacto = NUL
       }
       # Se homologa a modal de confirmacion, igual que los otros 3 formularios;
       # antes escribia directo sin confirmacion previa
-      racafeShiny::MostrarModalConfirmacion(
+      .accion_modal_confirmacion(
         ns = ns, titulo = "Confirmar vinculación de NIT",
         texto = paste0("¿Deseas vincular el NIT ", input$VIN_Nit, " como NIT de facturación de este lead?"),
         id_cancelar = "VIN_Cancelar", id_confirmar = "VIN_Confirmar",

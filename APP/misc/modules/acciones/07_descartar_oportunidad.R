@@ -40,7 +40,7 @@ DescartarOportunidad <- function(id, usuario, id_oportunidad) {
                                 session = shiny::getDefaultReactiveDomain()))
         return(invisible(NULL))
       }
-      racafeShiny::MostrarModalConfirmacion(
+      .accion_modal_confirmacion(
         ns = ns, titulo = "Confirmar descarte de oportunidad",
         texto = paste0("¿Deseas descartar esta oportunidad? Motivo: ", motivo_final()),
         id_cancelar = "DES_Cancelar", id_confirmar = "DES_Confirmar",
