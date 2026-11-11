@@ -3,11 +3,12 @@ PanelEtapaUI <- function(id) {
   ns <- NS(id)
   tagList(
     uiOutput(ns("Titulo")),
-    racafeModulos::TablaReactableUI(ns("TablaEtapa"), titulo = NULL),
+    .crm_tabla_ui(ns("TablaEtapa"), titulo = NULL),
     racafeModulos::MenuAccionesDependencies()
   )
 }
-PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra = NULL) {
+PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra = NULL,
+                       datos_base = NULL, al_actualizar = function() NULL) {
   stopifnot(etapa %in% ETAPAS_EMBUDO)
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -21,8 +22,9 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
     contactos_base <- reactive({
       trigger_refresco()
       
-      CargarDatos("CRMNALCONTACTO") %>%
-        derivar_etapa_actual() %>%
+      if (!is.null(datos_base)) return(datos_base())
+      .pr_cargar("CRMNALCONTACTO") %>%
+        derivar_etapa_actual(historial = .pr_cargar("CRMNALHISTORIALETAPA")) %>%
         filter(Etapa == etapa) %>%
         select(
           all_of(
@@ -61,7 +63,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
       
       if (identical(etapa, "PROSPECTO")) {
         alianzas <- tryCatch({
-          dat <- CargarDatos("CRMNALPROSPECTOALIANZA") %>%
+          dat <- .pr_cargar("CRMNALPROSPECTOALIANZA") %>%
             filter(CodContacto %in% base$CodContacto)
           
           dat <- dat %>%
@@ -97,7 +99,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
         
       } else if (identical(etapa, "LEAD")) {
         leads <- tryCatch({
-          CargarDatos("CONTACTOLEAD") %>%
+          .pr_cargar("CONTACTOLEAD") %>%
             filter(CodContacto %in% base$CodContacto) %>%
             select(
               CodContacto,
@@ -116,7 +118,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
           )
         })
         
-        crea_contacto <- CargarDatos("CRMNALCONTACTO") %>%
+        crea_contacto <- .pr_cargar("CRMNALCONTACTO") %>%
           filter(CodContacto %in% base$CodContacto) %>%
           select(
             CodContacto,
@@ -124,7 +126,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
           )
         
         rel <- tryCatch(
-          CargarDatos("CRMNALRELACIONAMIENTO") %>%
+          .pr_cargar("CRMNALRELACIONAMIENTO") %>%
             filter(CodContacto %in% base$CodContacto) %>%
             mutate(
               FechaHoraCrea = as_datetime(FechaHoraCrea)
@@ -198,12 +200,12 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
         clientes <- .obtener_conversion_cliente(codigos)
         leads <- .obtener_conversion_lead(codigos)
         
-        fechas_contacto <- CargarDatos("CRMNALCONTACTO") %>%
+        fechas_contacto <- .pr_cargar("CRMNALCONTACTO") %>%
           filter(CodContacto %in% codigos) %>%
           transmute(CodContacto, FechaHoraCrea = as_datetime(FechaHoraCrea))
         
         rel <- tryCatch(
-          CargarDatos("CRMNALRELACIONAMIENTO") %>%
+          .pr_cargar("CRMNALRELACIONAMIENTO") %>%
             filter(CodContacto %in% codigos) %>%
             mutate(FechaHoraCrea = as_datetime(FechaHoraCrea)),
           error = function(e) data.frame(CodContacto = character(), FechaHoraCrea = as.POSIXct(character()))
@@ -250,9 +252,9 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
             GestionesCliente = coalesce(GestionesCliente, 0L)
           )
         
-      } else if (identical(etapa, "CONTACTO")) {
+      } else if (identical(etapa, "CONTACTO") && is.null(datos_base)) {
         crea_info <- tryCatch({
-          CargarDatos("CRMNALCONTACTO") %>%
+          .pr_cargar("CRMNALCONTACTO") %>%
             filter(CodContacto %in% base$CodContacto) %>%
             select(
               CodContacto,
@@ -378,7 +380,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
       )
     }
     
-    modulo_tabla <- racafeModulos::TablaReactable(
+    modulo_tabla <- .crm_tabla_servidor(
       id = "TablaEtapa",
       data = datos_etapa,
       columnas = columnas_visibles_panel(etapa),
@@ -605,6 +607,8 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
           observeEvent(
             contador(),
             {
+              .pr_invalidar()
+              al_actualizar()
               trigger_refresco(
                 trigger_refresco() + 1
               )

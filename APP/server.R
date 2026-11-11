@@ -138,6 +138,7 @@ server <- function(input, output, session) {
   clientes_raw_cache <- reactiveVal(CargarDatos("CRMNALCLIENTE"))
   
   observeEvent(input$FT_Actualizar, {
+    .pr_invalidar()
     productos_cache(.crm_snapshot_productos(CargarDatos("CRMNALPRODS")))
     clientes_raw_cache(CargarDatos("CRMNALCLIENTE"))
   })
@@ -278,6 +279,7 @@ server <- function(input, output, session) {
   ### Prospección ----
   CargarTabUnaVez("PR_Kanban", "ui_PR_Kanban", function() KanbanEmbudoUI("Kanban"),
                   function() KanbanEmbudo("Kanban", usuario, filtros, es_admin, hechos = maestro_base_comercial,
+                    presupuestos = clientes_raw_cache, actualizacion = reactive(input$FT_Actualizar),
                     al_consultar = function(codigo, nit) {
                       consulta_solicitada(list(codigo = codigo, nit = nit, solicitud = Sys.time()))
                       bs4Dash::updateTabItems(session, "menu_principal", selected = "IN_Consulta")

@@ -1,3 +1,27 @@
+# Lecturas compartidas por sesión; las acciones de escritura conservan su consulta vigente ----
+.pr_fuentes <- function() {
+  sesion <- shiny::getDefaultReactiveDomain()
+  if (is.null(sesion)) return(NULL)
+  if (is.null(sesion$userData$prospeccion_fuentes)) {
+    sesion$userData$prospeccion_fuentes <- list(revision = shiny::reactiveVal(0L),
+      tablas = new.env(parent = emptyenv()))
+  }
+  sesion$userData$prospeccion_fuentes
+}
+.pr_cargar <- function(tabla) {
+  fuente <- .pr_fuentes()
+  if (is.null(fuente)) return(CargarDatos(tabla))
+  fuente$revision()
+  if (!exists(tabla, envir = fuente$tablas, inherits = FALSE)) fuente$tablas[[tabla]] <- CargarDatos(tabla)
+  fuente$tablas[[tabla]]
+}
+.pr_invalidar <- function() {
+  fuente <- .pr_fuentes()
+  if (is.null(fuente)) return(invisible(NULL))
+  rm(list = ls(fuente$tablas, all.names = TRUE), envir = fuente$tablas)
+  fuente$revision(shiny::isolate(fuente$revision()) + 1L)
+}
+
 # Funciones Embudo ----
 
 ## Generales ----
@@ -53,7 +77,7 @@ derivar_fecha_entrada_etapa <- function(contactos_con_etapa, historial = NULL) {
       labels = c("0-7 días", "8-15 días", "16-30 días", "31-60 días", "+60 días"), right = TRUE)
 }
 # Grafico de barras horizontales generico (plotly)
-.grafico_barras_horizontal <- function(dat, col_label, col_valor, color = "#1C398E", titulo_x = "Conteo") {
+.grafico_barras_horizontal <- function(dat, col_label, col_valor, color = "#DA291C", titulo_x = "Conteo") {
   if (nrow(dat) == 0) return(plotly::config(plotly::plotly_empty(type = "bar"), displayModeBar = FALSE))
   dat <- dat[order(dat[[col_valor]]), ]
   p <- plotly::plot_ly(
@@ -64,14 +88,14 @@ derivar_fecha_entrada_etapa <- function(contactos_con_etapa, historial = NULL) {
     plotly::layout(
       margin = list(l = 10, r = 20, t = 10, b = 30), xaxis = list(title = titulo_x),
       yaxis = list(title = ""), paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)",
-      hoverlabel = list(bgcolor = "#1A3C5E", font = list(color = "white", size = 12))
+      hoverlabel = list(bgcolor = "#495057", font = list(color = "white", size = 12))
     )
   plotly::config(p, displayModeBar = FALSE)
 }
 # Formatea las filas marcadas como "TOTAL" en tablas reactable (negrita + fondo)
 .estilo_fila_total <- function(datos_r, col_id) {
   function(value, index) {
-    es_total <- datos_r()[[col_id]][[index]] == "TOTAL"
+    es_total <- identical(as.character(datos_r()[[col_id]][[index]]), "TOTAL")
     if (es_total) list(fontWeight = "bold", background = "#f8f9fa") else list()
   }
 }
@@ -81,7 +105,7 @@ derivar_fecha_entrada_etapa <- function(contactos_con_etapa, historial = NULL) {
     return(data.frame(CodContacto = character(), DiasSinRelacionamiento = numeric()))
   }
   ultima_gestion <- tryCatch({
-    CargarDatos("CRMNALRELACIONAMIENTO") %>%
+    .pr_cargar("CRMNALRELACIONAMIENTO") %>%
       filter(CodContacto %in% cods) %>%
       mutate(FechaHoraCrea = as_datetime(FechaHoraCrea)) %>%
       group_by(CodContacto) %>%
@@ -97,10 +121,10 @@ derivar_fecha_entrada_etapa <- function(contactos_con_etapa, historial = NULL) {
 }
 # Trae todas las alianzas activas
 listar_todas_las_alianzas <- function() {
-  alianzas <- tryCatch(CargarDatos("CRMNALPROSPECTOALIANZA"),
+  alianzas <- tryCatch(.pr_cargar("CRMNALPROSPECTOALIANZA"),
                        error = function(e) data.frame(CodContacto = character(), CodClienteAliado = character()))
   if (nrow(alianzas) == 0) return(alianzas %>% mutate(ClienteAliado = character()))
-  clientes <- CargarDatos("CRMNALCONTACTO") %>% select(CodContacto, PerRazSoc, PerCod)
+  clientes <- .pr_cargar("CRMNALCONTACTO") %>% select(CodContacto, PerRazSoc, PerCod)
   alianzas %>%
     left_join(clientes, by = c("CodClienteAliado" = "CodContacto")) %>%
     mutate(ClienteAliado = coalesce(PerRazSoc, PerCod, CodClienteAliado)) %>%
@@ -541,7 +565,7 @@ generar_codigo_contacto <- function() {
   )
 }
 # Carga el pipeline completo del embudo (todas las etapas) para el kanban
-cargar_pipeline_embudo <- function(cargar = CargarDatos) {
+cargar_pipeline_embudo <- function(cargar = .pr_cargar) {
   contactos <- .crm_normalizar_fechas_historia(cargar("CRMNALCONTACTO"))
   historial <- cargar("CRMNALHISTORIALETAPA") %>% mutate(FechaHora = as_datetime(FechaHora, tz = "America/Bogota"))
   contactos <- derivar_etapa_actual(contactos, historial) %>% derivar_fecha_entrada_etapa(historial)
@@ -551,8 +575,11 @@ cargar_pipeline_embudo <- function(cargar = CargarDatos) {
     select(CodContacto, Asesor, Segmento, LinNegocio, FechaConversionLead = FechaConversion)
   alianzas <- cargar("CRMNALPROSPECTOALIANZA")
   nombres <- setNames(as.character(contactos$PerRazSoc), as.character(contactos$CodContacto))
+  por_nit <- setNames(as.character(contactos$PerRazSoc), .crm_nit_historia(contactos$PerCod))
+  aliados <- as.character(alianzas$CodClienteAliado)
+  nombre_nit <- unname(por_nit[.crm_nit_historia(aliados)])
   alianzas <- alianzas %>% mutate(ClienteAliado = coalesce(unname(nombres[as.character(CodClienteAliado)]),
-    as.character(CodClienteAliado))) %>% group_by(CodContacto) %>%
+    nombre_nit, as.character(CodClienteAliado))) %>% group_by(CodContacto) %>%
     summarise(NumAlianzas = n(), Alianzas = paste(unique(ClienteAliado), collapse = " | "), .groups = "drop")
   vinculos <- cargar("CRMNALVINCULONIT") %>% group_by(CodContacto) %>%
     summarise(NitVinculado = if (n_distinct(NitVinculado, na.rm = TRUE) == 1L) {
@@ -626,11 +653,15 @@ cargar_pipeline_embudo <- function(cargar = CargarDatos) {
     LEAD = tagList(racafeForms::racafeInfoItem("Línea", texto("LinNegocio")),
       racafeForms::racafeInfoItem("Segmento", texto("Segmento")),
       racafeForms::racafeInfoItem("Desde", fecha("FechaConversionLead"))),
-    CLIENTE = tagList(racafeForms::racafeInfoItem("Línea", texto("LinNegocio")),
-      racafeForms::racafeInfoItem("Segmento", texto("Segmento")),
-      racafeForms::racafeInfoItem("Última factura", fecha("UltimaFactura")),
-      if (length(fila$SacosPeriodo) && !is.na(fila$SacosPeriodo)) racafeForms::racafeInfoItem("Sacos · 70 kg",
-        formatC(fila$SacosPeriodo, format = "f", digits = 1, big.mark = ","))),
+    CLIENTE = lapply(fila$DetalleLineas[[1]], function(linea) {
+      tags$div(class = "kb-linea", tags$strong(linea$Linea),
+        racafeForms::racafeInfoItem("Segmento", linea$Segmento),
+        racafeForms::racafeInfoItem("Última compra", format(linea$UltimaCompra, "%d/%m/%Y")),
+        racafeForms::racafeInfoItem("Sacos acumulados del año", formatC(linea$Sacos, format = "f", digits = 1)),
+        racafeForms::racafeInfoItem("Presupuesto de sacos acumulado", linea$PptoSacos),
+        racafeForms::racafeInfoItem("Margen acumulado del año · COP", linea$Margen),
+        racafeForms::racafeInfoItem("Presupuesto de margen acumulado · COP", linea$PptoMargen))
+    }),
     DESCARTADO = tagList(racafeForms::racafeInfoItem("Etapa anterior", texto("EtapaPreDescarte")),
       racafeForms::racafeInfoItem("Motivo", texto("Razon1", "SIN MOTIVO REGISTRADO")),
       if (texto("Razon2", "") != "") racafeForms::racafeInfoItem("Detalle", texto("Razon2")),
@@ -638,7 +669,7 @@ cargar_pipeline_embudo <- function(cargar = CargarDatos) {
       racafeForms::racafeInfoItem("Descarte", fecha("FechaDescarte"))))
   contexto <- switch(fila$Etapa,
     CONTACTO = paste("ORIGEN:", texto("Origen")),
-    PROSPECTO = paste("CLIENTES ALIADOS:", texto("NumAlianzas", "0")),
+    PROSPECTO = paste("ALIADO:", texto("Alianzas", "SIN ALIANZAS")),
     LEAD = texto("LinNegocio"), CLIENTE = texto("Segmento"),
     DESCARTADO = paste("DE", texto("EtapaPreDescarte"), "·", texto("Razon1", "SIN MOTIVO REGISTRADO")))
   responsables <- texto("Asesor", "")
@@ -647,6 +678,9 @@ cargar_pipeline_embudo <- function(cargar = CargarDatos) {
   div(class = "kpb-card kpb-card-compact", draggable = if (solo_consulta) "false" else "true",
     `data-cod-contacto` = fila$CodContacto, `data-kb-source` = fila$Etapa,
     `data-kb-targets` = paste(destinos, collapse = " "),
+    `data-kb-search` = toupper(paste(unlist(fila[intersect(c("PerRazSoc", "PerCod", "Asesor", "Segmento",
+      "LinNegocio", "Origen", "Alianzas", "Razon1", "Razon2", "Razon3"), names(fila))]), collapse = " ")),
+    style = paste0("border-right:3px solid ", COLOR_ETAPA_EMBUDO[[fila$Etapa]], ";"),
     tags$details(tags$summary(tags$strong(texto("PerRazSoc", "SIN RAZÓN SOCIAL")),
       tags$span(class = "kpb-responsables", lapply(strsplit(responsables, " | ", fixed = TRUE)[[1]],
         function(x) racafeForms::racafeStatusBadge(x, "neutral", size = "xs"))),
@@ -688,7 +722,7 @@ detectar_conversion_leads <- function(usr = "SISTEMA", facturas = fact_cliente, 
 
 ## DetalleCliente ----
 .obtener_conversion_cliente <- function(codigos = NULL) {
-  dat <- CargarDatos("CRMNALLEADCLIENTE") %>% mutate(FechaConversion = as_datetime(FechaConversion))
+  dat <- .pr_cargar("CRMNALLEADCLIENTE") %>% mutate(FechaConversion = as_datetime(FechaConversion))
   if (!is.null(codigos)) dat <- dat %>% filter(CodContacto %in% codigos)
   dat %>%
     filter(!is.na(FechaConversion)) %>%
@@ -700,7 +734,7 @@ detectar_conversion_leads <- function(usr = "SISTEMA", facturas = fact_cliente, 
     )
 }
 .obtener_conversion_lead <- function(codigos = NULL) {
-  dat <- CargarDatos("CONTACTOLEAD") %>% mutate(FechaConversion = as_datetime(FechaConversion))
+  dat <- .pr_cargar("CONTACTOLEAD") %>% mutate(FechaConversion = as_datetime(FechaConversion))
   if (!is.null(codigos)) dat <- dat %>% filter(CodContacto %in% codigos)
   dat %>%
     filter(!is.na(FechaConversion)) %>%
@@ -710,7 +744,7 @@ detectar_conversion_leads <- function(usr = "SISTEMA", facturas = fact_cliente, 
 }
 .badge_etapa_cliente <- function(value) {
   etapa_actual <- if (is.na(value) || value == "") "SIN ETAPA" else value
-  colores <- c(CONTACTO = "#64748B", PROSPECTO = "#C8862A", LEAD = "#1C398E",
+  colores <- c(CONTACTO = "#64748B", PROSPECTO = "#C8862A", LEAD = "#DA291C",
                CLIENTE = "#198754", DESCARTADO = "#C11007")
   color <- colores[[etapa_actual]] %||% "#64748B"
   tags$span(
@@ -1425,69 +1459,14 @@ calcular_georeferenciacion <- function() {
 # Construye el embudo con un hover del mismo color de cada etapa.
 grafico_embudo <- function(metricas) {
   etapas <- c("CONTACTO", "LEAD", "CLIENTE")
-  valores <- c(
-    metricas$total_contactos,
-    metricas$total_leads,
-    metricas$total_clientes
-  )
-  
-  colores <- unname(COLOR_ETAPA_EMBUDO[etapas])
-  total_inicial <- valores[[1]]
-  
-  p <- plotly::plot_ly()
-  
-  for (i in seq_along(etapas)) {
-    pct_inicial <- if (total_inicial > 0) {
-      valores[[i]] / total_inicial
-    } else {
-      0
-    }
-    
-    pct_anterior <- if (i == 1 || valores[[i - 1]] == 0) {
-      1
-    } else {
-      valores[[i]] / valores[[i - 1]]
-    }
-    
-    p <- p %>%
-      plotly::add_trace(
-        type = "funnel",
-        y = etapas[[i]],
-        x = valores[[i]],
-        textinfo = "value+percent initial",
-        marker = list(color = colores[[i]]),
-        customdata = matrix(
-          c(pct_inicial, pct_anterior),
-          nrow = 1
-        ),
-        hovertemplate = paste0(
-          "<b>%{y}</b><br>",
-          "Registros: %{x}<br>",
-          "% del total inicial: %{customdata[0]:.1%}<br>",
-          "% de la etapa anterior: %{customdata[1]:.1%}",
-          "<extra></extra>"
-        ),
-        hoverlabel = list(
-          bgcolor = colores[[i]],
-          bordercolor = colores[[i]],
-          font = list(color = "white", size = 12)
-        ),
-        showlegend = FALSE
-      )
-  }
-  
-  p %>%
-    plotly::layout(
-      margin = list(l = 100, r = 40, t = 20, b = 20),
-      yaxis = list(
-        categoryorder = "array",
-        categoryarray = etapas,
-        autorange = "reversed"
-      ),
-      showlegend = FALSE,
-      paper_bgcolor = "rgba(0,0,0,0)",
-      plot_bgcolor = "rgba(0,0,0,0)"
-    ) %>%
+  valores <- c(metricas$total_contactos, metricas$total_leads, metricas$total_clientes)
+  valores[!is.finite(valores)] <- 0
+  plotly::plot_ly(type = "funnel", y = etapas, x = valores,
+    marker = list(color = unname(COLOR_ETAPA_EMBUDO[etapas])), textinfo = "value",
+    hovertemplate = "<b>%{y}</b><br>Entidades: %{x:,.0f}<extra></extra>") %>%
+    plotly::layout(height = 450, margin = list(l = 100, r = 40, t = 20, b = 20),
+      yaxis = list(categoryorder = "array", categoryarray = etapas, autorange = "reversed"),
+      showlegend = FALSE, hoverlabel = list(bgcolor = "#e9ecef", font = list(color = "#343a40"))) %>%
     plotly::config(displayModeBar = FALSE)
 }
 # Construye el treemap Etapa > Origen > Detalle Origen > Razon1.
@@ -1720,7 +1699,7 @@ treemap_canal <- function(dat) {
     customdata = ~dat$PctTexto,
     marker = list(
       colors = ~dat$TasaConversion,
-      colorscale = "Greens",
+      colorscale = list(c(0, "#e9ecef"), c(1, "#DA291C")),
       showscale = TRUE,
       colorbar = list(
         title = "Tasa de\nconversión"
