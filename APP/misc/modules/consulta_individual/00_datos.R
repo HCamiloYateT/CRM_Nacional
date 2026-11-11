@@ -13,16 +13,37 @@
   }, error = function(e) list(datos = data.frame(), error = paste(tabla, conditionMessage(e), sep = ": ")))
 }
 .in_catalogo <- function(contactos, clientes, historial, vinculos, usuario, admin, filtros, hechos = NULL,
-                         directorio = NULL) {
-  c <- .crm_marcas_historia(.op_contactos_visibles(contactos, usuario, admin))
+                         directorio = NULL, asignaciones = clientes) {
+  # Asignación comercial del principal; ninguna hija conserva una asignación independiente.
+  mapa <- if (is.data.frame(directorio) && all(c("PerCod", "CliNitPpal") %in% names(directorio))) {
+    stats::setNames(.in_id(directorio$CliNitPpal), .in_id(directorio$PerCod))
+  } else character()
+  asignaciones <- asignaciones %>% dplyr::group_by(CliNitPpal) %>%
+    dplyr::summarise(Asesor = paste(sort(unique(stats::na.omit(Asesor))), collapse = " | "), .groups = "drop")
+  principal_contacto <- unname(mapa[.in_id(.gc_columna(contactos, "PerCod"))])
+  principal_contacto <- dplyr::coalesce(principal_contacto, .in_id(.gc_columna(contactos, "PerCod")))
+  asignado <- asignaciones$Asesor[match(principal_contacto, .in_id(asignaciones$CliNitPpal))]
+  tiene_padre <- principal_contacto %in% .in_id(asignaciones$CliNitPpal)
+  contactos$Asesor <- as.character(.gc_columna(contactos, "Asesor"))
+  contactos$Asesor[tiene_padre] <- asignado[tiene_padre]
+  visibles <- .op_contactos_visibles(contactos, usuario, admin)
+  if (!isTRUE(admin)) {
+    asignado_al_usuario <- vapply(strsplit(toupper(dplyr::coalesce(contactos$Asesor, "")), " | ", fixed = TRUE),
+      function(x) toupper(usuario) %in% x, logical(1))
+    codigos_visibles <- union(as.character(visibles$CodContacto), as.character(contactos$CodContacto[asignado_al_usuario]))
+    visibles <- contactos[as.character(contactos$CodContacto) %in% codigos_visibles, , drop = FALSE]
+  }
+  c <- .crm_marcas_historia(visibles)
   asesor <- .in_id(.gc_columna(c, "Asesor"))
   # Una entidad aún sin asesor conserva su ficha; una selección global vacía no incluye ninguna.
-  permitidas <- length(filtros$asesor) > 0L & (asesor %in% filtros$asesor | is.na(asesor))
+  permitidas <- length(filtros$asesor) > 0L & (is.na(asesor) |
+    vapply(strsplit(dplyr::coalesce(asesor, ""), " | ", fixed = TRUE),
+      function(x) any(x %in% filtros$asesor), logical(1)))
   c <- c[permitidas, , drop = FALSE]
   base <- data.frame(Clave = if (nrow(c)) paste0("contacto:", .in_id(.gc_columna(c, "CodContacto"))) else character(),
     Codigo = .in_id(.gc_columna(c, "CodContacto")), Nombre = as.character(.gc_columna(c, "PerRazSoc")),
     NIT = .in_id(.gc_columna(c, "PerCod")), Principal = rep(NA_character_, nrow(c)),
-    Tipo = ifelse(c$EsReconstruido, "CLIENTE", as.character(.gc_columna(c, "Etapa", "CONTACTO"))),
+    Tipo = as.character(ifelse(c$EsReconstruido, "CLIENTE", as.character(.gc_columna(c, "Etapa", "CONTACTO")))),
     Asesor = as.character(.gc_columna(c, "Asesor")), Alcance = rep("Entidad", nrow(c)), stringsAsFactors = FALSE)
   base <- base[!is.na(base$Codigo), , drop = FALSE]
   if (anyDuplicated(base$Clave)) stop("Hay códigos de contacto duplicados. Revise el catálogo.")
@@ -80,10 +101,15 @@
   if (nrow(base)) {
     base$Clave <- ifelse(!is.na(base$NitFacturacion), paste0("nit:", base$NitFacturacion), base$Clave)
   }
+  cuentas$Asesor <- asignaciones$Asesor[match(cuentas$Principal, .in_id(asignaciones$CliNitPpal))]
+  base$Principal <- dplyr::coalesce(unname(mapa[base$NitFacturacion]), base$Principal)
   for (i in seq_len(nrow(cuentas))) {
     relacionados <- base[base$Clave == cuentas$Clave[[i]], , drop = FALSE]
     if (!nrow(relacionados)) next
     cuentas$Codigo[[i]] <- paste(unique(relacionados$Codigo), collapse = "|")
+    nit_con_ventas <- is.data.frame(hechos) && any(.in_id(.gc_columna(hechos, "CLCliNit")) %in% cuentas$NIT[[i]])
+    if (any(relacionados$Tipo == "DESCARTADO")) cuentas$Tipo[[i]] <- "DESCARTADO" else
+      if (!nit_con_ventas) cuentas$Tipo[[i]] <- relacionados$Tipo[[1]]
     if (!cuentas$NIT[[i]] %in% nombres_directorio) cuentas$Nombre[[i]] <- relacionados$Nombre[[1]]
     cuentas$VinculoEnRevision[[i]] <- any(relacionados$VinculoEnRevision)
   }
@@ -141,7 +167,7 @@
   hechos[filas, , drop = FALSE]
 }
 .in_periodo <- function(hechos, fecha) {
-  if (length(fecha) != 2L || anyNA(fecha) || fecha[[1]] > fecha[[2]]) stop("Revise el periodo del controlbar.")
+  if (length(fecha) != 2L || anyNA(fecha) || fecha[[1]] > fecha[[2]]) stop("Revise el Período de análisis.")
   hechos[!is.na(hechos$FecFact) & hechos$FecFact >= fecha[[1]] & hechos$FecFact <= fecha[[2]] &
     hechos$EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO"), , drop = FALSE]
 }

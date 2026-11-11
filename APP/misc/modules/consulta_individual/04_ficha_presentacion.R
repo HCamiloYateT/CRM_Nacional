@@ -58,8 +58,8 @@
   asesores <- .in_ficha_badge_texto(entidad$Asesor)
   es_hija <- !is.na(familia$principal) && !is.na(entidad$NIT) && entidad$NIT != familia$principal
   relacion <- if (es_hija) "Cuenta hija" else if (length(familia$hijos)) "Cuenta padre" else "Cuenta individual"
-  revision <- grepl("revisar", presupuesto, ignore.case = TRUE)
-  variante <- if (revision) "warning" else if (startsWith(presupuesto, "Con presupuesto")) "info" else "neutral"
+  revision <- isTRUE(grepl("revisar", presupuesto, ignore.case = TRUE))
+  variante <- if (revision) "warning" else if (isTRUE(startsWith(presupuesto, "Con presupuesto"))) "info" else "neutral"
   shiny::tags$header(class = "in-ficha-identidad",
     shiny::h4(entidad$Nombre),
     shiny::tags$p(class = "in-ficha-secundario",
@@ -71,7 +71,7 @@
         variant = if (entidad$Tipo == "CLIENTE") "info" else "neutral"),
       shiny::tagAppendAttributes(racafeForms::racafeStatusBadge(relacion,
         variant = if (relacion == "Cuenta padre") "danger" else "neutral"), title = familia$relacion),
-      racafeForms::racafeStatusBadge(presupuesto, variant = variante), estado_comercial))
+      if (length(presupuesto)) racafeForms::racafeStatusBadge(presupuesto, variant = variante), estado_comercial))
 }
 .in_ficha_valor <- function(id, valor, etiqueta, contexto, icono) {
   caja <- racafeModulos::cajaValor_ui(id, texto = etiqueta, icono = icono, compact = TRUE,
@@ -149,11 +149,11 @@
       shiny::tags$div(class = "in-ficha-cuenta",
         shiny::tags$div(class = "in-ficha-cuenta-datos", shiny::tags$strong(.in_ficha_texto(x$Cuenta[[i]])),
           shiny::tags$div(class = "in-ficha-secundario", paste("NIT:", x$NIT[[i]])),
-          if (!comunes) shiny::tags$div(class = "in-ficha-secundario", paste("Asesor:", asesores[[i]]))),
+          NULL),
         racafeForms::racafeStatusBadge(x$Relacion[[i]],
           variant = if (x$Relacion[[i]] == "Cuenta padre") "danger" else "neutral"))
     })),
-    if (comunes) shiny::tags$p(class = "in-ficha-asesor-comun in-ficha-secundario", paste("Asesor:", asesores[[1]])))
+    NULL)
 }
 .in_ficha_complementos <- function(fuentes, contexto) {
   force(contexto)
