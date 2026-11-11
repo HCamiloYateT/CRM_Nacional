@@ -4,7 +4,7 @@
 ## FormularioAscenderProspecto ----
 FormularioAscenderProspectoUI <- function(id) {
   ns <- NS(id)
-  tagList(
+  .accion_formulario_ui(id,
     box(title = "Ascender a Prospecto", width = 12, collapsible = FALSE,
         FormatearTexto("Vincula este contacto como alianza de uno o varios clientes existentes.",
                        tamano_pct = 0.8, color = "#64748B"),
@@ -20,18 +20,20 @@ FormularioAscenderProspectoUI <- function(id) {
 }
 FormularioAscenderProspecto <- function(id, usuario, cod_contacto, data_contacto = NULL) {
   moduleServer(id, function(input, output, session) {
+    .confirmacion <- .accion_confirmacion(input, session, cod_contacto, usuario)
     ns  <- session$ns
     ret <- reactiveVal(0)
     
+    observeEvent(list(cod_contacto(), input$FormularioListo), {
+      req(input$FormularioListo)
+      .crm_update_select(session, "PRO_Alianzas", selected = character())
+      updateTextAreaInput(session, "PRO_Observacion", value = "")
+    })
+    validacion <- .accion_validacion(input, session, cod_contacto,
+      c("PRO_Alianzas"), function() c("Seleccione al menos un cliente aliado" = EsVacio(input$PRO_Alianzas)))
     observeEvent(input$PRO_Solicitar, {
-      if (length(input$PRO_Alianzas) == 0) {
-        racafeForms::racafeNotify(type = "error", duration = 4, title = "Debe seleccionar al menos un cliente aliado",
-                                session = shiny::getDefaultReactiveDomain())
-        return(invisible(NULL))
-      }
-      # Modal centralizado de racafeShiny, igual que CrearContacto/Identificacion/
-      # Relacionamiento, en vez de MostrarModalConClase + modalDialog manual
-      .accion_modal_confirmacion(
+      if (!validacion$validate()) return(invisible(NULL))
+      .confirmacion$abrir(
         ns = ns, titulo = "Confirmar ascenso a Prospecto",
         texto = paste0("¿Deseas ascender este contacto a Prospecto con ", length(input$PRO_Alianzas),
                        " alianza(s) registrada(s)?"),
@@ -39,8 +41,9 @@ FormularioAscenderProspecto <- function(id, usuario, cod_contacto, data_contacto
         label_confirmar = "Ascender a Prospecto", icono_confirmar = "arrow-up"
       )
     })
-    observeEvent(input$PRO_Cancelar, { removeModal() })
+    observeEvent(input$PRO_Cancelar, { .confirmacion$cancelar("PRO_Confirmar"); removeModal() })
     observeEvent(input$PRO_Confirmar, {
+      if (!.confirmacion$aceptar("PRO_Confirmar", validacion$validate)) return(invisible(NULL))
       tryCatch({
         convertir_contacto_a_prospecto(cod_contacto(), input$PRO_Alianzas, usuario(), input$PRO_Observacion)
         removeModal()
@@ -61,7 +64,7 @@ FormularioAscenderProspecto <- function(id, usuario, cod_contacto, data_contacto
 ## FormularioAscenderLead ----
 FormularioAscenderLeadUI <- function(id) {
   ns <- NS(id)
-  tagList(
+  .accion_formulario_ui(id,
     box(title = "Ascender a Lead", width = 12, collapsible = FALSE,
         .crm_select(id = ns("ASC_LinNeg"), label = Obligatorio("Línea de Negocio"),
                                 choices = Choices()$linneg, selected = NULL, multiple = FALSE, empty = FALSE),
@@ -76,6 +79,7 @@ FormularioAscenderLeadUI <- function(id) {
 }
 FormularioAscenderLead <- function(id, usuario, cod_contacto, data_contacto = NULL) {
   moduleServer(id, function(input, output, session) {
+    .confirmacion <- .accion_confirmacion(input, session, cod_contacto, usuario)
     ns  <- session$ns
     ret <- reactiveVal(0)
     
@@ -96,15 +100,17 @@ FormularioAscenderLead <- function(id, usuario, cod_contacto, data_contacto = NU
         "El campo Línea de Negocio es obligatorio" = EsVacio(input$ASC_LinNeg)
       )
     }
+    observeEvent(list(cod_contacto(), input$FormularioListo), {
+      req(input$FormularioListo)
+      .crm_update_select(session, "ASC_Asesor", selected = character())
+      .crm_update_select(session, "ASC_Segmento", selected = character())
+      .crm_update_select(session, "ASC_LinNeg", selected = character())
+    })
+    validacion <- .accion_validacion(input, session, cod_contacto,
+      c("ASC_Asesor", "ASC_Segmento", "ASC_LinNeg"), validar_campos_ascenso)
     observeEvent(input$ASC_Solicitar, {
-      cond <- validar_campos_ascenso()
-      if (any(cond)) {
-        sapply(names(cond), function(x) {
-          if (cond[[x]]) racafeForms::racafeNotify(session, title = x, type = "error", duration = 4)
-        })
-        return(invisible(NULL))
-      }
-      .accion_modal_confirmacion(
+      if (!validacion$validate()) return(invisible(NULL))
+      .confirmacion$abrir(
         ns = ns, titulo = "Confirmar ascenso a Lead",
         texto = paste0("¿Deseas ascender este contacto a Lead con asesor ", input$ASC_Asesor,
                        ", segmento ", input$ASC_Segmento, " y línea de negocio ", input$ASC_LinNeg, "?"),
@@ -112,8 +118,9 @@ FormularioAscenderLead <- function(id, usuario, cod_contacto, data_contacto = NU
         label_confirmar = "Ascender a Lead", icono_confirmar = "arrow-up"
       )
     })
-    observeEvent(input$ASC_Cancelar, { removeModal() })
+    observeEvent(input$ASC_Cancelar, { .confirmacion$cancelar("ASC_Confirmar"); removeModal() })
     observeEvent(input$ASC_Confirmar, {
+      if (!.confirmacion$aceptar("ASC_Confirmar", validacion$validate)) return(invisible(NULL))
       tryCatch({
         convertir_contacto_a_lead(cod_contacto(), input$ASC_Asesor, input$ASC_Segmento, input$ASC_LinNeg, usuario())
         removeModal()
@@ -135,7 +142,7 @@ FormularioAscenderLead <- function(id, usuario, cod_contacto, data_contacto = NU
 ## FormularioReclasificarLead ----
 FormularioReclasificarLeadUI <- function(id) {
   ns <- NS(id)
-  tagList(
+  .accion_formulario_ui(id,
     box(title = "Reclasificar a Lead", width = 12, collapsible = FALSE,
         FormatearTexto("El volumen de este Prospecto ahora sí interesa para venta directa. Las alianzas ya registradas quedan como historial.",
                        tamano_pct = 0.8, color = "#64748B"),
@@ -152,6 +159,7 @@ FormularioReclasificarLeadUI <- function(id) {
 }
 FormularioReclasificarLead <- function(id, usuario, cod_contacto, data_contacto = NULL) {
   moduleServer(id, function(input, output, session) {
+    .confirmacion <- .accion_confirmacion(input, session, cod_contacto, usuario)
     ns  <- session$ns
     ret <- reactiveVal(0)
     
@@ -171,15 +179,17 @@ FormularioReclasificarLead <- function(id, usuario, cod_contacto, data_contacto 
         "El campo Línea de Negocio es obligatorio" = EsVacio(input$RLE_LinNeg)
       )
     }
+    observeEvent(list(cod_contacto(), input$FormularioListo), {
+      req(input$FormularioListo)
+      .crm_update_select(session, "RLE_Asesor", selected = character())
+      .crm_update_select(session, "RLE_Segmento", selected = character())
+      .crm_update_select(session, "RLE_LinNeg", selected = character())
+    })
+    validacion <- .accion_validacion(input, session, cod_contacto,
+      c("RLE_Asesor", "RLE_Segmento", "RLE_LinNeg"), validar_campos_reclasificacion)
     observeEvent(input$RLE_Solicitar, {
-      cond <- validar_campos_reclasificacion()
-      if (any(cond)) {
-        sapply(names(cond), function(x) {
-          if (cond[[x]]) racafeForms::racafeNotify(session, title = x, type = "error", duration = 4)
-        })
-        return(invisible(NULL))
-      }
-      .accion_modal_confirmacion(
+      if (!validacion$validate()) return(invisible(NULL))
+      .confirmacion$abrir(
         ns = ns, titulo = "Confirmar reclasificación a Lead",
         texto = paste0("¿Deseas reclasificar este Prospecto a Lead con asesor ", input$RLE_Asesor,
                        ", segmento ", input$RLE_Segmento, " y línea de negocio ", input$RLE_LinNeg, "?"),
@@ -187,8 +197,9 @@ FormularioReclasificarLead <- function(id, usuario, cod_contacto, data_contacto 
         label_confirmar = "Reclasificar a Lead", icono_confirmar = "arrow-up"
       )
     })
-    observeEvent(input$RLE_Cancelar, { removeModal() })
+    observeEvent(input$RLE_Cancelar, { .confirmacion$cancelar("RLE_Confirmar"); removeModal() })
     observeEvent(input$RLE_Confirmar, {
+      if (!.confirmacion$aceptar("RLE_Confirmar", validacion$validate)) return(invisible(NULL))
       tryCatch({
         convertir_prospecto_a_lead(cod_contacto(), input$RLE_Asesor, input$RLE_Segmento, input$RLE_LinNeg, usuario())
         removeModal()
@@ -210,7 +221,7 @@ FormularioReclasificarLead <- function(id, usuario, cod_contacto, data_contacto 
 ## FormularioVincularNit ----
 FormularioVincularNitUI <- function(id) {
   ns <- NS(id)
-  tagList(
+  .accion_formulario_ui(id,
     box(title = "Vincular NIT de Facturación", width = 12, collapsible = FALSE,
         FormatearTexto("Úsalo cuando el lead entró con un NIT distinto al que finalmente factura.",
                        tamano_pct = 0.8, color = "#64748B"),
@@ -224,6 +235,7 @@ FormularioVincularNitUI <- function(id) {
 }
 FormularioVincularNit <- function(id, usuario, cod_contacto, data_contacto = NULL) {
   moduleServer(id, function(input, output, session) {
+    .confirmacion <- .accion_confirmacion(input, session, cod_contacto, usuario)
     ns  <- session$ns
     ret <- reactiveVal(0)
     
@@ -236,22 +248,18 @@ FormularioVincularNit <- function(id, usuario, cod_contacto, data_contacto = NUL
         CargarDatos("CRMNALCONTACTO", condicion = cond)
       })
     }
-    
-    observeEvent(cod_contacto(), {
-      req(cod_contacto())
+
+    observeEvent(list(cod_contacto(), input$FormularioListo), {
+      req(input$FormularioListo)
       v <- cargar_vinculo_nit(cod_contacto())
-      if (nrow(v) > 0) updateTextInput(session, "VIN_Nit", value = v$NitVinculado[[1]])
+      updateTextInput(session, "VIN_Nit", value = if (nrow(v)) v$NitVinculado[[1]] else "")
+      updateTextAreaInput(session, "VIN_Observacion", value = "")
     })
-    
+    validacion <- .accion_validacion(input, session, cod_contacto,
+      c("VIN_Nit"), function() c("Ingrese un NIT válido" = EsVacio(input$VIN_Nit) || !EsEnteroPositivo(input$VIN_Nit)))
     observeEvent(input$VIN_Guardar, {
-      if (EsVacio(input$VIN_Nit) || !EsEnteroPositivo(input$VIN_Nit)) {
-        racafeForms::racafeNotify(type = "error", duration = 4, title = "Ingrese un NIT válido",
-                                session = shiny::getDefaultReactiveDomain())
-        return(invisible(NULL))
-      }
-      # Se homologa a modal de confirmacion, igual que los otros 3 formularios;
-      # antes escribia directo sin confirmacion previa
-      .accion_modal_confirmacion(
+      if (!validacion$validate()) return(invisible(NULL))
+      .confirmacion$abrir(
         ns = ns, titulo = "Confirmar vinculación de NIT",
         texto = paste0("¿Deseas vincular el NIT ", input$VIN_Nit, " como NIT de facturación de este lead?"),
         id_cancelar = "VIN_Cancelar", id_confirmar = "VIN_Confirmar",
@@ -259,9 +267,10 @@ FormularioVincularNit <- function(id, usuario, cod_contacto, data_contacto = NUL
       )
     })
     
-    observeEvent(input$VIN_Cancelar, { removeModal() })
+    observeEvent(input$VIN_Cancelar, { .confirmacion$cancelar("VIN_Confirmar"); removeModal() })
     
     observeEvent(input$VIN_Confirmar, {
+      if (!.confirmacion$aceptar("VIN_Confirmar", validacion$validate)) return(invisible(NULL))
       tryCatch({
         registrar_vinculo_nit(cod_contacto(), input$VIN_Nit, usuario(), input$VIN_Observacion)
         removeModal()
@@ -284,17 +293,18 @@ FormularioVincularNit <- function(id, usuario, cod_contacto, data_contacto = NUL
 PromoverUI <- function(id) {
   ns <- NS(id)
   tagList(
-    uiOutput(ns("Titulo")),
-    uiOutput(ns("EstadoActual")),
+    uiOutput(ns("Encabezado")),
     uiOutput(ns("SelectorDestino")),
     uiOutput(ns("Contenido"))
   )
 }
 Promover <- function(id, usuario, codigo_contacto, destino_inicial = function() NULL) {
   moduleServer(id, function(input, output, session) {
+    .confirmacion <- .accion_confirmacion(input, session, codigo_contacto, usuario)
     ns <- session$ns
     
     trigger_refresco <- reactiveVal(0)
+    .accion_encabezado(output, codigo_contacto, function() { trigger_refresco(); .pr_fuentes()$revision() })
     # Destino elegido cuando la etapa vigente es CONTACTO (unica etapa con
     # mas de un formulario posible); se resetea cada vez que cambia el
     # contacto para no arrastrar la eleccion de un contacto al siguiente

@@ -183,6 +183,8 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
       abrir_accion(list(codigo = movimiento$codigo, accion = accion, destino = movimiento$hacia))
     })
     output$ModalContenido <- .crm_render_ui({
+      codigo_seleccionado()
+      input$AccionSeleccionada
       req(accion_seleccionada())
       modulo <- .REGISTRO_MODULOS_KANBAN[[accion_seleccionada()]]
       req(modulo)

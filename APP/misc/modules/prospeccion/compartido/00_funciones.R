@@ -15,10 +15,12 @@
   if (!exists(tabla, envir = fuente$tablas, inherits = FALSE)) fuente$tablas[[tabla]] <- CargarDatos(tabla)
   fuente$tablas[[tabla]]
 }
-.pr_invalidar <- function() {
+.pr_invalidar <- function(tablas = NULL) {
   fuente <- .pr_fuentes()
   if (is.null(fuente)) return(invisible(NULL))
-  rm(list = ls(fuente$tablas, all.names = TRUE), envir = fuente$tablas)
+  quitar <- ls(fuente$tablas, all.names = TRUE)
+  if (!is.null(tablas)) quitar <- intersect(quitar, tablas)
+  rm(list = quitar, envir = fuente$tablas)
   fuente$revision(shiny::isolate(fuente$revision()) + 1L)
 }
 

@@ -15,12 +15,8 @@
 ETAPAS_EMBUDO <- c("CONTACTO", "LEAD", "PROSPECTO", "CLIENTE", "DESCARTADO")
 ## Kanban ----
 # Color por etapa para las columnas/tarjetas del kanban
-COLOR_ETAPA_EMBUDO <- c("CONTACTO" = "#c8c8c8",
-                        "LEAD" = "#0073A8",
-                        "PROSPECTO" = "#C9A66B",
-                        "CLIENTE" = "#b3001b",
-                        "DESCARTADO" = "#1a1a1a"
-                        )
+COLOR_ETAPA_EMBUDO <- .COLORES_ETAPA
+
 # Delega el click de un boton de tarjeta del kanban al input Shiny AccionSeleccionada del namespace
 ## Acciones por Etapa ----
 .ACCIONES_ETAPA_EMBUDO <- list(

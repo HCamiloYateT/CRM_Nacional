@@ -1,8 +1,8 @@
 # Crear oportunidades desde el contacto o desde el tablero comercial ----
 CrearOportunidadUI <- function(id) {
   ns <- shiny::NS(id)
-  racafeForms::racafeForm(variant = "plain",
-    shiny::uiOutput(ns("Titulo")), shiny::uiOutput(ns("EstadoActual")),
+  .accion_formulario_ui(id, racafeForms::racafeForm(variant = "plain",
+    shiny::uiOutput(ns("Encabezado")),
     racafeForms::racafeCard(title = "Producto",
       .crm_select("OP_LinNeg", "Línea de negocio", choices = c("", Choices()$linneg), ns = ns),
       racafeForms::racafeFormRow(columns = 2,
@@ -17,15 +17,25 @@ CrearOportunidadUI <- function(id) {
         racafeForms::racafeInputNumeric("OP_Margen", "Margen por kilo", value = NA, format = "currency", ns = ns)),
       shiny::uiOutput(ns("OP_Resumen"))),
     racafeForms::racafeFormFooter(racafeForms::racafeButton("OP_Crear", "Crear oportunidad",
-      icon = "plus", ns = ns)))
+      icon = "plus", ns = ns))))
 }
 CrearOportunidad <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
+    .confirmacion <- .accion_confirmacion(input, session, codigo_contacto, usuario)
     
+    .accion_encabezado(output, codigo_contacto)
     ns <- session$ns
     creacion_trigger <- reactiveVal(0)
     creacion_pendiente <- reactiveVal(NULL)
     
+    observeEvent(list(codigo_contacto(), input$FormularioListo), {
+      req(input$FormularioListo)
+      creacion_pendiente(NULL)
+      .crm_update_select(session, "OP_LinNeg", selected = character())
+      for (campo in c("OP_Sacos", "OP_Frecuencia", "OP_Margen")) {
+        racafeForms::racafeUpdateNumeric(session, campo, value = NA_real_)
+      }
+    })
     # Datos ----
     
     # Catalogo completo de productos; no depende del contacto, se carga una
@@ -72,7 +82,7 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
     observeEvent(input$OP_LinNeg, {
       req(input$OP_LinNeg)
       cho_cat <- prods() %>%
-        dplyr::filter(LinNeg == input$OP_LinNeg, Excluir != "SI") %>%
+        dplyr::filter(LinNeg == input$OP_LinNeg, is.na(Excluir) | Excluir != "SI") %>%
         dplyr::pull(Categoria) %>%
         Unicos()
       
@@ -97,7 +107,7 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
     observeEvent(input$OP_Categoria, {
       req(input$OP_Categoria)
       cho_prod <- prods() %>%
-        dplyr::filter(Categoria == input$OP_Categoria, Excluir != "SI") %>%
+        dplyr::filter(LinNeg == input$OP_LinNeg, Categoria == input$OP_Categoria, Excluir != "SI") %>%
         dplyr::pull(Producto) %>%
         Unicos()
       
@@ -166,8 +176,8 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
     })
     
     # Crea oportunidad en BD ----
-    observeEvent(input$OP_Crear, {
-      cond <- c(
+    .campos_validos <- function() {
+      c(
         "El campo Línea de Negocio es obligatorio" = EsVacio(input$OP_LinNeg),
         "El campo Categoría es obligatorio"        = EsVacio(input$OP_Categoria),
         "El campo Producto es obligatorio"         = EsVacio(input$OP_Producto),
@@ -179,14 +189,13 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
         "La fecha debe ser vigente" = !isTRUE(as.Date(input$OP_Fecha) >= Sys.Date())
       )
       
-      if (any(cond)) {
-        sapply(names(cond[cond]), function(msg) {
-          racafeForms::racafeNotify(duration = 3, type = "error", title = msg,
-                                  session = shiny::getDefaultReactiveDomain())
-        })
-        return(invisible(NULL))
-      }
-      
+    }
+    validacion <- .accion_validacion(input, session, codigo_contacto,
+      c("OP_LinNeg", "OP_Categoria", "OP_Producto", "OP_Sacos", "OP_Frecuencia", "OP_Margen",
+        "OP_Sacos", "OP_Frecuencia", "OP_Fecha"), .campos_validos)
+    observeEvent(input$OP_Crear, {
+      if (!validacion$validate()) return(invisible(NULL))
+
       # Codigo y nombre de linea de negocio — reutiliza determinar_linea_negocio()
       # (Generales.R, compartida con Promover) en vez de duplicar el mapeo.
       # linea$cod llega como texto ("21000"); se convierte a numerico porque
@@ -205,7 +214,7 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
       creacion_pendiente(list(contacto = codigo_contacto(), linea = linnegcod,
         categoria = input$OP_Categoria, producto = input$OP_Producto, fecha = input$OP_Fecha,
         sacos = input$OP_Sacos, margen = input$OP_Margen, frecuencia = input$OP_Frecuencia))
-      .accion_modal_confirmacion(
+      .confirmacion$abrir(
         ns = ns, titulo = "Confirmar creación",
         texto = paste0("¿Desea registrar esta oportunidad de '", input$OP_Producto, "'?"),
         id_cancelar = "OP_CancelarCreacion", id_confirmar = "OP_ConfirmarCreacion",
@@ -213,8 +222,9 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
       )
     })
     
-    observeEvent(input$OP_CancelarCreacion, { creacion_pendiente(NULL); removeModal() })
+    observeEvent(input$OP_CancelarCreacion, { .confirmacion$cancelar("OP_ConfirmarCreacion"); creacion_pendiente(NULL); removeModal() })
     observeEvent(input$OP_ConfirmarCreacion, {
+      if (!.confirmacion$aceptar("OP_ConfirmarCreacion", validacion$validate)) return(invisible(NULL))
       pendiente <- creacion_pendiente()
       req(pendiente, identical(pendiente$contacto, codigo_contacto()))
       creacion_pendiente(NULL)

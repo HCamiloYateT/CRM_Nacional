@@ -4,10 +4,8 @@
 # Color estandar para mensajes de error en formularios
 COLOR_ERROR = "#C11007"
 # Paleta icono/color por etapa del embudo, usada por .badge_etapa()
-.COLORES_ETAPA <- c(
-  CONTACTO   = "#5D6D7E", PROSPECTO = "#C8862A", LEAD = "#1C398E",
-  CLIENTE    = "#198754", DESCARTADO = COLOR_ERROR
-)
+.COLORES_ETAPA <- c(CONTACTO = "#c8c8c8", PROSPECTO = "#C9A66B", LEAD = "#0073A8",
+                    CLIENTE = "#b3001b", DESCARTADO = "#1a1a1a")
 # Paleta icono/color por canal de recordatorio, usada por .badge_canal() (sin uso hoy, se deja para reuso futuro)
 .CANAL_ESTILO <- list(
   Correo    = list(icono = "envelope",          color = "#1C398E"),

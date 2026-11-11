@@ -1,12 +1,12 @@
 # CrearContacto
 CrearContactoUI <- function(id) {
   ns <- NS(id)
-  tagList(
+  .accion_formulario_ui(id,
     useShinyjs(),
     racafeForms::racafePanel(title = NULL, padding = "compact", bordered = FALSE,
                              racafeForms::racafeForm(size = "compact", variant = "plain",
                                                      .crm_select("CampoAutorizaDatos", label = "Autoriza Tratamiento de Datos", required = TRUE,
-                                                                                    choices = c("SI", "NO"), selected = "SI", multiple = FALSE,
+                                                                                    choices = c("SI", "NO"), selected = NULL, multiple = FALSE,
                                                                                     empty = FALSE, search = FALSE, ns = ns),
                                                      conditionalPanel(
                                                        condition = paste0("input['", ns("CampoAutorizaDatos"), "'] == 'SI'"),
@@ -50,9 +50,18 @@ CrearContacto <- function(id, usuario) {
       x <- x[!is.na(x) & nzchar(x)]
       sub("^0+(?=[0-9])", "", x, perl = TRUE)
     }
-    .BuscarNitExistente <- function(nit) {
+    .BuscarNitExistente <- function(nit, vigente = FALSE) {
       nit <- .NormalizarNit(nit)
       if (!length(nit)) return(NULL)
+      if (vigente) {
+        for (tabla in c("CRMNALCONTACTO", "CRMNALMARLOT")) {
+          x <- CargarDatos(tabla, condicion = sprintf("PerCod = '%s'", .rc_escapar_sql(nit[[1]])))
+          if (nrow(x)) return(if (tabla == "CRMNALCONTACTO") "contactos" else "registro comercial")
+        }
+        x <- CargarDatos("CRMNALCLIENTE", condicion = sprintf("CLCliNit = '%s'", .rc_escapar_sql(nit[[1]])))
+        if (nrow(x)) return("clientes")
+        return(NULL)
+      }
       fuentes <- list(
         "clientes" = list(datos = clientes_registrados(), columnas = c("CliNitPpal", "CLCliNit", "PerCod", "CLIENTE")),
         "contactos" = list(datos = todos_contactos(), columnas = c("PerCod")),
@@ -80,6 +89,17 @@ CrearContacto <- function(id, usuario) {
     .BuscarRazonesSimilares <- function(razon, max_resultados = 5L) {
       if (EsVacio(razon)) return(data.frame())
       razon <- .RazonComparable(razon)
+      candidatos <- candidatos_similitud()
+      if (!nrow(candidatos)) return(candidatos)
+      claves <- candidatos$Clave
+      denominador <- pmax(nchar(razon), nchar(claves), 1L)
+      similitud <- 1 - as.numeric(utils::adist(razon, claves)[1, ]) / denominador
+      candidatos$Similitud <- round(100 * similitud, 1)
+      candidatos <- candidatos[similitud >= 0.8 & nchar(claves) >= 4L, , drop = FALSE]
+      candidatos <- candidatos[order(-candidatos$Similitud), , drop = FALSE]
+      head(unique(candidatos), max_resultados)
+    }
+    candidatos_similitud <- reactive({
       fuentes <- list(
         "Contacto" = todos_contactos(),
         "Cliente" = clientes_registrados(),
@@ -96,14 +116,9 @@ CrearContacto <- function(id, usuario) {
       candidatos <- dplyr::bind_rows(candidatos)
       if (!nrow(candidatos)) return(candidatos)
       candidatos <- candidatos[!is.na(candidatos$RazonSocial) & nzchar(trimws(candidatos$RazonSocial)), , drop = FALSE]
-      claves <- .RazonComparable(candidatos$RazonSocial)
-      denominador <- pmax(nchar(razon), nchar(claves), 1L)
-      similitud <- 1 - as.numeric(utils::adist(razon, claves)[1, ]) / denominador
-      candidatos$Similitud <- round(100 * similitud, 1)
-      candidatos <- candidatos[similitud >= 0.8 & nchar(claves) >= 4L, , drop = FALSE]
-      candidatos <- candidatos[order(-candidatos$Similitud), , drop = FALSE]
-      head(unique(candidatos), max_resultados)
-    }
+      candidatos$Clave <- .RazonComparable(candidatos$RazonSocial)
+      candidatos
+    })
     # Validacion de campos obligatorios y unicidad de NIT antes de guardar
     .ValidarCamposFormulario <- function() {
       racafeForms::racafeValidateForm(
@@ -116,12 +131,15 @@ CrearContacto <- function(id, usuario) {
           CampoDetalleOrigen = list(label = "Detalle del Origen", required = FALSE, kind = "select")
         ),
         required = list(
+          CampoNit = function(values) EsVacio(values$CampoNit) && EsVacio(values$CampoRazonSocial),
           CampoRazonSocial = function(values) {
             EsVacio(values$CampoNit) && EsVacio(values$CampoRazonSocial)
           },
           CampoDetalleOrigen = function(values) isTRUE(detalle_es_requerido())
         ),
         rules = list(
+          CampoAutorizaDatos = function(value, values) if (identical(value, "SI")) TRUE else
+            "Se requiere autorización para registrar el contacto.",
           CampoNit = function(value, values) {
             nit <- trimws(as.character(value))
             if (!EsEnteroPositivo(nit)) return("El NIT debe ser un valor numérico válido.")
@@ -139,7 +157,7 @@ CrearContacto <- function(id, usuario) {
     .LimpiarFormulario <- function() {
       updateTextInput(session = session, inputId = "CampoRazonSocial", value = "")
       updateTextInput(session = session, inputId = "CampoNit", value = "")
-      .crm_update_select(session, "CampoAutorizaDatos", selected = "SI")
+      .crm_update_select(session, "CampoAutorizaDatos", selected = character())
       .crm_update_select(session, "CampoOrigen", selected = "")
       .crm_update_select(session, "CampoDetalleOrigen", choices = character(0), selected = "")
     }
@@ -147,19 +165,26 @@ CrearContacto <- function(id, usuario) {
     # Reactivos ----
     ## Datos ----
     todos_contactos <- reactive({
-      CargarDatos("CRMNALCONTACTO")
+      contador_creaciones()
+      .accion_medir("catalogo_contactos", .pr_cargar("CRMNALCONTACTO"))
     })
     clientes_registrados <- reactive({
-      CargarDatos("CRMNALCLIENTE")
+      .accion_medir("catalogo_clientes", .pr_cargar("CRMNALCLIENTE"))
     })
     clientes_marlot <- reactive({
-      CargarDatos("CRMNALMARLOT")
+      .accion_medir("catalogo_comercial", .pr_cargar("CRMNALMARLOT"))
     })
+    origenes <- reactive(.pr_cargar("CRMNALORILEAD"))
     ## Inputs ----
     observeEvent(input$CampoOrigen, {
-      req(input$CampoOrigen)
+      if (EsVacio(input$CampoOrigen)) {
+        detalle_es_requerido(FALSE)
+        .crm_update_select(session, "CampoDetalleOrigen", choices = character(), selected = character())
+        shinyjs::hide("WrapDetalleOrigen")
+        return(invisible(NULL))
+      }
       t1 <- tryCatch(
-        CargarDatos("CRMNALORILEAD") %>% filter(Estado == "A", Origen == input$CampoOrigen, !is.na(Detalle)),
+        origenes() %>% filter(Estado == "A", Origen == input$CampoOrigen, !is.na(Detalle)),
         error = function(e) NULL
       )
       tiene_detalle <- !is.null(t1) && nrow(t1) > 0
@@ -190,12 +215,7 @@ CrearContacto <- function(id, usuario) {
       .BuscarRazonesSimilares(razon)
     })
     
-    output$ValidacionNit <- .crm_render_ui({
-      mensaje <- resultado_nit_r()
-      if (is.null(mensaje)) return(NULL)
-      racafeForms::racafeFormMessage(mensaje, type = "error", size = "compact")
-    })
-    
+
     output$SimilitudRazonSocial <- .crm_render_ui({
       coincidencias <- similares_r()
       if (!nrow(coincidencias)) return(NULL)
@@ -215,14 +235,12 @@ CrearContacto <- function(id, usuario) {
     })
     
     .MostrarValidacion <- function(resultado, focus = FALSE) {
-      # El NIT muestra su propio error reactivo, sin duplicarlo en racafeForms.
-      resultado$errors <- resultado$errors[names(resultado$errors) != "CampoNit"]
-      resultado$pending <- names(resultado$errors)
       racafeForms::racafeShowValidation(session, resultado, mode = "inline", focus = focus)
     }
     
     validacion_intentada_rv <- reactiveVal(FALSE)
     confirmacion_rv <- reactiveVal(FALSE)
+    solicitud_rv <- reactiveVal(NULL)
     
     observe({
       if (!isTRUE(validacion_intentada_rv())) return()
@@ -239,51 +257,29 @@ CrearContacto <- function(id, usuario) {
       .MostrarValidacion(actual, focus = FALSE)
     }
     
+    observeEvent(input$FormularioListo, {
+      confirmacion_rv(FALSE); solicitud_rv(NULL)
+      .LimpiarFormulario(); .LimpiarValidacion()
+    })
     # Observadores -----
     observeEvent(input$BotonGuardar, {
       validacion_intentada_rv(TRUE)
-      validacion <- .ValidarCamposFormulario()
+      validacion <- .accion_medir("validacion", .ValidarCamposFormulario())
       .MostrarValidacion(validacion, focus = TRUE)
       if (!isTRUE(validacion$valid)) return(invisible(NULL))
       
       razon <- .NormalizarRazonSocial(input$CampoRazonSocial)
       nit <- trimws(input$CampoNit %||% "")
       similares <- .BuscarRazonesSimilares(razon)
-      advertencia <- if (nrow(similares)) {
-        racafeForms::racafeFormGroup(
-          title = "Posibles coincidencias de razón social",
-          racafeForms::racafeFormMessage(
-            "Se encontraron registros con nombres similares. Verifique antes de continuar.",
-            type = "warning", size = "compact"
-          ),
-          shiny::tags$ul(lapply(seq_len(nrow(similares)), function(i) {
-            shiny::tags$li(sprintf("%s (%s; similitud %.1f%%)",
-                                   similares$RazonSocial[[i]], similares$Fuente[[i]],
-                                   similares$Similitud[[i]]))
-          }))
-        )
-      } else NULL
-      
       confirmacion_rv(TRUE)
-      showModal(racafeForms::racafeModal(
-        title = "Confirmar creación de contacto", size = "subventana3",
-        shiny::tags$p("Revise la información antes de registrar el contacto."),
-        racafeForms::racafeInfoGrid(
-          racafeForms::racafeInfoItem("NIT", if (nzchar(nit)) nit else "Sin NIT"),
-          racafeForms::racafeInfoItem("RAZÓN SOCIAL", if (!is.na(razon)) razon else "Sin razón social"),
-          racafeForms::racafeInfoItem("AUTORIZA DATOS", input$CampoAutorizaDatos),
-          racafeForms::racafeInfoItem("ORIGEN", input$CampoOrigen),
-          racafeForms::racafeInfoItem("DETALLE DEL ORIGEN",
-                                      if (isTRUE(detalle_es_requerido())) input$CampoDetalleOrigen else "No aplica"),
-          columns = 2
-        ),
-        advertencia,
-        footer = racafeForms::racafeModalFooter(
-          racafeForms::racafeButtonCancel("BotonCancelarGuardado", "Cancelar", size = "xs", ns = ns),
-          racafeForms::racafeButton("BotonConfirmarGuardado", "Crear contacto",
-                                    icon = "floppy-disk", variant = "primary", size = "xs", ns = ns)
-        )
-      ))
+      solicitud_rv(list(usuario = usuario(), valores = lapply(c("CampoNit", "CampoRazonSocial", "CampoOrigen",
+        "CampoDetalleOrigen", "CampoAutorizaDatos"), function(id) input[[id]])))
+      # La confirmación corporativa conserva el formulario y sus valores.
+      racafeForms::racafeConfirm(session, "BotonConfirmarGuardado", "Confirmar creación de contacto",
+        paste("¿Desea crear el contacto", razon, "?",
+          if (nrow(similares)) "Hay nombres similares; revise las coincidencias antes de confirmar."), ns = ns)
+      return(invisible(NULL))
+
     })
     observeEvent(input$BotonCancelarGuardado, {
       confirmacion_rv(FALSE)
@@ -291,7 +287,13 @@ CrearContacto <- function(id, usuario) {
     })
     observeEvent(input$BotonConfirmarGuardado, {
       if (!isTRUE(confirmacion_rv())) return(invisible(NULL))
-      validacion <- .ValidarCamposFormulario()
+      if (!isTRUE(input$BotonConfirmarGuardado)) { confirmacion_rv(FALSE); return(invisible(NULL)) }
+      solicitud <- solicitud_rv()
+      actuales <- lapply(c("CampoNit", "CampoRazonSocial", "CampoOrigen", "CampoDetalleOrigen", "CampoAutorizaDatos"),
+        function(id) input[[id]])
+      confirmacion_rv(FALSE)
+      if (!identical(solicitud$usuario, usuario()) || !identical(solicitud$valores, actuales)) return(invisible(NULL))
+      validacion <- .accion_medir("validacion", .ValidarCamposFormulario())
       if (!isTRUE(validacion$valid)) {
         confirmacion_rv(FALSE)
         removeModal()
@@ -299,6 +301,13 @@ CrearContacto <- function(id, usuario) {
         return(invisible(NULL))
       }
       confirmacion_rv(FALSE)
+      fuente <- .BuscarNitExistente(input$CampoNit, vigente = TRUE)
+      if (!is.null(fuente)) {
+        validacion$errors[["CampoNit"]] <- paste("El NIT ya existe en", fuente)
+        validacion$pending <- names(validacion$errors)
+        .MostrarValidacion(validacion, focus = TRUE)
+        return(invisible(NULL))
+      }
       codigo <- generar_codigo_contacto()
       
       fila <- data.frame(CodContacto   = codigo,
@@ -315,13 +324,13 @@ CrearContacto <- function(id, usuario) {
         )
       
       tryCatch({
-        columnas <- names(CargarDatos("CRMNALCONTACTO"))
+        columnas <- .accion_medir("esquema", names(CargarDatos("CRMNALCONTACTO", condicion = "1=0")))
         marcas <- list(EsReconstruido = FALSE, FuenteRegistro = "CRM", FechaImputada = FALSE)
         for (nombre in intersect(names(marcas), columnas)) fila[[nombre]] <- marcas[[nombre]]
-        AgregarDatos(fila, "CRMNALCONTACTO")
+        .accion_medir("escritura", AgregarDatos(fila, "CRMNALCONTACTO"))
+        .pr_invalidar("CRMNALCONTACTO")
         removeModal()
-        .LimpiarValidacion()
-        .LimpiarFormulario()
+        .accion_medir("componentes", { .LimpiarValidacion(); .LimpiarFormulario() })
         racafeForms::racafeNotify(session, "Contacto creado", paste("Código:", codigo),
                                   type = "success", duration = 5)
         codigo_creado(codigo)

@@ -2,7 +2,8 @@
 ## Generales ----
 # Arma "NIT - Razon Social" para titulos de formularios
 .titulo_identificacion <- function(nit, razsoc) {
-  paste0(nit %||% "SIN NIT", " - ", razsoc %||% "SIN RAZÓN SOCIAL")
+  nit <- if (EsVacio(nit)) "SIN NIT" else format(nit, scientific = FALSE, trim = TRUE)
+  paste0(nit, " - ", if (EsVacio(razsoc)) "SIN RAZÓN SOCIAL" else razsoc)
 }
 # Escapa comillas simples para condiciones SQL
 .rc_escapar_sql <- function(x) gsub("'", "''", x)
@@ -23,10 +24,11 @@
 }
 # Badge con icono y color por etapa del embudo
 .badge_etapa <- function(etapa) {
-  color <- .COLORES_ETAPA[[etapa]] %||% "#6c757d"
+  color <- unname(.COLORES_ETAPA[etapa]); if (is.na(color)) color <- "#6c757d"
+  texto <- if (etapa %in% c("CONTACTO", "PROSPECTO")) "#343A40" else "#FFFFFF"
   tags$span(
     style = paste0("display:inline-block; padding:2px 10px; border-radius:10px; ",
-                   "background:", color, "; color:#fff; font-size:12px; font-weight:600;"),
+                   "background:", color, "; color:", texto, "; font-size:12px; font-weight:600;"),
     etapa
   )
 }
@@ -37,11 +39,13 @@
             icon(est$icono, class = if (est$icono == "whatsapp") "fab" else NULL), " ", canal)
 }
 # Etapa vigente de UN contacto, reutilizando derivar_etapa_actual() de embudo/00_Funciones.R
-obtener_etapa_contacto <- function(cod_contacto) {
+obtener_etapa_contacto <- function(cod_contacto, fila = NULL) {
   cond <- sprintf("CodContacto = '%s'", .rc_escapar_sql(cod_contacto))
-  fila <- tryCatch(CargarDatos("CRMNALCONTACTO", condicion = cond), error = function(e) data.frame())
+  if (is.null(fila)) fila <- CargarDatos("CRMNALCONTACTO", condicion = cond)
   if (nrow(fila) == 0) return(NA_character_)
-  derivar_etapa_actual(contactos = fila)$Etapa[[1]]
+  historial <- CargarDatos("CRMNALHISTORIALETAPA", condicion = cond)
+  historial$FechaHora <- lubridate::as_datetime(historial$FechaHora)
+  derivar_etapa_actual(contactos = fila, historial = historial)$Etapa[[1]]
 }
 # Determina codigo y nombre de linea de negocio a partir del segmento principal
 determinar_linea_negocio <- function(segmento_principal) {
@@ -50,7 +54,7 @@ determinar_linea_negocio <- function(segmento_principal) {
   }
   if (segmento_principal == "A LA MEDIDA") {
     return(list(cod = "21000", nombre = "A LA MEDIDA"))
-  } else if (segmento_principal == "CONVENCIONALES") {
+  } else if (segmento_principal %in% c("CONVENCIONALES", "COPRODUCTOS")) {
     return(list(cod = "10000", nombre = "CONVENCIONALES"))
   } else if (segmento_principal == "DIFERENCIADOS") {
     return(list(cod = "20000", nombre = "DIFERENCIADOS"))
@@ -65,7 +69,7 @@ registrar_transicion_etapa <- function(cod_contacto, etapa_anterior, etapa_nueva
     CodContacto = cod_contacto, EtapaAnterior = etapa_anterior, EtapaNueva = etapa_nueva,
     Usuario = usr, FechaHora = Sys.time(), Motivo = motivo, stringsAsFactors = FALSE
   )
-  if ("EsReconstruido" %in% names(CargarDatos("CRMNALHISTORIALETAPA"))) {
+  if ("EsReconstruido" %in% names(CargarDatos("CRMNALHISTORIALETAPA", condicion = "1=0"))) {
     registro_historial$EsReconstruido <- FALSE
   }
   AgregarDatos(registro_historial, "CRMNALHISTORIALETAPA")
@@ -217,37 +221,40 @@ RegistrarError <- function(error, operacion, usuario = NULL, codigo_contacto = N
 # Carga el correo empresarial del directorio de un contacto
 cargar_info_empresarial_directorio <- function(cod_contacto) {
   tryCatch({
-    CargarDatos("CRMNALDIRECTORIOEMPRESARIAL") %>% filter(CodContacto == cod_contacto)
+    CargarDatos("CRMNALDIRECTORIOEMPRESARIAL",
+      condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(cod_contacto)))
   }, error = function(e) data.frame())
 }
 # Guarda (upsert) el correo empresarial del directorio de un contacto
 guardar_info_empresarial_directorio <- function(cod_contacto, correo_empresarial, usr) {
-  fila <- data.frame(CodContacto = cod_contacto, CorreoGeneral = correo_empresarial,
+  fila <- data.frame(CodContacto = cod_contacto, CorreoGeneral = if (EsVacio(correo_empresarial)) NA_character_ else trimws(correo_empresarial),
                      UsuarioMod = usr, FechaHoraModi = Sys.time(), stringsAsFactors = FALSE)
   ReemplazarDatos(fila, "CRMNALDIRECTORIOEMPRESARIAL", llaves = list(CodContacto = cod_contacto))
 }
 # Lista los telefonos del directorio de un contacto
 listar_telefonos_directorio <- function(cod_contacto) {
   tryCatch({
-    CargarDatos("CRMNALDIRECTORIOTELEFONO") %>% filter(CodContacto == cod_contacto)
+    CargarDatos("CRMNALDIRECTORIOTELEFONO",
+      condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(cod_contacto)))
   }, error = function(e) data.frame(IdTelefono = character(), Telefono = character()))
 }
 # Registra un telefono en el directorio de un contacto
 registrar_telefono_directorio <- function(cod_contacto, telefono, usr) {
   fila <- data.frame(IdTelefono = .generar_id_telefono(), CodContacto = cod_contacto,
-                     Telefono = telefono, UsuarioCrea = usr, FechaHoraCrea = Sys.time(),
+                     Telefono = trimws(telefono), UsuarioCrea = usr, FechaHoraCrea = Sys.time(),
                      stringsAsFactors = FALSE)
   AgregarDatos(fila, "CRMNALDIRECTORIOTELEFONO")
 }
 # Elimina un telefono del directorio
 eliminar_telefono_directorio <- function(id_telefono) {
-  vacio <- CargarDatos("CRMNALDIRECTORIOTELEFONO") %>% filter(FALSE)
+  vacio <- CargarDatos("CRMNALDIRECTORIOTELEFONO", condicion = "1=0")
   ReemplazarDatos(vacio, "CRMNALDIRECTORIOTELEFONO", llaves = list(IdTelefono = id_telefono))
 }
 # Lista las redes sociales del directorio de un contacto
 listar_redes_directorio <- function(cod_contacto) {
   tryCatch({
-    CargarDatos("CRMNALDIRECTORIORED") %>% filter(CodContacto == cod_contacto)
+    CargarDatos("CRMNALDIRECTORIORED",
+      condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(cod_contacto)))
   }, error = function(e) data.frame(IdRed = character(), TipoRedSocial = character(),
                                     UsuarioRed = character()))
 }
@@ -259,13 +266,14 @@ registrar_red_social_directorio <- function(cod_contacto, tipo_red, usuario_red)
 }
 # Elimina una red social del directorio
 eliminar_red_social_directorio <- function(id_red) {
-  vacio <- CargarDatos("CRMNALDIRECTORIORED") %>% filter(FALSE)
+  vacio <- CargarDatos("CRMNALDIRECTORIORED", condicion = "1=0")
   ReemplazarDatos(vacio, "CRMNALDIRECTORIORED", llaves = list(IdRed = id_red))
 }
 # Lista las personas de contacto del directorio, con sus redes en HTML
 listar_personas_directorio <- function(cod_contacto) {
   personas <- tryCatch({
-    CargarDatos("CRMNALDIRECTORIOPERSONA") %>% filter(CodContacto == cod_contacto)
+    CargarDatos("CRMNALDIRECTORIOPERSONA",
+      condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(cod_contacto)))
   }, error = function(e) data.frame(IdPersona = character(), Nombre = character(),
                                     Cargo = character(), Telefono = character(), Correo = character()))
   if (nrow(personas) == 0) return(personas %>% mutate(RedesHTML = character()))
@@ -274,8 +282,8 @@ listar_personas_directorio <- function(cod_contacto) {
   # formateador propio: evita duplicacion de logica de formato y garantiza
   # que el texto del link sea siempre el usuario, nunca el nombre de la red.
   redes <- tryCatch({
-    CargarDatos("CRMNALDIRECTORIOPERSONARED") %>%
-      filter(IdPersona %in% personas$IdPersona) %>%
+    CargarDatos("CRMNALDIRECTORIOPERSONARED", condicion = paste0("IdPersona IN (",
+      paste(sprintf("'%s'", .rc_escapar_sql(personas$IdPersona)), collapse = ","), ")")) %>%
       mutate(RedHTML = mapply(.linea_red_social, TipoRedSocial, UsuarioRed)) %>%
       group_by(IdPersona) %>%
       summarise(RedesHTML = paste(RedHTML, collapse = ""), .groups = "drop")
@@ -290,7 +298,8 @@ registrar_persona_directorio <- function(cod_contacto, nombre, cargo, telefono, 
   id_persona <- .generar_id_persona()
   fila <- data.frame(
     IdPersona = id_persona, CodContacto = cod_contacto, Nombre = nombre, Cargo = cargo,
-    Telefono = telefono, Correo = correo, UsuarioCrea = usr, FechaHoraCrea = Sys.time(),
+    Telefono = trimws(telefono),
+    Correo = if (EsVacio(correo)) NA_character_ else trimws(correo), UsuarioCrea = usr, FechaHoraCrea = Sys.time(),
     stringsAsFactors = FALSE
   )
   AgregarDatos(fila, "CRMNALDIRECTORIOPERSONA")
@@ -298,7 +307,7 @@ registrar_persona_directorio <- function(cod_contacto, nombre, cargo, telefono, 
 }
 # Elimina una persona de contacto y sus redes sociales asociadas
 eliminar_persona_directorio <- function(id_persona) {
-  vacio_persona <- CargarDatos("CRMNALDIRECTORIOPERSONA") %>% filter(FALSE)
+  vacio_persona <- CargarDatos("CRMNALDIRECTORIOPERSONA", condicion = "1=0")
   ReemplazarDatos(vacio_persona, "CRMNALDIRECTORIOPERSONA", llaves = list(IdPersona = id_persona))
   
   redes <- tryCatch(CargarDatos("CRMNALDIRECTORIOPERSONARED") %>% filter(IdPersona == id_persona),
@@ -347,13 +356,15 @@ guardar_ubicacion_contacto <- function(cod_contacto, pais, depto, mpio, direccio
 # Carga la ubicacion principal de un contacto
 cargar_ubicacion_contacto <- function(cod_contacto) {
   tryCatch({
-    CargarDatos("CRMNALUBICACION") %>% filter(CodContacto == cod_contacto)
+    CargarDatos("CRMNALUBICACION",
+      condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(cod_contacto)))
   }, error = function(e) data.frame())
 }
 # Lista las sucursales de un contacto
 listar_sucursales_contacto <- function(cod_contacto) {
   tryCatch({
-    CargarDatos("CRMNALSUCURSALES") %>% filter(CodContacto == cod_contacto)
+    CargarDatos("CRMNALSUCURSALES",
+      condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(cod_contacto)))
   }, error = function(e) data.frame(IdSucursal = character(), Nombre = character(), Tipo = character(),
                                     Depto = character(), Mpio = character(), Localidad = character(),
                                     Barrio = character(), Direccion = character(), lat = double(),
@@ -380,7 +391,7 @@ registrar_sucursal_contacto <- function(cod_contacto, nombre, tipo, depto, mpio,
 }
 # Elimina una sucursal
 eliminar_sucursal_contacto <- function(id_sucursal) {
-  vacio <- CargarDatos("CRMNALSUCURSALES") %>% filter(FALSE)
+  vacio <- CargarDatos("CRMNALSUCURSALES", condicion = "1=0")
   ReemplazarDatos(vacio, "CRMNALSUCURSALES", llaves = list(IdSucursal = id_sucursal))
 }
 # Autocompleta direccion contra Places API (Google)
@@ -391,7 +402,7 @@ google_autocompletar_direccion <- function(texto, pais_iso2 = "CO") {
   }
   
   if (!nzchar(Sys.getenv("GOOGLE_MAPS_KEY", Sys.getenv("GOOGLE_API_KEY")))) {
-    return(.direccion_abierta(texto = texto, pais = pais_iso2))
+    return(list(status = "SIN_PROVEEDOR", sugerencias = NULL))
   }
   respuesta <- tryCatch({
     httr2::request("https://places.googleapis.com/v1/places:autocomplete") %>%
@@ -449,7 +460,9 @@ google_obtener_detalle_lugar <- function(place_id) {
     return(list(status = "SIN_PLACE_ID"))
   }
   
-  if (startsWith(place_id, "OSM:")) return(.direccion_abierta(place_id = substring(place_id, 5L)))
+  if (!nzchar(Sys.getenv("GOOGLE_MAPS_KEY", Sys.getenv("GOOGLE_API_KEY")))) {
+    return(list(status = "SIN_PROVEEDOR"))
+  }
   respuesta <- tryCatch({
     httr2::request(paste0("https://places.googleapis.com/v1/places/", place_id)) %>%
       httr2::req_headers(
@@ -489,7 +502,8 @@ google_obtener_detalle_lugar <- function(place_id) {
 # Carga la informacion de potencial de un contacto
 cargar_potencial_contacto <- function(cod_contacto) {  # sin cambio de nombre; tabla renombrada
   tryCatch({
-    CargarDatos("CRMNALPOTENCIAL") %>% filter(CodContacto == cod_contacto)
+    CargarDatos("CRMNALPOTENCIAL",
+      condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(cod_contacto)))
   }, error = function(e) data.frame())
 }
 # Guarda (upsert) la informacion de potencial de un contacto
@@ -953,43 +967,49 @@ descartar_oportunidad <- function(id_oportunidad, razon, usr) {
 .accion_modal_confirmacion <- function(ns, titulo, texto, id_cancelar, id_confirmar, label_confirmar,
                                        icono_confirmar, color_confirmar = NULL, label_cancelar = "Cancelar",
                                        icono_cancelar = "xmark", easyClose = FALSE, clase = "aviso") {
-  shiny::showModal(racafeForms::racafeModal(title = titulo, shiny::tags$p(texto), size = clase,
-    easy_close = easyClose, footer = racafeForms::racafeModalFooter(
-      racafeForms::racafeButton(id_cancelar, label_cancelar, icon = icono_cancelar, ns = ns,
-        variant = "secondary", size = "xs"),
-      racafeForms::racafeButton(id_confirmar, label_confirmar, icon = icono_confirmar, ns = ns,
-        variant = "primary", size = "xs"))))
+  # SweetAlert conserva el formulario abierto y sus bindings debajo de la confirmación.
+  racafeForms::racafeConfirm(shiny::getDefaultReactiveDomain(), id_confirmar, titulo, texto,
+    confirm_label = label_confirmar, cancel_label = label_cancelar, ns = ns)
 }
 
 # Guardados secundarios: congelar el formulario validado y escribir solo al confirmar ----
 .accion_guardado <- function(input, session, codigo_contacto, usuario) {
+  ocupado <- shiny::reactiveVal(FALSE)
   pendiente <- shiny::reactiveVal(NULL)
-  shiny::observeEvent(input$ConfirmarRegistroCancelar, { pendiente(NULL); shiny::removeModal() })
+  shiny::observeEvent(input$ConfirmarRegistroCancelar, { pendiente(NULL); invisible(NULL) })
   shiny::observeEvent(input$ConfirmarRegistroAceptar, {
+    if (!isTRUE(input$ConfirmarRegistroAceptar)) { pendiente(NULL); return(invisible(NULL)) }
     solicitud <- pendiente()
-    shiny::req(solicitud)
+    shiny::req(solicitud, !ocupado())
     pendiente(NULL)
     if (!identical(solicitud$codigo, codigo_contacto()) || !identical(solicitud$usuario, usuario())) {
-      shiny::removeModal()
       racafeForms::racafeNotify(title = "La entidad o el usuario cambió. Revise el registro nuevamente.",
         type = "warning", session = session)
       return(invisible(NULL))
     }
+    actuales <- shiny::reactiveValuesToList(input)
+    campos <- grep("^(Campo|Direccion)", names(solicitud$valores), value = TRUE)
+    if (!identical(solicitud$valores[campos], actuales[campos])) {
+      racafeForms::racafeNotify(session, title = "Los datos cambiaron. Revise y confirme nuevamente.", type = "warning")
+      return(invisible(NULL))
+    }
+    if (!is.null(solicitud$validar) && !solicitud$validar()) return(invisible(NULL))
+    ocupado(TRUE); on.exit(ocupado(FALSE), add = TRUE)
     tryCatch({
       eval(solicitud$expresion, solicitud$entorno)
-      .pr_invalidar()
-      shiny::removeModal()
+      .pr_invalidar(solicitud$tablas)
     }, error = function(e) {
-      shiny::removeModal()
       .ManejarErrorAccion(e, solicitud$titulo, usuario(), codigo_contacto())
     })
   }, ignoreInit = TRUE)
-  function(expresion, titulo) {
+  shiny::observeEvent(list(codigo_contacto(), input$FormularioListo), pendiente(NULL), priority = 30)
+  function(expresion, titulo, validar = NULL, tablas = NULL) {
+    if (ocupado() || (!is.null(validar) && !validar())) return(invisible(NULL))
     shiny::req(codigo_contacto(), usuario())
     valores <- shiny::reactiveValuesToList(input)
     entorno <- list2env(list(input = valores), parent = parent.frame())
     pendiente(list(expresion = substitute(expresion), entorno = entorno, codigo = codigo_contacto(),
-      usuario = usuario(), titulo = titulo))
+      usuario = usuario(), titulo = titulo, validar = validar, valores = valores, tablas = tablas))
     .accion_modal_confirmacion(session$ns, titulo, "¿Desea confirmar esta modificación del registro?",
       "ConfirmarRegistroCancelar", "ConfirmarRegistroAceptar", "Confirmar", "check")
   }
@@ -1021,27 +1041,102 @@ descartar_oportunidad <- function(id_oportunidad, razon, usr) {
   telefono <- trimws(as.character(telefono))
   if (!length(telefono) || is.na(telefono) || !nzchar(telefono)) return(FALSE)
   digitos <- gsub("[^0-9]", "", telefono)
-  !grepl("^[+0-9() .-]+$", telefono) || nchar(digitos) < 7L || nchar(digitos) > 15L
+  !grepl("^\\+?[0-9() .-]+$", telefono) || nchar(digitos) < 7L || nchar(digitos) > 15L
 }
 
-# Búsqueda pública cuando Places no tiene clave; nunca impide diligenciar la dirección manualmente ----
-.direccion_abierta <- function(texto = NULL, pais = "CO", place_id = NULL) {
-  tryCatch({
-    url <- if (is.null(place_id)) "https://nominatim.openstreetmap.org/search" else
-      "https://nominatim.openstreetmap.org/lookup"
-    consulta <- httr2::request(url) %>% httr2::req_user_agent("CRM-Nacional/1.0 (address lookup)") %>%
-      httr2::req_timeout(10)
-    consulta <- if (is.null(place_id)) consulta %>% httr2::req_url_query(q = texto, format = "jsonv2",
-      addressdetails = 1, countrycodes = tolower(pais), limit = 5) else
-      consulta %>% httr2::req_url_query(osm_ids = place_id, format = "jsonv2", addressdetails = 1)
-    datos <- httr2::resp_body_json(httr2::req_perform(consulta), simplifyVector = FALSE)
-    if (!length(datos)) return(list(status = "ZERO_RESULTS", sugerencias = NULL))
-    if (is.null(place_id)) return(list(status = "OK", sugerencias = dplyr::bind_rows(lapply(datos, function(x) {
-      data.frame(texto = x$display_name, place_id = paste0("OSM:", toupper(substr(x$osm_type, 1, 1)), x$osm_id))
-    }))))
-    x <- datos[[1]]; direccion <- x$address
-    list(status = "OK", direccion_formateada = x$display_name, pais = direccion$country,
-      depto = direccion$state, mpio = direccion$city %||% direccion$town %||% direccion$municipality %||%
-        direccion$village, lat = as.numeric(x$lat), lng = as.numeric(x$lon))
-  }, error = function(e) list(status = "ERROR_CONEXION", sugerencias = NULL))
+# Adaptador configurable: no realiza llamadas externas sin una configuración explícita ----
+.accion_geocodificar <- function(texto = NULL, pais = "CO", place_id = NULL) {
+  proveedor <- getOption("crm.geocodificador")
+  if (is.null(proveedor)) return(list(status = "SIN_PROVEEDOR", sugerencias = NULL))
+  if (!is.function(proveedor)) stop("crm.geocodificador debe ser una función.")
+  tryCatch(proveedor(texto = texto, pais = pais, place_id = place_id),
+    error = function(e) list(status = "ERROR_CONEXION", sugerencias = NULL))
+}
+
+# Validación de acciones: una instancia por grupo; limpia errores al cambiar o remontar entidad ----
+.accion_validacion <- function(input, session, codigo, campos, condiciones) {
+  intentada <- shiny::reactiveVal(FALSE)
+  comprobar <- function() {
+    esquema <- stats::setNames(lapply(unique(campos), function(id) list(label = id, kind = "select")), unique(campos))
+    resultado <- racafeForms::racafeValidateForm(input, esquema, ns = session$ns)
+    errores <- condiciones()
+    for (i in seq_along(errores)) {
+      if (is.na(errores[[i]]) || errores[[i]]) {
+        campo <- unname(campos[[i]])
+        resultado$errors[[campo]] <- paste(c(resultado$errors[campo], names(errores)[[i]])[
+          !is.na(c(resultado$errors[campo], names(errores)[[i]]))], collapse = " ")
+      }
+    }
+    resultado$pending <- names(resultado$errors)
+    resultado$valid <- !length(resultado$pending)
+    resultado
+  }
+  mostrar <- function(foco = FALSE) {
+    x <- comprobar()
+    racafeForms::racafeShowValidation(session, x, mode = "inline", focus = foco)
+    x$valid
+  }
+  limpiar <- function() {
+    intentada(FALSE)
+    x <- comprobar(); x$errors <- character(); x$pending <- character(); x$valid <- TRUE
+    racafeForms::racafeShowValidation(session, x, mode = "inline", focus = FALSE)
+  }
+  shiny::observe({ if (intentada()) mostrar() })
+  shiny::observeEvent(list(codigo(), input$FormularioListo), limpiar(), priority = 20)
+  list(validate = function() { intentada(TRUE); mostrar(TRUE) }, reset = limpiar)
+}
+
+# Encabezado compartido fuera de la navegación de pestañas ----
+.accion_encabezado <- function(output, codigo, revision = function() .pr_fuentes()$revision()) {
+  output$Encabezado <- shiny::renderUI({
+    revision(); shiny::req(codigo())
+    fila <- CargarDatos("CRMNALCONTACTO", condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(codigo())))
+    shiny::req(nrow(fila) == 1L)
+    etapa <- obtener_etapa_contacto(codigo(), fila = fila)
+    shiny::tagList(shiny::tags$h4(.titulo_identificacion(fila$PerCod[[1]], fila$PerRazSoc[[1]])),
+      shiny::tags$p("Etapa vigente: ", if (!is.na(etapa)) .badge_etapa(etapa)))
+  })
+}
+
+# Aceptar confirmaciones una sola vez y solo para el formulario revisado ----
+.accion_confirmacion <- function(input, session, codigo, usuario) {
+  solicitudes <- new.env(parent = emptyenv())
+  valores <- function() {
+    x <- shiny::reactiveValuesToList(input)
+    x[grepl("^(Campo|ASC_|PRO_|RLE_|VIN_|GES_|REC_|DES_|OP_)", names(x)) &
+      !grepl("Solicitar|Confirmar|Cancelar|Guardar|Programar", names(x))]
+  }
+  shiny::observeEvent(list(codigo(), input$FormularioListo), {
+    rm(list = ls(solicitudes), envir = solicitudes)
+  }, priority = 30)
+  list(abrir = function(..., id_confirmar) {
+    solicitudes[[id_confirmar]] <- list(codigo = codigo(), usuario = usuario(), valores = valores())
+    .accion_modal_confirmacion(..., id_confirmar = id_confirmar)
+  }, aceptar = function(id, validar = function() TRUE) {
+    if (!isTRUE(input[[id]])) {
+      if (exists(id, solicitudes, inherits = FALSE)) rm(list = id, envir = solicitudes)
+      return(FALSE)
+    }
+    if (!exists(id, solicitudes, inherits = FALSE)) return(FALSE)
+    solicitud <- solicitudes[[id]]; rm(list = id, envir = solicitudes)
+    if (!identical(solicitud$codigo, codigo()) || !identical(solicitud$usuario, usuario()) ||
+        !identical(solicitud$valores, valores())) {
+      racafeForms::racafeNotify(session, title = "El formulario cambió. Revise y confirme nuevamente.", type = "warning")
+      return(FALSE)
+    }
+    validar()
+  }, cancelar = function(id) {
+    if (exists(id, solicitudes, inherits = FALSE)) rm(list = id, envir = solicitudes)
+  })
+}
+
+# Medición opcional de las fases de una acción, sin registrar datos comerciales ----
+.accion_medir <- function(fase, expresion) {
+  inicio <- proc.time()[["elapsed"]]
+  on.exit({
+    registrar <- getOption("crm.perfil_acciones")
+    if (is.function(registrar)) tryCatch(registrar(fase = fase,
+      segundos = proc.time()[["elapsed"]] - inicio), error = function(e) invisible(NULL))
+  }, add = TRUE)
+  eval.parent(substitute(expresion))
 }

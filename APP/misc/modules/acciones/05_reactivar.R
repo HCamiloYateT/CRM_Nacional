@@ -6,6 +6,7 @@ ReactivarUI <- function(id) {
 }
 Reactivar <- function(id, usuario, codigo_contacto, disparador = codigo_contacto) {
   moduleServer(id, function(input, output, session) {
+    .confirmacion <- .accion_confirmacion(input, session, codigo_contacto, usuario)
     ns <- session$ns
     ret <- reactiveVal(0)
     ultimo_disparado <- reactiveVal(NULL)
@@ -21,7 +22,7 @@ Reactivar <- function(id, usuario, codigo_contacto, disparador = codigo_contacto
       
       destino <- .obtener_etapa_pre_descarte(codigo_contacto())
       
-      .accion_modal_confirmacion(
+      .confirmacion$abrir(
         ns = ns,
         titulo = "Confirmar reactivación",
         texto = paste0("Este registro volverá a la etapa: ", destino, ". ¿Desea continuar?"),
@@ -37,6 +38,7 @@ Reactivar <- function(id, usuario, codigo_contacto, disparador = codigo_contacto
     
     # Confirmar ----
     observeEvent(input$REA_Confirmar, {
+      if (!.confirmacion$aceptar("REA_Confirmar")) return(invisible(NULL))
       tryCatch({
         reactivar_contacto(codigo_contacto(), usuario())
         removeModal()
