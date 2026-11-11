@@ -943,3 +943,63 @@ descartar_oportunidad <- function(id_oportunidad, razon, usr) {
     as.numeric(valor[[1]])
   )
 }
+
+# Confirmación corporativa de acciones, con los mismos IDs de los formularios ----
+.accion_modal_confirmacion <- function(ns, titulo, texto, id_cancelar, id_confirmar, label_confirmar,
+                                       icono_confirmar, color_confirmar = NULL, label_cancelar = "Cancelar",
+                                       icono_cancelar = "xmark", easyClose = FALSE, clase = "aviso") {
+  shiny::showModal(racafeForms::racafeModal(title = titulo, shiny::tags$p(texto), size = clase,
+    easy_close = easyClose, footer = racafeForms::racafeModalFooter(
+      racafeForms::racafeButton(id_cancelar, label_cancelar, icon = icono_cancelar, ns = ns,
+        variant = "secondary", size = "xs"),
+      racafeForms::racafeButton(id_confirmar, label_confirmar, icon = icono_confirmar, ns = ns,
+        variant = "primary", size = "xs"))))
+}
+
+# Guardados secundarios: congelar el formulario validado y escribir solo al confirmar ----
+.accion_guardado <- function(input, session, codigo_contacto, usuario) {
+  pendiente <- shiny::reactiveVal(NULL)
+  shiny::observeEvent(input$ConfirmarRegistroCancelar, { pendiente(NULL); shiny::removeModal() })
+  shiny::observeEvent(input$ConfirmarRegistroAceptar, {
+    solicitud <- pendiente()
+    shiny::req(solicitud)
+    pendiente(NULL)
+    if (!identical(solicitud$codigo, codigo_contacto()) || !identical(solicitud$usuario, usuario())) {
+      shiny::removeModal()
+      racafeForms::racafeNotify(title = "La entidad o el usuario cambió. Revise el registro nuevamente.",
+        type = "warning", session = session)
+      return(invisible(NULL))
+    }
+    tryCatch({
+      eval(solicitud$expresion, solicitud$entorno)
+      .pr_invalidar()
+      shiny::removeModal()
+    }, error = function(e) {
+      shiny::removeModal()
+      .ManejarErrorAccion(e, solicitud$titulo, usuario(), codigo_contacto())
+    })
+  }, ignoreInit = TRUE)
+  function(expresion, titulo) {
+    shiny::req(codigo_contacto(), usuario())
+    valores <- shiny::reactiveValuesToList(input)
+    entorno <- list2env(list(input = valores), parent = parent.frame())
+    pendiente(list(expresion = substitute(expresion), entorno = entorno, codigo = codigo_contacto(),
+      usuario = usuario(), titulo = titulo))
+    .accion_modal_confirmacion(session$ns, titulo, "¿Desea confirmar esta modificación del registro?",
+      "ConfirmarRegistroCancelar", "ConfirmarRegistroAceptar", "Confirmar", "check")
+  }
+}
+
+.accion_validar <- function(condiciones) {
+  errores <- is.na(condiciones) | condiciones
+  if (any(errores)) {
+    sapply(names(condiciones)[errores], function(mensaje) racafeForms::racafeNotify(
+      title = mensaje, type = "error", session = shiny::getDefaultReactiveDomain()))
+  }
+  !any(errores)
+}
+.accion_correo_invalido <- function(correo) {
+  correo <- trimws(as.character(correo))
+  if (!length(correo) || is.na(correo) || !nzchar(correo)) return(FALSE)
+  !grepl("^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$", correo)
+}

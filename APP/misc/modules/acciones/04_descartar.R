@@ -149,7 +149,7 @@ FormularioDescartar <- function(id, usuario, cod_contacto, etapa, data_contacto 
         })
         return(invisible(NULL))
       }
-      racafeShiny::MostrarModalConfirmacion(
+      .accion_modal_confirmacion(
         ns = ns, titulo = paste("Confirmar descarte de", etiqueta),
         texto = paste0("¿Deseas descartar este ", tolower(etiqueta), "? Motivo: ", motivo_final()),
         id_cancelar = "DES_Cancelar", id_confirmar = "DES_Confirmar",

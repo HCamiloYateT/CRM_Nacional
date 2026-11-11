@@ -368,8 +368,8 @@ DetalleAnalisisConversion <- function(id, universo_contactos, usuario) {
         if (!is.finite(max_fila) || max_fila <= 0) return(list())
         intensidad <- valor / max_fila
         list(
-          background = paste0("rgba(28,57,142,", round(0.08 + intensidad * 0.72, 2), ")"),
-          color = if (intensidad >= 0.6) "#FFFFFF" else "#404040",
+          background = grDevices::rgb(grDevices::colorRamp(c("#F5EFE4", "#C8A77D"))(intensidad) / 255),
+          color = "#493C2D",
           fontWeight = if (intensidad == 1) "bold" else "normal"
         )
       }

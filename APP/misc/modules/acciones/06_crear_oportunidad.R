@@ -205,7 +205,7 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
       creacion_pendiente(list(contacto = codigo_contacto(), linea = linnegcod,
         categoria = input$OP_Categoria, producto = input$OP_Producto, fecha = input$OP_Fecha,
         sacos = input$OP_Sacos, margen = input$OP_Margen, frecuencia = input$OP_Frecuencia))
-      racafeShiny::MostrarModalConfirmacion(
+      .accion_modal_confirmacion(
         ns = ns, titulo = "Confirmar creación",
         texto = paste0("¿Desea registrar esta oportunidad de '", input$OP_Producto, "'?"),
         id_cancelar = "OP_CancelarCreacion", id_confirmar = "OP_ConfirmarCreacion",
