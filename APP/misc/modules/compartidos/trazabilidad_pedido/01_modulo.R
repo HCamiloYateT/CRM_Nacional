@@ -21,7 +21,8 @@
   }
   reales <- d$EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO")
   solicitados <- sumar_unidad(lineas, "SacosPedido70Linea")
-  facturados <- if ("FacturadosOperativos70" %in% names(d)) por_lote("FacturadosOperativos70") else
+  facturados <- if ("FacturadosConsolidados70" %in% names(d)) por_lote("FacturadosConsolidados70") else
+    if ("FacturadosOperativos70" %in% names(d)) por_lote("FacturadosOperativos70") else
     .com_suma(d$SacosFact[reales])
   indicadores <- list(solicitados = solicitados, asignados = por_lote("SacosLote70"),
     producidos = por_lote("SacosProducidos70"), despachados = por_lote("SacosDespachados70"),
@@ -84,7 +85,7 @@ TrazabilidadPedido <- function(id, maestro, pedido) {
       "CLCliNit", "LinNegCod", "FechaCreacionPedido", "FechaAsignacionLote", "FechaProduccion", "FechaDespachoReal",
       "FecFact", "FacturasSYSCAFE", "EstadoFinanciero", "SacosFact", "Margen", "PrecioNegociadoOriginal",
       "UnidadPrecioOriginal", "MonedaPrecioOriginal", "PrecioNegociadoKg", "CantidadPedidoOrigen", "UnidadKgPedido",
-      "SacosLoteOrigen", "SacosProducidosOrigen", "SacosDespachadosOrigen", "SacosLote70", "SacosProducidos70", "SacosDespachados70"))
+      "SacosLoteOrigen", "SacosProducidosOrigen", "SacosDespachadosOrigen", "SacosLote70", "SacosProducidos70", "SacosDespachados70", "FacturadosOperativos70", "FacturadosConsolidados70"))
     .crm_vancouver_server("facturas", shiny::reactive(datos()$facturas),
       col_labels = c(CLLotCod = "Lote", FecFact = "Fecha de factura", TipoFactura = "Origen", NumeroFactura = "Factura"))
     .crm_vancouver_server("conciliacion", shiny::reactive(datos()$conciliacion))

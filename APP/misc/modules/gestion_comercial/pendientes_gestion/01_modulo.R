@@ -22,7 +22,9 @@
     dplyr::summarise(Pedido = .gc_unico(Pedido), Linea = .gc_unico(Linea), NIT = .gc_unico(NIT),
       Cliente = .gc_unico(Cliente), Fecha = .gc_unico(Fecha),
       Asignados = .gc_unico(SacosLote70), Producidos = .gc_unico(SacosProducidos70),
-      Despachados = .gc_unico(SacosDespachados70), Facturados = .gc_unico(FacturadosOperativos70),
+      Despachados = .gc_unico(SacosDespachados70),
+      FacturadosSYSCAFE = .gc_unico(FacturadosOperativos70),
+      Facturados = .gc_unico(if ("FacturadosConsolidados70" %in% names(x)) FacturadosConsolidados70 else FacturadosOperativos70),
       FacturadosPeriodo = sum(SacosFact, na.rm = TRUE),
       .groups = "drop")
   asignacion <- lotes %>% dplyr::filter(!is.na(Pedido), !is.na(Linea)) %>%
@@ -86,10 +88,10 @@
   agregar(sin_margen, "Revisar margen", sin_margen$Pendientes, "Pedido")
   filas <- which(is.na(lotes$Pedido))
   agregar(lotes[filas, ], "Sin pedido", rep(NA_real_, length(filas)), "Lote")
-  revisar <- which(is.na(lotes$Asignados) | is.na(lotes$Producidos) | is.na(lotes$Despachados) |
+  revisar <- which(is.na(lotes$Asignados) | is.na(lotes$Producidos) | is.na(lotes$Despachados) | is.na(lotes$Facturados) |
     lotes$Producidos > lotes$Asignados + 0.1 | lotes$Despachados > lotes$Producidos + 0.1 |
     lotes$Facturados > lotes$Despachados + 0.1 |
-    lotes$FacturadosPeriodo > lotes$Facturados + 0.1)
+    lotes$FacturadosPeriodo > lotes$FacturadosSYSCAFE + 0.1)
   agregar(lotes[revisar, ], "Revisar cantidades", rep(NA_real_, length(revisar)), "Lote")
   filas <- which(is.na(pedidos$Pedidos) | pedidos$Asignados > pedidos$Pedidos + 0.1 |
     pedidos$Facturados > pedidos$Pedidos + 0.1)

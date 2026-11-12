@@ -15,6 +15,20 @@
   x$SacosAnaliticos70 <- ifelse(x$EsEstimado, campo("SacosProyectados"), campo("SacosFact"))
   x$MargenAnalitico <- ifelse(estado == "CERRADO", campo("MargenContable"),
     ifelse(estado == "FACTURADO_ABIERTO", campo("MargenAbiertoEstimado"), campo("MargenProyectado")))
+  if (all(c("CLLotCod", "SacosFact", "FacturadosOperativos70") %in% names(x))) {
+    consolidado <- x %>% dplyr::filter(!is.na(CLLotCod), as.character(CLLotCod) != "0") %>%
+      dplyr::group_by(CLLotCod) %>% dplyr::summarise(
+        Financiero = {
+          v <- SacosFact[EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO")]
+          if (anyNA(v)) NA_real_ else sum(v)
+        },
+        Operativo = {
+          v <- unique(FacturadosOperativos70[!is.na(FacturadosOperativos70)])
+          if (length(v) == 1L) v[[1]] else NA_real_
+        }, .groups = "drop")
+    consolidado$FacturadosConsolidados70 <- pmax(consolidado$Financiero, consolidado$Operativo)
+    x$FacturadosConsolidados70 <- consolidado$FacturadosConsolidados70[match(x$CLLotCod, consolidado$CLLotCod)]
+  }
   x$OrigenDato <- campo("FuenteFinanciera", NA_character_)
   x$FechaCorteFuente <- as.Date(ifelse(estado == "CERRADO", as.numeric(as.Date(campo("FechaCortePyG", as.Date(NA)))),
     as.numeric(as.Date(campo("FechaCorteOperativo", as.Date(NA))))), origin = "1970-01-01")

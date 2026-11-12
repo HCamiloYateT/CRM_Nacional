@@ -85,6 +85,7 @@ server <- function(input, output, session) {
   maestro_base_comercial <- reactive({
     h <- exportacion_rv()
     x <- .crm_preparar_datos(h$crm_maestro, productos_cache(), h$segmentaciones_actual, h$ord_cmp)
+    if (!"FacturadosConsolidados70" %in% names(x)) x <- .crm_capa_ejecucion(x)
     attr(x, "facturas_detalle") <- h$homologaciones$facturas_detalle
     x
   })
