@@ -14,12 +14,14 @@
   x$Pedido <- .in_id(.gc_columna(x, "CLPdcCod"))
   x$NIT <- .in_id(.gc_columna(x, "CLCliNit"))
   x$FechaPedido <- .in_fecha(.gc_columna(x, "PdcFecCre"))
-  x$PrecioKg <- .gc_num(.gc_columna(x, c("PdcPrecioKilo", "PrecioKiloPedido")))
+  x$LineaPedidoPrecio <- if ("PrecioNegociadoOriginal" %in% names(x)) .in_id(x$CLPdcLin) else rep("Cabecera", nrow(x))
+  x$PrecioKg <- .gc_num(.gc_columna(x, if ("PrecioNegociadoOriginal" %in% names(x)) "PrecioNegociadoKg" else
+    c("PdcPrecioKilo", "PrecioKiloPedido")))
   x$Marca <- as.character(.gc_columna(x, "Marca"))
   x$NombreComercial <- as.character(.gc_columna(x, c("MCNom", "NombreComercial")))
   x$Linea <- as.character(.gc_columna(x, c("CLLinNegNo", "LinNegCod")))
   x <- x[!is.na(x$Pedido), , drop = FALSE]
-  x %>% dplyr::group_by(NIT, Pedido, Linea, FechaPedido, Marca, NombreComercial, PrecioKg) %>%
+  x %>% dplyr::group_by(NIT, Pedido, LineaPedidoPrecio, Linea, FechaPedido, Marca, NombreComercial, PrecioKg) %>%
     dplyr::summarise(Sacos = .com_suma(SacosFact), Margen = .com_suma(Margen),
       UltimaFactura = if (any(!is.na(FecFact))) max(FecFact, na.rm = TRUE) else as.Date(NA), .groups = "drop") %>%
     dplyr::arrange(dplyr::desc(FechaPedido), Pedido)

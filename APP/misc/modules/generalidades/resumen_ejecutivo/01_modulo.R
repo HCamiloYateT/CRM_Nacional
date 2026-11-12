@@ -28,8 +28,6 @@
          formato = "entero", valor = 18L, tab = "GC_Pendientes"),
     list(id = "gc_tareas", texto = "Tareas pendientes", icono = "tasks",
          formato = "entero", valor = NA_real_, tab = "GC_Tareas"),
-    list(id = "gc_alertas", texto = "Alertas y Notificaciones", icono = "bell",
-         formato = "entero", valor = 6L, tab = "GC_Alertas"),
     list(id = "gc_fidelidad", texto = "Fidelidad y Riesgo", icono = "shield-halved",
          formato = "porcentaje", valor = 0.91, tab = "GC_Fidelidad"),
     list(id = "gc_cartera", texto = "Cartera", icono = "file-invoice-dollar",
@@ -54,22 +52,12 @@
          formato = "entero", valor = 215L, tab = "PR_Potencial")
   )),
   list(seccion = "Cohortes de Clientes", icono = "chart-gantt", cajas = list(
-    list(id = "co_retencion", texto = "Retención", icono = "people-group",
-         formato = "porcentaje", valor = 0.86, tab = "CO_Retencion"),
-    list(id = "co_ventas", texto = "Ventas", icono = "chart-line",
-         formato = "dinero", valor = 850000000, tab = "CO_Ventas"),
-    list(id = "co_margen", texto = "Margen", icono = "dollar-sign",
-         formato = "dinero", valor = 126000000, tab = "CO_Margen"),
-    list(id = "co_frecuencia", texto = "Frecuencia", icono = "clock",
-         formato = "numero", valor = 2.8, tab = "CO_Frecuencia")
+    list(id = "co_estados", texto = "Estados y transiciones", icono = "people-arrows",
+         formato = "entero", valor = NA_real_, tab = "CO_Estados")
   )),
   list(seccion = "Herramientas", icono = "screwdriver-wrench", cajas = list(
     list(id = "he_calculadoras", texto = "Calculadoras", icono = "calculator",
-         formato = "entero", valor = 4L, tab = "HE_Calculadoras"),
-    list(id = "he_conversion", texto = "Tablas de Conversión", icono = "table",
-         formato = "entero", valor = 6L, tab = "HE_Conversion"),
-    list(id = "he_informes", texto = "Informes", icono = "file-export",
-         formato = "entero", valor = 12L, tab = "HE_Informes")
+         formato = "entero", valor = 4L, tab = "HE_Calculadoras")
   )),
   list(seccion = "Productos", icono = "boxes-stacked", cajas = list(
     list(id = "pd_ejecucion", texto = "Productos facturados", icono = "chart-column",

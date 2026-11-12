@@ -1,9 +1,9 @@
 # Cumplimiento total: misma base anual de la fila TOTAL ----
 .presupuesto_resumen_total <- function(datos) {
   .cumplimiento <- function(ejecutado, presupuesto) {
-    total <- sum(presupuesto, na.rm = TRUE)
+    total <- .com_suma(presupuesto)
     if (!is.finite(total) || total == 0) return(NA_real_)
-    valor <- sum(ejecutado, na.rm = TRUE) / total
+    valor <- .com_suma(ejecutado) / total
     if (is.finite(valor)) valor else NA_real_
   }
   list(sacos = .cumplimiento(datos$Sacos_Real, datos$Sacos_Ppto),
@@ -121,12 +121,12 @@ PresupuestoUI <- function(id) {
     ),
     # Tabla GT resumen mensual/acumulado — con scroll horizontal
     fluidRow(
-      bs4Dash::bs4Card(
+      .crm_seccion_presupuesto(
         title = "Presupuesto", status = "white", solidHeader = TRUE,
         width = 12, collapsible = FALSE,
         div(
           style = "overflow-x: auto; width: 100%;",
-          uiOutput(ns("Presupuesto"))
+          .crm_tabla_ui(ns("capas_presupuesto"))
         )
       ),
       column(12, uiOutput(ns("nota_presupuesto")))
@@ -134,25 +134,25 @@ PresupuestoUI <- function(id) {
     # Graficos de serie temporal sacos y margen
     fluidRow(
       column(6,
-             bs4Dash::bs4Card(
+             .crm_seccion_presupuesto(
                title = "Presupuesto de Sacos (70 Kgs)", status = "white",
                solidHeader = TRUE, width = 12, collapsible = TRUE,
-               .crm_plot_output(ns("GraficoPresupuestoSacos")),
+               .crm_plot_output(ns("capas_sacos")),
                uiOutput(ns("nota_serie_sacos"))
              )
       ),
       column(6,
-             bs4Dash::bs4Card(
+             .crm_seccion_presupuesto(
                title = "Presupuesto de $MNFCC", status = "white",
                solidHeader = TRUE, width = 12, collapsible = TRUE,
-               .crm_plot_output(ns("GraficoPresupuestoMargen")),
+               .crm_plot_output(ns("capas_margen")),
                uiOutput(ns("nota_serie_margen"))
              )
       )
     ),
     # Tablas de cumplimiento por dimension + graficos — colapsado por defecto
     fluidRow(
-      bs4Dash::bs4Card(
+      .crm_seccion_presupuesto(
         title = "Cumplimiento y proyección por dimensión", status = "white",
         solidHeader = TRUE, width = 12, collapsible = TRUE, collapsed = TRUE,
         fluidRow(
@@ -178,7 +178,7 @@ PresupuestoUI <- function(id) {
         uiOutput(ns("nota_dimension")),
         fluidRow(
           column(6,
-                 bs4Dash::bs4Card(
+                 .crm_seccion_presupuesto(
                    title = uiOutput(ns("titulo_proyeccion")),
                    status = "white", solidHeader = FALSE, width = 12,
                    collapsible = TRUE, elevation = 1,
@@ -200,7 +200,7 @@ PresupuestoUI <- function(id) {
                  )
           ),
           column(6,
-                 bs4Dash::bs4Card(
+                 .crm_seccion_presupuesto(
                    title = "Velocidad de ejecución frente a la requerida",
                    status = "white", solidHeader = FALSE, width = 12,
                    collapsible = TRUE, elevation = 1,
@@ -226,7 +226,7 @@ PresupuestoUI <- function(id) {
     )
   )
 }
-Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NULL) {
+Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NULL, maestro = NULL) {
   moduleServer(id, function(input, output, session) {
     .detalle_lotes_rv <- reactiveVal(data.frame(FecFact = as.Date(character()), PerRazSoc = character(),
                                                CLLinNegNo = character(), CLLotCod = numeric(), Asesor = character(),
@@ -658,136 +658,12 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     }
     
     # Grafico de serie temporal ejecucion vs presupuesto con meta futura
-    construir_grafico_serie <- function(datos_grafico, vista_acumulada,
-                                        col_real, col_ppto, col_ref_na,
-                                        titulo_acum, titulo_mensual,
-                                        label_y_acum, label_y_mensual,
-                                        formato_y = "numero") {
-      mes_vigente <- calendario_r()$mes_vigente
-      
-      datos_grafico <- datos_grafico %>%
-        arrange(Mes_Num) %>%
-        mutate(
-          acum_real = cumsum(ifelse(is.na(.data[[col_real]]), 0, .data[[col_real]])),
-          acum_ppto = cumsum(.data[[col_ppto]])
-        )
-      
-      ultimo_mes <- suppressWarnings(
-        max(datos_grafico$Mes_Num[!is.na(datos_grafico[[col_ref_na]])], na.rm = TRUE)
-      )
-      if (is.infinite(ultimo_mes)) ultimo_mes <- 0
-      
-      datos_grafico <- datos_grafico %>%
-        mutate(acum_real = ifelse(Mes_Num <= ultimo_mes, acum_real, NA_real_))
-      
-      ejec_acum <- datos_grafico %>%
-        filter(Mes_Num < mes_vigente, !is.na(.data[[col_real]])) %>%
-        summarise(s = sum(.data[[col_real]], na.rm = TRUE)) %>%
-        pull(s)
-      
-      ppto_total <- sum(datos_grafico[[col_ppto]], na.rm = TRUE)
-      meses_rest <- calendario_r()$meses_rest
-      meta_info <- .meta_mensual_requerida(ppto_total, ejec_acum, meses_rest)
-      meta_mens <- meta_info$valor
-      
-      datos_grafico <- datos_grafico %>%
-        mutate(
-          meta_mensual = ifelse(Mes_Num >= mes_vigente, meta_mens, NA_real_),
-          meta_acum    = ifelse(
-            Mes_Num >= mes_vigente,
-            ejec_acum + (Mes_Num - mes_vigente + 1L) * meta_mens, NA_real_
-          ),
-          Fecha = factor(Fecha, levels = .MESES, ordered = TRUE)
-        )
-      
-      if (vista_acumulada) {
-        datos_plot <- datos_grafico %>%
-          select(Fecha, acum_ppto, acum_real, meta_acum) %>%
-          pivot_longer(c(acum_ppto, acum_real, meta_acum),
-                       names_to = "Tipo", values_to = "Valor") %>%
-          mutate(
-            Tipo = dplyr::recode(Tipo,
-                                 acum_ppto = "Presupuesto Acumulado",
-                                 acum_real = "Ejecutado Acumulado",
-                                 meta_acum = "Meta Acumulada para Ppto"
-            ),
-            Tipo = factor(Tipo, levels = c(
-              "Presupuesto Acumulado", "Ejecutado Acumulado", "Meta Acumulada para Ppto"
-            ))
-          )
-        titulo_g <- titulo_acum; titulo_y <- label_y_acum
-      } else {
-        datos_plot <- datos_grafico %>%
-          select(
-            Fecha,
-            ppto     = all_of(col_ppto),
-            real     = all_of(col_real),
-            meta_men = meta_mensual
-          ) %>%
-          pivot_longer(c(ppto, real, meta_men), names_to = "Tipo", values_to = "Valor") %>%
-          mutate(
-            Tipo = dplyr::recode(Tipo,
-                                 ppto     = "Presupuesto Mensual",
-                                 real     = "Ejecutado Mensual",
-                                 meta_men = "Meta mensual para presupuesto"
-            ),
-            Tipo = factor(Tipo, levels = c(
-              "Presupuesto Mensual", "Ejecutado Mensual", "Meta mensual para presupuesto"
-            ))
-          )
-        titulo_g <- titulo_mensual; titulo_y <- label_y_mensual
-      }
-      
-      trazas <- list(
-        list(
-          tipo  = if (vista_acumulada) "Presupuesto Acumulado" else "Presupuesto Mensual",
-          color = "#52525C", dash = "dash"
-        ),
-        list(
-          tipo  = if (vista_acumulada) "Ejecutado Acumulado" else "Ejecutado Mensual",
-          color = "#1C398E", dash = "solid"
-        ),
-        list(
-          tipo  = if (vista_acumulada) "Meta Acumulada para Ppto" else "Meta mensual para presupuesto",
-          color = "#82181A", dash = "dot"
-        )
-      )
-      
-      p <- plot_ly()
-      for (tr in trazas) {
-        p <- p %>% add_trace(
-          data = filter(datos_plot, Tipo == tr$tipo),
-          x = ~Fecha, y = ~Valor,
-          name = tr$tipo, type = "scatter", mode = "lines+markers",
-          line   = list(color = tr$color, dash = tr$dash, width = 2),
-          marker = list(color = tr$color),
-          hovertemplate = paste0(
-            "<b>", tr$tipo, "</b><br>Mes: %{x}<br>Valor: %{y:,.0f}<extra></extra>"
-          )
-        )
-      }
-      
-      yax <- list(title = titulo_y, tickformat = ",", rangemode = "tozero")
-      if (formato_y == "dinero") yax$tickprefix <- "$"
-      
-      p %>%
-        layout(
-          title     = titulo_g,
-          xaxis     = list(title = "Mes"),
-          yaxis     = yax,
-          legend    = list(
-            orientation = "h", x = 0.5, y = -0.2,
-            xanchor = "center", yanchor = "top"
-          ),
-          hovermode = "x unified"
-        ) %>%
-        config(displayModeBar = FALSE, displaylogo = FALSE)
-    }
+
     
     # División segura ----
     .division_segura <- function(numerador, denominador = 1) {
       valor <- suppressWarnings(numerador / denominador)
-      replace(valor, !is.finite(valor), 0)
+      replace(valor, !is.finite(valor), NA_real_)
     }
     
     # Metas mensuales requeridas ----
@@ -815,7 +691,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       NULL
     }
     
-    .nota_presupuesto_ui <- function(texto) .crm_nota(texto)
+    .nota_presupuesto_ui <- function(texto) .crm_nota_metodologica(texto)
     
     # Fuente financiera ----
     .resolver_datos <- function(x) {
@@ -841,11 +717,13 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     })
     
     cierre_pyg_r <- reactive({
+      fuente <- pyg_referencia_r()
+      if (!is.null(fuente) && nrow(fuente) > 0L && any(!is.na(fuente$FecMes))) {
+        return(max(fuente$FecMes, na.rm = TRUE))
+      }
       if (exists("ultimo_periodo_pyg", envir = .GlobalEnv, inherits = FALSE)) {
         return(as.Date(get("ultimo_periodo_pyg", envir = .GlobalEnv)))
       }
-      fuente <- pyg_referencia_r()
-      if (!is.null(fuente) && nrow(fuente) > 0L) return(max(fuente$FecMes, na.rm = TRUE))
       as.Date(NA)
     })
 
@@ -1072,6 +950,42 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       preparar_datos_grafico(datos_act_r(), ppto_r(), periodo_r())
     })
     
+    capas_mes <- reactive({
+      fuente <- if (is.null(maestro)) dat() else maestro()
+      fuente <- .gc_filtrar_dimensiones(fuente, filtros_r())
+      f <- filtros_r()$fecha
+      .crm_capas_mensuales(fuente, as.Date(f[[1]]), as.Date(f[[2]]))
+    })
+    presupuesto_mes <- reactive({
+      p <- ppto_r() %>% group_by(Periodo, Fecha) %>% summarise(PptoSacos = .com_suma(PptoSS),
+        PptoMargen = .com_suma(PptoMa), .groups = "drop")
+      p$Mes <- as.Date(sprintf("%04d-%02d-01", p$Periodo, match(p$Fecha, .MESES)))
+      p
+    })
+    .crm_vancouver_server("capas_presupuesto", reactive({
+      x <- capas_mes()
+      shiny::validate(shiny::need(nrow(x) > 0L, "No hay ejecución ni estimaciones para este alcance."))
+      x <- tidyr::pivot_wider(x, id_cols = Mes, names_from = EstadoEjecucion, values_from = c(Sacos, Margen))
+      full_join(x, presupuesto_mes()[c("Mes", "PptoSacos", "PptoMargen")], by = "Mes") %>% arrange(Mes)
+    }))
+    .graficar_capas <- function(medida) {
+      x <- capas_mes(); p <- presupuesto_mes()
+      shiny::validate(shiny::need(nrow(x) > 0L, "No hay datos para construir las capas mensuales."))
+      x <- x %>% arrange(Mes) %>% group_by(EstadoEjecucion) %>%
+        mutate(Valor = if (isTRUE(input$vista_acumulada)) cumsum(.data[[medida]]) else .data[[medida]]) %>% ungroup()
+      p$Valor <- if (medida == "Sacos") p$PptoSacos else p$PptoMargen
+      if (isTRUE(input$vista_acumulada)) p$Valor <- cumsum(p$Valor)
+      g <- plotly::plot_ly(x, x = ~Mes, y = ~Valor, color = ~EstadoEjecucion, type = "scatter", mode = "lines+markers",
+        colors = c("Cerrado financiero" = "#7A2028", "Facturado sin cierre" = "#495057", "Estimado comercial" = "#C8A77D"),
+        hovertemplate = "%{x|%Y-%m}<br>%{y:,.2f}<extra>%{fullData.name}</extra>")
+      g %>% plotly::add_trace(data = p, x = ~Mes, y = ~Valor, name = "Presupuesto", inherit = FALSE,
+        type = "scatter", mode = "lines+markers", line = list(color = "#343A40", dash = "dash"),
+        hovertemplate = "%{x|%Y-%m}<br>Presupuesto: %{y:,.2f}<extra></extra>") %>%
+        plotly::layout(yaxis = list(title = if (medida == "Sacos") "Sacos de 70 kg" else "Margen · COP"))
+    }
+    output$capas_sacos <- .crm_render_plotly(.graficar_capas("Sacos"))
+    output$capas_margen <- .crm_render_plotly(.graficar_capas("Margen"))
+
     # Nombres de columnas dinamicos segun periodo activo
     col_names_r <- reactive({
       p  <- periodo_r()
@@ -1644,203 +1558,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     )
     
     ## Tabla GT mensual/acumulada ----
-    output$Presupuesto <- .crm_render_ui({
-      periodo     <- periodo_r()
-      periodo_ant <- periodo - 1L
-      cn          <- col_names_r()
-      
-      datos_ant <- datos_base_r() %>% filter(Periodo == periodo_ant)
-      datos_act <- datos_act_r()  %>% filter(Periodo == periodo)
-      ppto      <- ppto_r()
-      
-      ventas_mes <- bind_rows(datos_ant, datos_act) %>%
-        group_by(Periodo, Fecha) %>%
-        summarise(Sacos70 = sum(Sacos70, na.rm = TRUE),
-                  MargenFCC = sum(MargenFCC, na.rm = TRUE), .groups = "drop")
-      ppto_mes <- ppto %>%
-        group_by(Periodo, Fecha) %>%
-        summarise(PptoSS = sum(PptoSS, na.rm = TRUE),
-                  PptoMa = sum(PptoMa, na.rm = TRUE), .groups = "drop")
-      t1 <- tidyr::crossing(
-        Periodo = c(periodo_ant, periodo), Fecha = .MESES
-      ) %>%
-        left_join(ventas_mes, by = c("Periodo", "Fecha")) %>%
-        left_join(ppto_mes, by = c("Periodo", "Fecha")) %>%
-        pivot_wider(names_from = Periodo, values_from = c(Sacos70, MargenFCC, PptoSS, PptoMa)) %>%
-        mutate(
-          Fecha = factor(Fecha, levels = .MESES, ordered = TRUE),
-          across(starts_with(c("Sacos70_", "MargenFCC_")), ~ .x),
-          !!cn$cumpl_sacos  := !!sym(cn$sacos_act)  / !!sym(cn$ppto_sacos),
-          VarSS              = Variacion(!!sym(cn$sacos_ant),  !!sym(cn$sacos_act)),
-          !!cn$cumpl_margen := !!sym(cn$margen_act) / !!sym(cn$ppto_margen),
-          VarMgn             = Variacion(!!sym(cn$margen_ant), !!sym(cn$margen_act))
-        ) %>%
-        arrange(Fecha) %>%
-        mutate(
-          !!cn$acum_sacos_ant  := ifelse(
-            !is.na(!!sym(cn$sacos_ant)),
-            cumsum(coalesce(!!sym(cn$sacos_ant),  0)), NA
-          ),
-          !!cn$acum_margen_ant := ifelse(
-            !is.na(!!sym(cn$margen_ant)),
-            cumsum(coalesce(!!sym(cn$margen_ant), 0)), NA
-          ),
-          !!cn$acum_ppto_ss    := ifelse(
-            !is.na(!!sym(cn$ppto_sacos)),
-            cumsum(coalesce(!!sym(cn$ppto_sacos), 0)), NA
-          ),
-          !!cn$acum_ppto_ma    := ifelse(
-            !is.na(!!sym(cn$ppto_margen)),
-            cumsum(coalesce(!!sym(cn$ppto_margen), 0)), NA
-          ),
-          !!cn$acum_sacos_act  := ifelse(
-            !is.na(!!sym(cn$sacos_act)),
-            cumsum(coalesce(!!sym(cn$sacos_act),  0)), NA
-          ),
-          !!cn$acum_margen_act := ifelse(
-            !is.na(!!sym(cn$margen_act)),
-            cumsum(coalesce(!!sym(cn$margen_act), 0)), NA
-          ),
-          !!cn$cumpl_ss_acum   := ifelse(
-            !is.na(!!sym(cn$acum_sacos_act)) &
-              !is.na(!!sym(cn$acum_ppto_ss)) & !!sym(cn$acum_ppto_ss) != 0,
-            !!sym(cn$acum_sacos_act) / !!sym(cn$acum_ppto_ss), NA
-          ),
-          !!cn$cumpl_mgn_acum  := ifelse(
-            !is.na(!!sym(cn$acum_margen_act)) &
-              !is.na(!!sym(cn$acum_ppto_ma)) & !!sym(cn$acum_ppto_ma) != 0,
-            !!sym(cn$acum_margen_act) / !!sym(cn$acum_ppto_ma), NA
-          ),
-          !!cn$varss_acum      := ifelse(
-            !is.na(!!sym(cn$acum_sacos_ant)) & !is.na(!!sym(cn$acum_sacos_act)),
-            Variacion(!!sym(cn$acum_sacos_ant), !!sym(cn$acum_sacos_act)), NA
-          ),
-          !!cn$varmgn_acum     := ifelse(
-            !is.na(!!sym(cn$acum_margen_ant)) & !is.na(!!sym(cn$acum_margen_act)),
-            Variacion(!!sym(cn$acum_margen_ant), !!sym(cn$acum_margen_act)), NA
-          )
-        ) %>%
-        select(
-          Fecha,
-          !!sym(cn$sacos_ant),  !!sym(cn$acum_sacos_ant),
-          !!sym(cn$margen_ant), !!sym(cn$acum_margen_ant),
-          !!sym(cn$ppto_sacos), !!sym(cn$sacos_act),
-          !!sym(cn$cumpl_sacos), VarSS,
-          !!sym(cn$acum_ppto_ss),  !!sym(cn$acum_sacos_act),
-          !!sym(cn$cumpl_ss_acum), !!sym(cn$varss_acum),
-          !!sym(cn$ppto_margen), !!sym(cn$margen_act),
-          !!sym(cn$cumpl_margen), VarMgn,
-          !!sym(cn$acum_ppto_ma),   !!sym(cn$acum_margen_act),
-          !!sym(cn$cumpl_mgn_acum), !!sym(cn$varmgn_acum)
-        )
-      
-      fila_total <- t1 %>%
-        summarise(
-          !!sym(cn$sacos_ant)   := sum(!!sym(cn$sacos_ant),   na.rm = TRUE),
-          !!sym(cn$margen_ant)  := sum(!!sym(cn$margen_ant),  na.rm = TRUE),
-          !!sym(cn$ppto_sacos)  := sum(!!sym(cn$ppto_sacos),  na.rm = TRUE),
-          !!sym(cn$sacos_act)   := sum(!!sym(cn$sacos_act),   na.rm = TRUE),
-          !!sym(cn$ppto_margen) := sum(!!sym(cn$ppto_margen), na.rm = TRUE),
-          !!sym(cn$margen_act)  := sum(!!sym(cn$margen_act),  na.rm = TRUE),
-          across(c(
-            !!sym(cn$acum_sacos_ant), !!sym(cn$acum_margen_ant),
-            !!sym(cn$acum_ppto_ss),   !!sym(cn$acum_sacos_act),
-            !!sym(cn$acum_ppto_ma),   !!sym(cn$acum_margen_act),
-            !!sym(cn$cumpl_ss_acum),  !!sym(cn$varss_acum),
-            !!sym(cn$cumpl_mgn_acum), !!sym(cn$varmgn_acum)
-          ), ~ NA_real_)
-        ) %>%
-        mutate(
-          Fecha = "TOTAL",
-          !!cn$cumpl_sacos  := !!sym(cn$sacos_act)  / !!sym(cn$ppto_sacos),
-          VarSS              = Variacion(!!sym(cn$sacos_ant),  !!sym(cn$sacos_act)),
-          !!cn$cumpl_margen := !!sym(cn$margen_act) / !!sym(cn$ppto_margen),
-          VarMgn             = Variacion(!!sym(cn$margen_ant), !!sym(cn$margen_act))
-        )
-      
-      gt1 <- bind_rows(t1, fila_total) %>%
-        .crm_tabla_vancouver(font_size = 11, row_padding = 5) %>%
-        tab_header(
-          title    = md(paste0("**Seguimiento de Presupuesto ", periodo, "**")),
-          subtitle = md(paste0(
-            "Comparativo mensual y acumulado de sacos y margen FCC frente al presupuesto",
-            " — cierre financiero de indicadores: ",
-            if (calendario_r()$mes_actual > 0L) .MESES[calendario_r()$mes_actual] else "SIN CIERRE",
-            " — período anterior: ", periodo_ant
-          ))
-        ) %>%
-        tab_spanner(label = as.character(periodo_ant), columns = 2:5) %>%
-        tab_spanner(label = as.character(periodo),     columns = 6:21) %>%
-        tab_spanner(label = "Sacos Mensual",    columns = 6:9) %>%
-        tab_spanner(label = "Sacos Acumulado",  columns = 10:13) %>%
-        tab_spanner(label = "$MNFCC Mensual",   columns = 14:17) %>%
-        tab_spanner(label = "$MNFCC Acumulado", columns = 18:21) %>%
-        cols_label(
-          Fecha = "",
-          .list = setNames(
-            c(
-              "", "Sacos", "Sacos Acum.", "Margen", "Margen Acum.",
-              rep(c("Presupuesto", "Ejecutado", "Cumplimiento", "Comp. Per. Ant."), 4)
-            ),
-            c(
-              "Fecha",
-              cn$sacos_ant, cn$acum_sacos_ant, cn$margen_ant, cn$acum_margen_ant,
-              cn$ppto_sacos, cn$sacos_act, cn$cumpl_sacos, "VarSS",
-              cn$acum_ppto_ss, cn$acum_sacos_act, cn$cumpl_ss_acum, cn$varss_acum,
-              cn$ppto_margen, cn$margen_act, cn$cumpl_margen, "VarMgn",
-              cn$acum_ppto_ma, cn$acum_margen_act, cn$cumpl_mgn_acum, cn$varmgn_acum
-            )
-          )
-        ) %>%
-        fmt_number(columns   = c(2, 3, 6, 7, 10, 11), decimals = 0) %>%
-        fmt_currency(columns = c(4, 5, 14, 15, 18, 19), currency = "COP", decimals = 0) %>%
-        fmt_percent(columns  = c(8, 9, 12, 13, 16, 17, 20, 21), decimals = 1) %>%
-        gt::tab_options(
-          table.width = gt::pct(100), container.width = gt::pct(100),
-          table.font.size = gt::px(11), column_labels.font.size = gt::px(10),
-          data_row.padding = gt::px(5)
-        ) %>%
-        gt::tab_style(
-          style = gt::cell_text(color = "#1F2937"),
-          locations = gt::cells_body(columns = dplyr::everything())
-        ) %>%
-        gt::tab_style(
-          style = gt::cell_fill(color = "#F0FDF4"),
-          locations = gt::cells_body(columns = dplyr::all_of(c(
-            cn$sacos_ant, cn$acum_sacos_ant, cn$margen_ant, cn$acum_margen_ant
-          )))
-        ) %>%
-        gt::tab_style(
-          style = gt::cell_fill(color = "#F8FAFC"),
-          locations = gt::cells_body(columns = dplyr::all_of(c(
-            cn$ppto_sacos, cn$sacos_act, cn$cumpl_sacos, "VarSS",
-            cn$ppto_margen, cn$margen_act, cn$cumpl_margen, "VarMgn"
-          )))
-        ) %>%
-        gt::tab_style(
-          style = gt::cell_fill(color = "#EFF6FF"),
-          locations = gt::cells_body(columns = dplyr::all_of(c(
-            cn$acum_ppto_ss, cn$acum_sacos_act, cn$cumpl_ss_acum, cn$varss_acum,
-            cn$acum_ppto_ma, cn$acum_margen_act, cn$cumpl_mgn_acum, cn$varmgn_acum
-          )))
-        ) %>%
-        sub_missing(columns = everything(), rows = everything(), missing_text = "") %>%
-        tab_style(
-          style     = cell_text(weight = "bold"),
-          locations = cells_body(rows = Fecha == "TOTAL")
-        ) %>%
-        gt_pct_style_semaforo(!!sym(cn$cumpl_sacos))    %>%
-        gt_var_style_local("VarSS") %>%
-        gt_pct_style_semaforo(!!sym(cn$cumpl_ss_acum))  %>%
-        gt_var_style_local(cn$varss_acum) %>%
-        gt_pct_style_semaforo(!!sym(cn$cumpl_margen))   %>%
-        gt_var_style_local("VarMgn") %>%
-        gt_pct_style_semaforo(!!sym(cn$cumpl_mgn_acum)) %>%
-        gt_var_style_local(cn$varmgn_acum) %>%
-        gt::cols_hide(columns = dplyr::all_of(c("VarSS", "VarMgn", cn$varss_acum, cn$varmgn_acum)))
-      
-      return(gt1)
-    })
+
     
     output$nota_presupuesto <- .crm_render_ui({
       shiny::tagList(
@@ -1848,9 +1566,11 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           c(paste0("Año anterior: ", periodo_r() - 1L), paste0("Mensual: ", periodo_r()),
             paste0("Acumulado: ", periodo_r())), title = "Convenciones",
           swatches = c("#F0FDF4", "#F8FAFC", "#EFF6FF"))),
-        .crm_nota(c("Cumplimiento = ejecutado / presupuesto.",
-          "La tabla y las series incluyen la facturación disponible, también en meses abiertos o futuros.",
-          "Los indicadores cerrados usan el cierre financiero; los meses pendientes incluyen el mes vigente.")))
+        .crm_nota_metodologica(c("Las series separan cierre financiero, factura sin cierre y saldo comercial estimado.",
+          "Un pedido parcial puede aparecer en las tres capas por cantidades diferentes; no se repite la cantidad facturada.",
+          "El horizonte incluye las fechas futuras del pedido. Una estimación vencida conserva su fecha original.",
+          "El margen de factura abierta y el comercial son provisionales. Si no se pueden calcular, permanecen vacíos.",
+          "Los KPI de cierre usan exclusivamente meses cerrados; los meses pendientes incluyen el mes vigente.")))
     })
 
     ## Titulo dinamico sub-card proyeccion ----
@@ -1859,24 +1579,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     })
     
     ## Graficos de serie temporal ----
-    output$GraficoPresupuestoSacos <- .crm_render_plotly({
-      construir_grafico_serie(
-        datos_grafico_r(), input$vista_acumulada,
-        "Sacos_Real", "Sacos_Ppto", "Sacos70",
-        "Ejecución vs Presupuesto \u2014 Sacos (Acumulado)",
-        "Ejecución vs Presupuesto \u2014 Sacos (Mensual)",
-        "Sacos Acumulados", "Sacos Mensuales", "numero"
-      )
-    })
-    output$GraficoPresupuestoMargen <- .crm_render_plotly({
-      construir_grafico_serie(
-        datos_grafico_r(), input$vista_acumulada,
-        "Margen_Real", "Margen_Ppto", "MargenFCC",
-        "Ejecución vs Presupuesto \u2014 Margen (Acumulado)",
-        "Ejecución vs Presupuesto \u2014 Margen (Mensual)",
-        "Margen Acumulado", "Margen Mensual", "dinero"
-      )
-    })
+
+
     
     ## UI dinamica: dos tablas breakdown (Sacos arriba, Margen abajo) ----
     output$tabla_sacos_ui <- .crm_render_ui({

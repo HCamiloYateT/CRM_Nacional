@@ -2,8 +2,7 @@
 ProductosSinClasificarUI <- function(id) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
-    racafeForms::racafeActionBar(left = racafeForms::racafeButton("actualizar", "Actualizar listado",
-      icon = "arrows-rotate", variant = "secondary", ns = ns)),
+    racafeForms::racafeActionBar(left = NULL),
     .crm_nota("Seleccione una referencia y complete su categoría y producto para incluirla en los análisis."),
     .crm_tabla_ui(ns("referencias"), titulo = "Referencias pendientes de clasificación"),
     shiny::uiOutput(ns("edicion")))
@@ -13,7 +12,7 @@ ProductosSinClasificar <- function(id, usuario, al_actualizar,
   shiny::moduleServer(id, function(input, output, session) {
     revision <- shiny::reactiveVal(0L)
     pendiente <- shiny::reactiveVal(NULL)
-    fuente <- shiny::reactive({ revision(); .clas_validar(cargar("CRMNALPRODS")) })
+    fuente <- shiny::reactive({ .pr_fuentes()$revision(); revision(); .clas_validar(cargar("CRMNALPRODS")) })
     filas <- shiny::reactive(.clas_pendientes(fuente(), if (is.null(operaciones)) list() else operaciones()))
     tabla <- .crm_vancouver_server("referencias", filas, id_col = "Referencia", modo_seleccion = "fila",
       columnas = c("NumeroLotes", "Marca", "NombreComercial", "Presentacion", "Linea", "Categoria", "Producto"),

@@ -94,20 +94,18 @@
       SegmentoAsignadoSistema = Segmento %in% c(NA_character_, "", "SIN DATO"),
       Excluir = ifelse(Excluir %in% c(NA_character_, "", "SIN DATO"), "NO", Excluir),
       ProdExcluir = ifelse(ProdExcluir %in% c(NA_character_, "", "SIN DATO"), "NO", ProdExcluir),
-      Segmento = dplyr::case_when(
-        !SegmentoAsignadoSistema ~ Segmento,
-        LinNegCod == 10000 & SacLote <= 240 ~ "DETAL",
-        LinNegCod == 10000 & SacLote > 240 ~ "MEDIANO",
-        LinNegCod == 21000 & SacLote < 50 ~ "DETAL",
-        LinNegCod == 21000 & SacLote >= 50 ~ "MEDIANO",
-        TRUE ~ "SIN DATO"
-      ),
+      Segmento = ifelse(SegmentoAsignadoSistema, "SIN DATO", Segmento),
       SegmentoRacafe = ifelse(SegmentoRacafe %in% c(NA_character_, "", "SIN DATO") & !is.na(FecFact),
                               "CLIENTE", SegmentoRacafe),
       SegmentoRacafe = ifelse(SegmentoRacafe %in% c(NA_character_, ""), "SIN DATO", SegmentoRacafe),
       dplyr::across(c(Asesor, CLLinNegNo, Categoria, Producto),
                     ~ ifelse(.x %in% c(NA_character_, ""), "SIN DATO", .x))
     )
+  if ("SegmentoVigente" %in% names(dat)) {
+    # No sustituir el segmento asignado en CRM por el segmento financiero que se contrasta con él.
+    resultado$SegmentacionClientePYGHistorica <- resultado$SegmentacionClientePYG
+    resultado$SegmentacionClientePYG <- resultado$SegmentoVigente
+  }
   if (nrow(resultado) != nrow(dat)) stop("El enriquecimiento multiplicó registros de data.", call. = FALSE)
   resultado
 }
@@ -140,6 +138,14 @@
 .crm_enriquecer_productos <- function(dat, productos) {
   claves <- c("LinNegCod", "LinProCod", "MCCod", "MrcCod")
   .crm_validar_clave(productos, claves, "productos_snap")
+  bloqueos <- if ("HomologacionAmbigua" %in% names(productos)) productos %>%
+    dplyr::filter(HomologacionAmbigua) %>% dplyr::distinct(LinNegCod, LinProCod) else
+      productos[0, c("LinNegCod", "LinProCod")]
+  # Clasificar por los códigos originales del pedido; los códigos del lote se conservan para auditoría.
+  llaves <- paste0(claves, "Clasificacion")
+  origen <- c("LinNegCodPedido", "LinProCodPedido", "NombreComercialPedidoCod", "MarcaPedidoCod")
+  for (i in seq_along(claves)) dat[[llaves[[i]]]] <- if (origen[[i]] %in% names(dat))
+    dplyr::coalesce(dat[[origen[[i]]]], dat[[claves[[i]]]]) else dat[[claves[[i]]]]
   productos <- dplyr::select(productos, dplyr::all_of(claves), LinProNom, MCNom, Marca, Categoria, Producto,
                              ProdExcluir = Excluir)
   .valor_unico <- function(x) {
@@ -151,13 +157,19 @@
     dplyr::group_by(LinNegCod, LinProCod) %>%
     dplyr::summarise(dplyr::across(-dplyr::all_of(c("MCCod", "MrcCod")), .valor_unico), .groups = "drop") %>%
     dplyr::rename_with(~ paste0(.x, "Fallback"), -dplyr::all_of(c("LinNegCod", "LinProCod")))
+  exactos <- productos %>% dplyr::rename_with(~ paste0(.x, "Clasificacion"), dplyr::all_of(claves))
+  generales <- generales %>% dplyr::rename(LinNegCodClasificacion = LinNegCod, LinProCodClasificacion = LinProCod)
   resultado <- dat %>%
-    dplyr::left_join(productos, by = claves, na_matches = "never") %>%
-    dplyr::left_join(generales, by = c("LinNegCod", "LinProCod"), na_matches = "never")
-  for (columna in c("LinProNom", "MCNom", "Marca", "Categoria", "Producto", "ProdExcluir")) {
-    resultado[[columna]] <- dplyr::coalesce(resultado[[columna]], resultado[[paste0(columna, "Fallback")]])
+    dplyr::left_join(exactos, by = llaves, na_matches = "never", relationship = "many-to-one") %>%
+    dplyr::left_join(generales, by = c("LinNegCodClasificacion", "LinProCodClasificacion"),
+      na_matches = "never", relationship = "many-to-one")
+  for (columna in c("LinProNom", "Categoria", "Producto", "ProdExcluir")) {
+    respaldo <- resultado[[paste0(columna, "Fallback")]]
+    if (columna %in% c("Categoria", "Producto")) respaldo[paste(resultado$LinNegCodClasificacion,
+      resultado$LinProCodClasificacion) %in% paste(bloqueos$LinNegCod, bloqueos$LinProCod)] <- NA_character_
+    resultado[[columna]] <- dplyr::coalesce(resultado[[columna]], respaldo)
   }
-  dplyr::select(resultado, -dplyr::ends_with("Fallback"))
+  dplyr::select(resultado, -dplyr::ends_with("Fallback"), -dplyr::all_of(llaves))
 }
 
 # Exportación maestra de main ----
@@ -214,13 +226,19 @@
 
 .crm_snapshot_productos <- function(productos) {
   claves <- c("LinNegCod", "LinProCod", "MCCod", "MrcCod")
-  if ("FecProceso" %in% names(productos)) {
-    # Escoger el registro más reciente por clave, incluso si todo el grupo carece de fecha.
-    productos <- productos %>%
-      dplyr::group_by(dplyr::across(dplyr::all_of(claves))) %>%
-      dplyr::arrange(dplyr::desc(FecProceso), .by_group = TRUE) %>%
-      dplyr::slice_head(n = 1L) %>% dplyr::ungroup()
-  }
+  productos <- productos %>% dplyr::group_by(dplyr::across(dplyr::all_of(claves))) %>%
+    dplyr::group_modify(function(d, llave) {
+      if ("FecProceso" %in% names(d) && any(!is.na(d$FecProceso))) {
+        d <- d[d$FecProceso %in% max(d$FecProceso, na.rm = TRUE), , drop = FALSE]
+      }
+      # Empates contradictorios quedan sin clasificación; nunca escoger una categoría arbitraria.
+      campos <- intersect(c("Categoria", "Producto"), names(d))
+      ambiguo <- nrow(unique(d[campos])) > 1L
+      fila <- d[1L, , drop = FALSE]
+      if (ambiguo) fila[campos] <- NA_character_
+      fila$HomologacionAmbigua <- ambiguo
+      fila
+    }) %>% dplyr::ungroup()
   .crm_validar_clave(productos, claves, "productos")
   productos
 }
@@ -256,7 +274,9 @@
   datos$homologaciones <- h
   # Las proyecciones se conservan en crm_maestro y se excluyen de la base de ejecución de los módulos existentes.
   datos$data <- maestro %>%
-    dplyr::filter(EstadoFinanciero != "PROYECTADO") %>% dplyr::select(dplyr::all_of(.crm_columnas_data))
+    dplyr::filter(EstadoFinanciero != "PROYECTADO") %>% dplyr::select(dplyr::all_of(.crm_columnas_data), dplyr::any_of(c("SegmentoVigente", "FechaSegmento", "SegmentoAmbiguo",
+      "LinNegCodPedido", "LinProCodPedido", "MarcaPedidoCod", "NombreComercialPedidoCod", "MarcaPedido", "NombreComercialPedido",
+      "PrecioNegociadoOriginal", "MonedaPrecioOriginal", "UnidadPrecioOriginal", "PrecioNegociadoKg", "EstadoFinanciero")))
   datos$n_cliente <- h$clientes_sistema
   datos$clientes_actual <- h$clientes
   datos$clientes_hist <- h$clientes_historico

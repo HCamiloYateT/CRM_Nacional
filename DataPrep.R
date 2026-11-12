@@ -20,6 +20,7 @@ if (utils::packageVersion("racafeCore") < "1.0.1") {
 
 # Funciones ----
 sys.source("APP/misc/datos/05_historia_comercial.R", envir = environment())
+sys.source("APP/misc/datos/06_integridad_operativa.R", envir = environment())
 
 ## Lotes ----
 .lotes_full_sql <- function() {
@@ -1004,11 +1005,23 @@ contactos_clientes <- .asegurar_contactos_clientes(
 
 contactos_raw <- contactos_clientes
 
+# Campos originales de la línea: solo seleccionar columnas que realmente existen.
+esquema_pedido_linea <- names(racafeBD::ConsultaSistema("syscafe", "SELECT * FROM EXPPEDI1 WHERE 1=0"))
+.campo_linea_sql <- function(candidatos, alias) {
+  campo <- intersect(candidatos, esquema_pedido_linea)
+  paste0(if (length(campo)) paste0("p1.", campo[[1]]) else "NULL", " AS ", alias)
+}
+campos_originales_sql <- paste(c(.campo_linea_sql("MrcCod", "MarcaPedidoCod"),
+  .campo_linea_sql(c("MCCod", "NomComCod"), "NombreComercialPedidoCod"),
+  .campo_linea_sql(c("PdcPrecioKilo", "PdcPreKilo", "PdcPrePes"), "PrecioNegociadoOriginal"),
+  .campo_linea_sql("UMeCod", "UnidadPrecioOriginal")), collapse = ", ")
+campo_precio_negociado <- head(intersect(c("PdcPrecioKilo", "PdcPreKilo", "PdcPrePes"), esquema_pedido_linea), 1L)
+
 # Pedidos activos de venta nacional
 # PEDIDOS ----
 ped <- racafeBD::ConsultaSistema(
   "syscafe",
-  query = "SELECT p1.PdcCod,
+  query = paste0("SELECT ", campos_originales_sql, ", p1.PdcCod,
                   pd.PdcCntCli AS PdcRefCli,
                   pd.PdcFecCre,
                   p1.PdcLin,
@@ -1030,7 +1043,7 @@ ped <- racafeBD::ConsultaSistema(
            LEFT JOIN NUNIMEDI um ON pd.UMeCod = um.UMeCod
            WHERE pd.CiaCod = 10
              AND pd.CliNit <> 32
-             AND pd.PdcVtaNal = 1"
+             AND pd.PdcVtaNal = 1")
 ) %>%
   mutate(
     PdcFecCre = as.Date(PdcFecCre),
@@ -1050,6 +1063,13 @@ ped <- racafeBD::ConsultaSistema(
   )
 
 # Cuadro de lotes con carga incremental (activos + congelados del cache)
+ped$MonedaPrecioOriginal <- getOption("crm.moneda_precio_negociado", NA_character_)
+ped$UnidadPrecioConfirmada <- if (campo_precio_negociado %in% c("PdcPrecioKilo", "PdcPreKilo")) "KG" else
+  getOption("crm.unidad_precio_negociado", NA_character_)
+ped$PrecioNegociadoKg <- ifelse(ped$UnidadPrecioConfirmada == "KG" & ped$MonedaPrecioOriginal == "COP",
+  ped$PrecioNegociadoOriginal, NA_real_)
+ped$FuentePrecioNegociado <- if (length(campo_precio_negociado)) paste0("EXPPEDI1.", campo_precio_negociado) else NA_character_
+
 ruta_lotes_cache <- "APP/data/lotes_raw.rds"
 
 datos_previos <- NULL
@@ -1483,7 +1503,7 @@ resumen_lotes_linea <- relacion_lote_linea %>%
   mutate(
     SacosCerrados = coalesce(SacosCerrados, 0),
     SacosAbiertos = coalesce(SacosAbiertos, 0),
-    SacosFacturados = coalesce(FacturadosOperativos70, SacosCerrados + SacosAbiertos)
+    SacosFacturados = pmax(coalesce(FacturadosOperativos70, 0), SacosCerrados + SacosAbiertos)
   ) %>%
   group_by(PdcCod, PdcLin) %>%
   summarise(
@@ -1491,7 +1511,7 @@ resumen_lotes_linea <- relacion_lote_linea %>%
     CantidadAsignadaOrigen = sum(SacLote, na.rm = TRUE),
     CantidadProducidaOrigen = sum(SacProd, na.rm = TRUE),
     CantidadDespachadaOrigen = sum(SacDesp, na.rm = TRUE),
-    SacosFacturados = sum(SacosFacturados, na.rm = TRUE),
+    SacosFacturados = if (anyNA(SacosFacturados)) NA_real_ else sum(SacosFacturados),
     .groups = "drop"
   )
 
@@ -1513,7 +1533,7 @@ lineas_pendientes <- ped %>%
     CLPdcCod = PdcCod,
     CLPdcLin = PdcLin,
     SacosPedido,
-    SacosFacturadosLinea = coalesce(SacosFacturados, 0),
+    SacosFacturadosLinea = if_else(is.na(NumLotes), 0, SacosFacturados),
     SacosPendientesLinea = if_else(
       is.finite(SacosPedido),
       pmax(SacosPedido - SacosFacturadosLinea, 0),
@@ -2210,13 +2230,13 @@ pedidos_integrados <- ped %>%
   left_join(resumen_lotes_linea, by = c("PdcCod", "PdcLin")) %>%
   mutate(
     NumLotes = coalesce(NumLotes, 0L),
-    SacosAsignados = coalesce(SacosAsignados, 0),
-    SacosProducidos = coalesce(SacosProducidos, 0),
-    SacosDespachados = coalesce(SacosDespachados, 0),
-    SacosFacturados = coalesce(SacosFacturados, 0),
-    CantidadAsignadaOrigen = coalesce(CantidadAsignadaOrigen, 0),
-    CantidadProducidaOrigen = coalesce(CantidadProducidaOrigen, 0),
-    CantidadDespachadaOrigen = coalesce(CantidadDespachadaOrigen, 0),
+    SacosAsignados = if_else(NumLotes == 0L, 0, SacosAsignados),
+    SacosProducidos = if_else(NumLotes == 0L, 0, SacosProducidos),
+    SacosDespachados = if_else(NumLotes == 0L, 0, SacosDespachados),
+    SacosFacturados = if_else(NumLotes == 0L, 0, SacosFacturados),
+    CantidadAsignadaOrigen = if_else(NumLotes == 0L, 0, CantidadAsignadaOrigen),
+    CantidadProducidaOrigen = if_else(NumLotes == 0L, 0, CantidadProducidaOrigen),
+    CantidadDespachadaOrigen = if_else(NumLotes == 0L, 0, CantidadDespachadaOrigen),
     UnidadLoteValidada = coalesce(UnidadLoteValidada, FALSE),
     SacosPendientes = if_else(is.finite(SacosPedido), pmax(SacosPedido - SacosFacturados, 0), NA_real_),
     FechaFactProbable = PdcFecEst,
@@ -2249,8 +2269,8 @@ pedidos_integrados <- ped %>%
     ),
     MargenEstimado = if_else(Proyectar & is.finite(MarSacoEstimado), SacosPendientes * MarSacoEstimado, NA_real_),
     IngresoEstimado = if_else(
-      Proyectar & is.finite(PdcPrecioKilo) & is.finite(SacosPendientes),
-      SacosPendientes * 70 * PdcPrecioKilo,
+      Proyectar & is.finite(PrecioNegociadoKg) & is.finite(SacosPendientes),
+      SacosPendientes * 70 * PrecioNegociadoKg,
       NA_real_
     ),
     FechaCorteOperativo = as.Date(fecha_actualizacion_operativa)
@@ -2522,9 +2542,14 @@ lin_pro <- racafeBD::ConsultaSistema(
   "syscafe", "SELECT LinProCod, LinProNom FROM NTIPPROD WHERE CiaCod = 10"
 ) %>% distinct(LinProCod, .keep_all = TRUE)
 
-n_marcom <- racafeBD::ConsultaSistema(
-  "syscafe", "SELECT MCCod, MCNom FROM NMARCOM"
-) %>% distinct(MCCod, .keep_all = TRUE)
+# NNOMCOM se utiliza solo si el esquema contiene la llave y el nombre reconocibles.
+esquema_nombres <- tryCatch(names(racafeBD::ConsultaSistema("syscafe", "SELECT * FROM NNOMCOM WHERE 1=0")),
+  error = function(e) character())
+fuente_nombres <- if (all(c("MCCod", "MCNom") %in% esquema_nombres)) "NNOMCOM" else "NMARCOM"
+n_marcom <- racafeBD::ConsultaSistema("syscafe", paste("SELECT MCCod, MCNom FROM", fuente_nombres)) %>%
+  distinct() %>% group_by(MCCod) %>% summarise(
+    NombreAmbiguo = n_distinct(MCNom, na.rm = TRUE) > 1L,
+    MCNom = if (n_distinct(MCNom, na.rm = TRUE) == 1L) first(MCNom[!is.na(MCNom)]) else NA_character_, .groups = "drop")
 
 n_marcas <- racafeBD::ConsultaSistema(
   "syscafe", "SELECT MrcCod, MrcNom AS Marca FROM NMARCAS"
@@ -2602,15 +2627,13 @@ if (file.exists(ruta_evolucion)) homologaciones$evolucion_historica <- .ev_leer_
       ReferenciaFactura = paste0(TipoFactura, ":", NumeroFactura)
     ) %>%
     filter(!is.na(CLLotCod), !is.na(FecMes)) %>%
-    group_by(CLLotCod, FecMes) %>%
-    summarise(
-      FacturasSYSCAFE = paste(sort(unique(ReferenciaFactura)), collapse = "; "),
-      NumFacturasSYSCAFE = n_distinct(ReferenciaFactura),
-      .groups = "drop"
-    )
+    distinct(CLLotCod, FecFact, FecMes, TipoFactura, NumeroFactura, ReferenciaFactura)
 }
 
-referencias_factura <- .facturas_referencia()
+facturas_detalle <- .facturas_referencia()
+referencias_factura <- facturas_detalle %>% group_by(CLLotCod, FecMes) %>%
+  summarise(FacturasSYSCAFE = paste(sort(unique(ReferenciaFactura)), collapse = "; "),
+    NumFacturasSYSCAFE = n_distinct(ReferenciaFactura), .groups = "drop")
 .verificar_clave_unica(referencias_factura, c("CLLotCod", "FecMes"),
                        "referencias_factura")
 
@@ -2653,7 +2676,10 @@ mapa_pedidos <- ped %>%
     CantidadPedidoOrigen = as.numeric(PdcCan),
     UnidadKgPedido = as.numeric(UMeFac),
     SacosPedido70Linea = as.numeric(SacosPedido),
-    PrecioKiloPedido = as.numeric(PdcPrecioKilo)
+    PrecioKiloPedido = as.numeric(PdcPrecioKilo), MarcaPedidoCod, NombreComercialPedidoCod,
+    LinNegCodPedido = LinNegCod, LinProCodPedido = LinProCod,
+    PrecioNegociadoOriginal, MonedaPrecioOriginal, UnidadPrecioOriginal, UnidadPrecioConfirmada,
+    PrecioNegociadoKg, FuentePrecioNegociado
   )
 
 .verificar_clave_unica(mapa_pedidos, c("CLPdcCod", "CLPdcLin"),
@@ -2756,6 +2782,35 @@ crm_maestro <- crm_maestro %>%
     MetricaSacosDespachados70 = if_else(primer_lote,
                                         coalesce(SacosDespachados70, 0), 0)
   )
+
+# Integridad del maestro: las cantidades observadas y estimadas conservan filas separadas.
+crm_maestro <- .crm_capa_ejecucion(crm_maestro)
+homologaciones$diagnostico_fechas <- crm_maestro %>% filter(!is.na(RevisionFechaAnalitica)) %>%
+  select(CLPdcCod, CLPdcLin, CLLotCod, EstadoEjecucion, FechaAnalitica, FechaCreacionPedido, RevisionFechaAnalitica)
+segmentos_vigentes <- .crm_segmento_vigente(margenes_pyg)
+homologaciones$segmentos_comerciales_vigentes <- segmentos_vigentes
+crm_maestro <- crm_maestro %>% mutate(NITSegmento = .crm_id_texto(CLCliNit), LineaSegmento = as.character(LinNegCod)) %>%
+  left_join(segmentos_vigentes %>% rename(LineaSegmento = LinNegCod), by = c("NITSegmento", "LineaSegmento"),
+    relationship = "many-to-one") %>% select(-NITSegmento, -LineaSegmento)
+crm_maestro$MarcaPedido <- n_marcas$Marca[match(crm_maestro$MarcaPedidoCod, n_marcas$MrcCod)]
+crm_maestro$NombreComercialPedido <- n_marcom$MCNom[match(crm_maestro$NombreComercialPedidoCod, n_marcom$MCCod)]
+pedidos_clasificacion <- ped %>% mutate(MCCod = NombreComercialPedidoCod, MrcCod = MarcaPedidoCod)
+diagnostico_producto <- .crm_diagnostico_productos(pedidos_clasificacion, productos_hom)
+faltan_maestros <- pedidos_clasificacion %>% filter(
+  !is.na(MrcCod) & !MrcCod %in% n_marcas$MrcCod | !is.na(MCCod) & !MCCod %in% n_marcom$MCCod) %>%
+  transmute(PdcCod, PdcLin, LinNegCod, LinProCod, MCCod, MrcCod, Diagnostico = "Marca o nombre sin correspondencia en maestro")
+homologaciones$facturas_detalle <- facturas_detalle
+homologaciones$diagnostico_productos_pedido <- bind_rows(diagnostico_producto, faltan_maestros)
+homologaciones$esquemas_auditados <- list(EXPPEDI1 = esquema_pedido_linea, nombres_comerciales = fuente_nombres,
+  campo_precio = campo_precio_negociado, unidad_precio_confirmada = unique(ped$UnidadPrecioConfirmada))
+fuente_cobertura_lotes <- tryCatch(racafeBD::CargarDatos("CRMNALLOT"), error = function(e) data.frame())
+inicio_trazabilidad <- .crm_cobertura_lotes(fuente_cobertura_lotes)
+crm_maestro$FechaInicioTrazabilidad <- inicio_trazabilidad
+crm_maestro$CoberturaPendientes <- ifelse(!is.na(crm_maestro$CLLotCod), "Lote observado",
+  ifelse(is.na(inicio_trazabilidad) | is.na(crm_maestro$FechaCreacionPedido), "Cobertura no verificable",
+    ifelse(crm_maestro$FechaCreacionPedido < inicio_trazabilidad, "Anterior a cobertura", "Dentro de cobertura")))
+homologaciones$cobertura_operativa <- list(fuente = "CRMNALLOT", inicio = inicio_trazabilidad,
+  estado = if (is.na(inicio_trazabilidad)) "No verificable" else "Primera fecha observada; requiere certificar cobertura")
 
 # VALIDACIONES FINALES ----
 if (nrow(crm_maestro) != nrow(data_crm)) {

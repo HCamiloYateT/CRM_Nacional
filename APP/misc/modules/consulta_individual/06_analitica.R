@@ -18,14 +18,17 @@
     rep(NA_character_, nrow(x))
   x$ProductoDiferente <- .in_clave_observada(x, c("LinNegCod", "Categoria", "Producto"))
   sin_producto <- toupper(as.character(.gc_columna(x, "Producto"))) %in% c("", "SIN DATO", "SIN DATOS")
-  if ("LinProCod" %in% names(x)) x$ProductoDiferente <- .in_clave_observada(x, c("LinNegCod", "LinProCod")) else
-    x$ProductoDiferente[sin_producto] <- NA_character_
+  sin_producto <- sin_producto | is.na(x$ProductoDiferente)
+  if ("LinProCod" %in% names(x)) {
+    referencia <- .in_clave_observada(x, c("LinNegCod", "LinProCod"))
+    x$ProductoDiferente[sin_producto] <- referencia[sin_producto]
+  } else x$ProductoDiferente[sin_producto] <- NA_character_
   x
 }
 .in_kpi_ejecucion <- function(x) {
   u <- .in_unidades(x)
   contar <- function(col) if (!nrow(u) || all(is.na(u[[col]]))) NA_real_ else dplyr::n_distinct(u[[col]], na.rm = TRUE)
-  precios <- .in_precios_pedidos(x) %>% dplyr::group_by(NIT, Pedido) %>%
+  precios <- .in_precios_pedidos(x) %>% dplyr::group_by(NIT, Pedido, LineaPedidoPrecio) %>%
     dplyr::summarise(PrecioKg = .gc_unico(PrecioKg), .groups = "drop")
   precios <- precios$PrecioKg
   precios <- precios[is.finite(precios) & precios > 0]
@@ -35,31 +38,9 @@
     margen = if (nrow(x)) .com_suma(x$Margen) else NA_real_,
     precio = if (length(precios)) mean(precios) else NA_real_)
 }
-.in_estadisticas <- function(x) {
-  u <- .in_unidades(x)
-  lotes <- u %>% dplyr::filter(!is.na(Lote)) %>% dplyr::group_by(Lote) %>%
-    dplyr::summarise(Sacos = .com_suma(SacosFact), Margen = .com_suma(Margen), .groups = "drop")
-  precios <- .in_precios_pedidos(x)
-  # Una observación por cabecera de pedido. Un precio contradictorio queda desconocido.
-  precios <- precios %>% dplyr::group_by(NIT, Pedido) %>%
-    dplyr::summarise(PrecioKg = .gc_unico(PrecioKg), .groups = "drop")
-  resumen <- function(v, variable, unidad) {
-    v <- v[is.finite(v)]
-    n <- length(v); media <- if (n) mean(v) else NA_real_
-    error <- if (n >= 2L) stats::qt(0.975, n - 1L) * stats::sd(v) / sqrt(n) else NA_real_
-    data.frame(Variable = variable, Unidad = unidad, Observaciones = n,
-      Minimo = if (n) min(v) else NA_real_, Maximo = if (n) max(v) else NA_real_,
-      Promedio = media, IC95Inferior = media - error, IC95Superior = media + error,
-      Lectura = if (n < 2L) "NO HAY OBSERVACIONES SUFICIENTES PARA EL IC" else
-        "IC T DE STUDENT PARA LA MEDIA; NO ES UN RANGO DE PRECIOS FUTUROS")
-  }
-  dplyr::bind_rows(resumen(lotes$Sacos, "SACOS FACTURADOS · 70 KG", "LOTE / CUENTA / LÍNEA"),
-    resumen(lotes$Margen, "MARGEN FCC · COP", "LOTE / CUENTA / LÍNEA"),
-    resumen(precios$PrecioKg[precios$PrecioKg > 0], "PRECIO DE PEDIDO · COP/KG", "PEDIDO / CUENTA"))
-}
 .in_transacciones_precio <- function(x, precio = NULL) {
   if (!is.null(precio) && (length(precio) != 1L || !is.finite(precio) || precio <= 0)) return(data.frame())
-  x$PrecioKg <- .gc_num(.gc_columna(x, c("PdcPrecioKilo", "PrecioKiloPedido")))
+  x$PrecioKg <- .gc_num(.gc_columna(x, if ("PrecioNegociadoOriginal" %in% names(x)) "PrecioNegociadoKg" else c("PdcPrecioKilo", "PrecioKiloPedido")))
   x <- x[is.finite(x$PrecioKg) & x$PrecioKg > 0 & is.finite(x$SacosFact) & x$SacosFact > 0, , drop = FALSE]
   if (!nrow(x)) return(x)
   x$Pedido <- .in_id(.gc_columna(x, "CLPdcCod")); x$Lote <- .in_id(.gc_columna(x, "CLLotCod"))
@@ -115,18 +96,22 @@
     fila <- x[i, , drop = FALSE]
     codigo <- paste(fila$CliNitPpal, fila$LinNegCod, corte)
     set.seed(as.integer(sum(utf8ToInt(codigo) * seq_along(utf8ToInt(codigo))) %% 2147483646) + 1L)
+    if (any(!is.finite(c(fila$ProbActivo, fila$Frecuencia, fila$T))) || fila$ProbActivo < 0 || fila$ProbActivo > 1) return(NULL)
     activo <- stats::rbinom(simulaciones, 1, fila$ProbActivo)
     tasa <- stats::rgamma(simulaciones, shape = p[[1]] + fila$Frecuencia, rate = p[[2]] + fila$T)
     abandono <- stats::rbeta(simulaciones, p[[3]], p[[4]] + fila$Frecuencia)
     compras <- activo * pmin(stats::rpois(simulaciones, tasa * horizonte), stats::rgeom(simulaciones, abandono) + 1L)
     limite <- as.numeric(stats::quantile(compras, c(0.025, 0.975), names = FALSE))
-    distribucion <- as.data.frame(table(compras), stringsAsFactors = FALSE)
+    if (anyNA(compras)) return(NULL)
+    distribucion <- data.frame(compras = 0:max(compras), Freq = tabulate(compras + 1L, nbins = max(compras) + 1L))
     data.frame(Linea = .in_linea(fila$LinNegCod), Compras = as.numeric(distribucion$compras),
       Probabilidad = distribucion$Freq / simulaciones, Inferior95 = limite[[1]], Superior95 = limite[[2]],
       Esperadas = fila$ComprasEsperadas, Observadas = fila$Compras,
-      MediaSimulada = mean(compras), ProbActivo = fila$ProbActivo)
+      MediaSimulada = mean(compras), MedianaSimulada = stats::median(compras), ProbActivo = fila$ProbActivo)
   })
-  list(datos = dplyr::bind_rows(resultados), parametros = modelo$parametros)
+  resultado <- dplyr::bind_rows(resultados)
+  if (!nrow(resultado)) return(list(error = "La cuenta no tiene parámetros individuales válidos para simular compras."))
+  list(datos = resultado, parametros = modelo$parametros)
 }
 
 # Cartera: saldos por corte y pagos acreditados, sin inferir recaudo por diferencia de saldos ----
@@ -155,10 +140,20 @@
   pagos <- data.frame()
   f <- fuente$facturacion
   if (is.data.frame(f) && all(c("PerCod", "Factura", "FcnFec", "FecPag", "FcnVal", "FcnSal") %in% names(f))) {
-    f <- elegir(.car_scope(f, clientes, mapa))
+    f <- elegir(.car_facturas_autorizadas(f, fuente$cartera, clientes, mapa))
     pagos <- .car_pagos(f, as.Date("1900-01-02"), corte, hoy = corte)
     pagos <- pagos[!pagos$FueraPeriodo, , drop = FALSE]
   }
   list(evolucion = evolucion, pagos = pagos,
     actual = .car_preparar(x, max(cortes)), cortes = length(cortes))
+}
+
+# Resúmenes distintos por unidad; el precio cuenta cada pedido una vez dentro del grupo ----
+.in_detalle_indicador <- function(x, clave) {
+  d <- switch(clave, pedidos = c("CLCliNit", "CLPdcCod"),
+    lineas = c("CLCliNit", "CLPdcCod", "CLPdcLin"), lotes = c("CLCliNit", "LinNegCod", "CLLotCod"),
+    facturas = c("CLCliNit", "Factura"), precio = c("CLCliNit", "CLPdcCod", "CLPdcLin"), productos = c("LinNegCod", "Categoria", "Producto"),
+    c("LinNegCod", "Categoria", "Producto"))
+  if (clave == "facturas") x <- .in_unidades(x)
+  .crm_resumen_dimension(x, d)
 }

@@ -434,9 +434,11 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     }
     
     # Fuentes ----
-    cierre_exportado <- if (exists("ultimo_periodo_pyg", envir = .GlobalEnv, inherits = FALSE)) {
-      as.Date(get("ultimo_periodo_pyg", envir = .GlobalEnv))
-    } else max(as.Date(.resolver(margenes_pyg)$FecMes), na.rm = TRUE)
+    fuentes_base <- shiny::reactive({
+    meses_fuente <- as.Date(.resolver(margenes_pyg)$FecMes)
+    meses_fuente <- meses_fuente[!is.na(meses_fuente)]
+    shiny::validate(shiny::need(length(meses_fuente) > 0L, "La fuente financiera no tiene meses válidos."))
+    cierre_exportado <- max(meses_fuente)
     fecha_cierre_pyg <- .crm_calendario_cierre(cierre_exportado, .VF_ANHO)$fecha_cierre
     
     data_raw <- .resolver(dat) %>%
@@ -617,11 +619,16 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
       dplyr::arrange(MesNum) %>%
       dplyr::select(-MesNum)
     
+      list(fecha_cierre_pyg = fecha_cierre_pyg, data_base = data_base, fact_base = fact_base, pyg_base = pyg_base,
+        nit_base = nit_base, clientes_snap_base = clientes_snap_base, n_cliente_principal = n_cliente_principal,
+        extraccion_pyg = extraccion_pyg)
+    })
+
     auditoria_integridad <- shiny::reactive({
-      base_pyg <- pyg_base %>%
+      base_pyg <- fuentes_base()$pyg_base %>%
         dplyr::filter(
           ANHO == .VF_ANHO,
-          FecMes <= fecha_cierre_pyg,
+          FecMes <= fuentes_base()$fecha_cierre_pyg,
           LinNegCod %in% c(10000, 21000)
         ) %>%
         dplyr::group_by(FecMes, LinNegCod) %>%
@@ -632,10 +639,10 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
           .groups = "drop"
         )
       
-      base_central <- data_base %>%
+      base_central <- fuentes_base()$data_base %>%
         dplyr::filter(
           lubridate::year(FecMes) == .VF_ANHO,
-          FecMes <= fecha_cierre_pyg,
+          FecMes <= fuentes_base()$fecha_cierre_pyg,
           LinNegCod %in% c(10000, 21000)
         ) %>%
         dplyr::group_by(FecMes, LinNegCod) %>%
@@ -661,7 +668,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     })
     
     output$tabla_extraccion_pyg <- .crm_render_ui({
-      tabla <- extraccion_pyg %>%
+      tabla <- fuentes_base()$extraccion_pyg %>%
         .crm_tabla_vancouver(row_padding = 2, font_size = 11) %>%
         gt::tab_header(
           title = "Extracción PyG financiero",
@@ -712,7 +719,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         ) %>%
         gt::sub_missing(missing_text = "")
       
-      shiny::tagList(.gt_escala_valor(tabla, extraccion_pyg, c("MNFCCConv", "MNFCCMedida", "MNFCCTotal")),
+      shiny::tagList(.gt_escala_valor(tabla, fuentes_base()$extraccion_pyg, c("MNFCCConv", "MNFCCMedida", "MNFCCTotal")),
         .crm_nota(c("Solo se muestra información de meses cerrados financieramente.",
           "Extracción independiente del PyG; los meses sin movimientos se muestran en cero.")))
     })
@@ -766,7 +773,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         as.Date(paste0(.VF_ANHO, "-01-01")),
         min(
           as.Date(paste0(.VF_ANHO, "-12-31")),
-          lubridate::ceiling_date(fecha_cierre_pyg, "month") - lubridate::days(1L)
+          lubridate::ceiling_date(fuentes_base()$fecha_cierre_pyg, "month") - lubridate::days(1L)
         )
       )
     })
@@ -774,8 +781,8 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     mapa_lotes <- shiny::reactive({
       f <- filtros()
       
-      datos <- data_base %>%
-        dplyr::filter(!is.na(CLLotCod), FecMes <= fecha_cierre_pyg) %>%
+      datos <- fuentes_base()$data_base %>%
+        dplyr::filter(!is.na(CLLotCod), FecMes <= fuentes_base()$fecha_cierre_pyg) %>%
         dplyr::arrange(dplyr::desc(FecMes)) %>%
         dplyr::distinct(CLLotCod, .keep_all = TRUE) %>%
         dplyr::transmute(
@@ -796,7 +803,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     })
     
     ultimo_mes_cerrado <- shiny::reactive({
-      fecha_cierre_pyg
+      fuentes_base()$fecha_cierre_pyg
     })
     
     data_periodo <- shiny::reactive({
@@ -804,7 +811,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
       mes_ini <- lubridate::floor_date(fechas[[1L]], "month")
       mes_fin <- lubridate::floor_date(fechas[[2L]], "month")
       
-      data_base %>%
+      fuentes_base()$data_base %>%
         dplyr::filter(
           FecMes >= mes_ini,
           FecMes <= mes_fin,
@@ -815,7 +822,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     pyg_periodo <- shiny::reactive({
       fechas <- rango_fechas()
       
-      pyg_base %>%
+      fuentes_base()$pyg_base %>%
         dplyr::filter(
           FecMes >= lubridate::floor_date(fechas[[1L]], "month"),
           FecMes <= lubridate::floor_date(fechas[[2L]], "month"),
@@ -838,7 +845,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         "month"
       ) - lubridate::days(1L)
       
-      lotes_pyg_nacional <- pyg_base %>%
+      lotes_pyg_nacional <- fuentes_base()$pyg_base %>%
         dplyr::filter(
           ANHO == .VF_ANHO,
           FecMes <= ultimo_mes_cerrado(),
@@ -848,7 +855,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         dplyr::pull(CLLotCod) %>%
         unique()
       
-      fact_base %>%
+      fuentes_base()$fact_base %>%
         dplyr::filter(
           FecFact >= fechas[[1L]],
           FecFact <= fechas[[2L]],
@@ -1030,12 +1037,12 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
           is.na(CLLotCod) |
             CLLotCod == 0
         ) %>%
-        dplyr::left_join(nit_base, by = "CLCliNit") %>%
+        dplyr::left_join(fuentes_base()$nit_base, by = "CLCliNit") %>%
         dplyr::mutate(
           CliNitPpal = dplyr::coalesce(CliNitPpal, CLCliNit)
         ) %>%
         dplyr::left_join(
-          clientes_snap_base,
+          fuentes_base()$clientes_snap_base,
           by = c("CliNitPpal", "LinNegCod")
         ) %>%
         dplyr::left_join(n_cliente_base, by = "CLCliNit") %>%
@@ -1089,9 +1096,9 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
       fact_mes <- fact_filtrado() %>%
         dplyr::left_join(
           dplyr::bind_rows(
-            pyg_base %>% dplyr::select(CLLotCod, LinNegCod),
-            data_base %>%
-              dplyr::filter(FecMes <= fecha_cierre_pyg) %>%
+            fuentes_base()$pyg_base %>% dplyr::select(CLLotCod, LinNegCod),
+            fuentes_base()$data_base %>%
+              dplyr::filter(FecMes <= fuentes_base()$fecha_cierre_pyg) %>%
               dplyr::select(CLLotCod, LinNegCod)
           ) %>%
             dplyr::filter(!is.na(CLLotCod), !is.na(LinNegCod)) %>%
@@ -1202,9 +1209,9 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         x[[1L]]
       }
       
-      base_segmentos <- pyg_base %>%
-        dplyr::filter(FecMes <= fecha_cierre_pyg, !is.na(CLCliNit), !is.na(LinNegCod)) %>%
-        dplyr::left_join(nit_base, by = "CLCliNit") %>%
+      base_segmentos <- fuentes_base()$pyg_base %>%
+        dplyr::filter(FecMes <= fuentes_base()$fecha_cierre_pyg, !is.na(CLCliNit), !is.na(LinNegCod)) %>%
+        dplyr::left_join(fuentes_base()$nit_base, by = "CLCliNit") %>%
         dplyr::mutate(CliNitPpal = dplyr::coalesce(CliNitPpal, CLCliNit))
       segmentos_recientes <- .vf_segmentos_recientes(base_segmentos)
       unidades_pyg <- base_segmentos %>%
@@ -1214,10 +1221,10 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
           MargenBase = sum(MargenPYG, na.rm = TRUE), .groups = "drop") %>%
         dplyr::inner_join(segmentos_recientes, by = c("CliNitPpal", "LinNegCod"))
 
-      atributos <- data_base %>%
+      atributos <- fuentes_base()$data_base %>%
         dplyr::filter(
           lubridate::year(FecMes) == .VF_ANHO,
-          FecMes <= fecha_cierre_pyg,
+          FecMes <= fuentes_base()$fecha_cierre_pyg,
           !is.na(CliNitPpal),
           !is.na(LinNegCod)
         ) %>%
@@ -1231,10 +1238,10 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
       universo <- unidades_pyg %>%
         dplyr::left_join(atributos, by = c("CliNitPpal", "LinNegCod")) %>%
         dplyr::left_join(
-          clientes_snap_base,
+          fuentes_base()$clientes_snap_base,
           by = c("CliNitPpal", "LinNegCod")
         ) %>%
-        dplyr::left_join(n_cliente_principal, by = "CliNitPpal") %>%
+        dplyr::left_join(fuentes_base()$n_cliente_principal, by = "CliNitPpal") %>%
         dplyr::mutate(
           Cliente = dplyr::coalesce(Cliente, RazonSocialCreacion),
           Asesor = dplyr::coalesce(AsesorCRM, AsesorOperativo),
@@ -1331,7 +1338,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         margen_sin_sacos,
         inconsistentes
       ) %>%
-        dplyr::left_join(nit_base, by = "CLCliNit") %>%
+        dplyr::left_join(fuentes_base()$nit_base, by = "CLCliNit") %>%
         dplyr::mutate(
           LinNegCod = dplyr::case_when(
             Linea == "CONVENCIONALES" ~ 10000,
@@ -1340,7 +1347,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
           )
         ) %>%
         dplyr::left_join(
-          clientes_snap_base,
+          fuentes_base()$clientes_snap_base,
           by = c("CliNitPpal", "LinNegCod")
         ) %>%
         dplyr::left_join(n_cliente_base, by = "CLCliNit") %>%
@@ -1565,7 +1572,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
       }
       
       mes <- as.Date(seleccion$id)
-      if (!is.na(mes) && mes <= fecha_cierre_pyg) {
+      if (!is.na(mes) && mes <= fuentes_base()$fecha_cierre_pyg) {
         cuadre_seleccion_rv(list(mes = mes, linea = linea))
       } else {
         cuadre_seleccion_rv(NULL)
@@ -2206,7 +2213,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     invisible(
       list(
         cuadre_sacos = cuadre_valor_r,
-        extraccion_pyg = extraccion_pyg,
+        extraccion_pyg = shiny::reactive(fuentes_base()$extraccion_pyg),
         auditoria_integridad = auditoria_integridad,
         conciliacion_mensual = conciliacion_mensual,
         cuadro_mensual = cuadro_mensual,

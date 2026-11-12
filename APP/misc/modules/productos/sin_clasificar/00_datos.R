@@ -18,12 +18,12 @@
   if (is.data.frame(operaciones)) operaciones <- list(operaciones)
   normalizar <- function(x) {
     if (!is.data.frame(x) || !nrow(x)) return(NULL)
-    referencias <- data.frame(LinNegCod = .gc_columna(x, "LinNegCod"),
-      LinProCod = .gc_columna(x, "LinProCod"),
-      MCCod = .gc_columna(x, c("MCCod", "CodigoNombreComercialLote", "CLMCCod")),
-      MrcCod = .gc_columna(x, c("MrcCod", "CodigoMarcaLote", "CLMrcCod")),
-      Marca = .gc_columna(x, c("Marca", "CLMrcNom")),
-      MCNom = .gc_columna(x, c("MCNom", "CLMCNom", "NombreComercial")),
+    referencias <- data.frame(LinNegCod = .gc_columna(x, c("LinNegCodPedido", "LinNegCod")),
+      LinProCod = .gc_columna(x, c("LinProCodPedido", "LinProCod")),
+      MCCod = .gc_columna(x, c("NombreComercialPedidoCod", "MCCod", "CodigoNombreComercialLote", "CLMCCod")),
+      MrcCod = .gc_columna(x, c("MarcaPedidoCod", "MrcCod", "CodigoMarcaLote", "CLMrcCod")),
+      Marca = .gc_columna(x, c("MarcaPedido", "Marca", "CLMrcNom")),
+      MCNom = .gc_columna(x, c("NombreComercialPedido", "MCNom", "CLMCNom", "NombreComercial")),
       LinProNom = .gc_columna(x, c("LinProNom", "CLLinProNo")),
       LinNeg = .gc_columna(x, c("LinNeg", "CLLinNegNo")),
       Lote = as.character(.gc_columna(x, "CLLotCod")), stringsAsFactors = FALSE)

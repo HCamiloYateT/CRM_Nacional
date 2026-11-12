@@ -7,10 +7,10 @@
                  "FacturadosOperativos70")
   if (!all(requeridas %in% names(maestro))) stop("Actualice DataPrep: faltan campos del flujo comercial.")
   x <- maestro
-  x$Pedido <- as.character(x$CLPdcCod)
-  x$Linea <- as.character(x$CLPdcLin)
-  x$Lote <- as.character(x$CLLotCod)
-  x$NIT <- as.character(x$CliNitPpal)
+  x$Pedido <- .crm_id_texto(x$CLPdcCod)
+  x$Linea <- .crm_id_texto(x$CLPdcLin)
+  x$Lote <- .crm_id_texto(x$CLLotCod)
+  x$NIT <- .crm_id_texto(x$CliNitPpal)
   x$Cliente <- as.character(x$PerRazSoc)
   x$Fecha <- as.Date(.gc_columna(x, c("PdcFecEst", "FechaEstimadaPedido")))
   x$Creacion <- as.Date(.gc_columna(x, c("FechaCreacionPedido", "PdcFecCre")))
@@ -22,7 +22,9 @@
     dplyr::summarise(Pedido = .gc_unico(Pedido), Linea = .gc_unico(Linea), NIT = .gc_unico(NIT),
       Cliente = .gc_unico(Cliente), Fecha = .gc_unico(Fecha),
       Asignados = .gc_unico(SacosLote70), Producidos = .gc_unico(SacosProducidos70),
-      Despachados = .gc_unico(SacosDespachados70), Facturados = .gc_unico(FacturadosOperativos70),
+      Despachados = .gc_unico(SacosDespachados70),
+      FacturadosSYSCAFE = .gc_unico(FacturadosOperativos70),
+      Facturados = .gc_unico(if ("FacturadosConsolidados70" %in% names(x)) FacturadosConsolidados70 else FacturadosOperativos70),
       FacturadosPeriodo = sum(SacosFact, na.rm = TRUE),
       .groups = "drop")
   asignacion <- lotes %>% dplyr::filter(!is.na(Pedido), !is.na(Linea)) %>%
@@ -56,7 +58,14 @@
     dat$Nivel <- nivel
     registros[[length(registros) + 1L]] <<- dat
   }
-  activos <- pedidos[pedidos$Activo, , drop = FALSE]
+  con_lote <- paste(pedidos$Pedido, pedidos$Linea) %in% paste(lotes$Pedido, lotes$Linea)
+  cobertura <- if ("FechaInicioTrazabilidad" %in% names(x)) unique(stats::na.omit(x$FechaInicioTrazabilidad)) else as.Date(character())
+  fecha_cobertura <- if (length(cobertura)) min(cobertura) else as.Date(NA)
+  elegible <- con_lote | (!is.na(fecha_cobertura) & !is.na(pedidos$Creacion) & pedidos$Creacion >= fecha_cobertura)
+  sin_trazabilidad <- pedidos[pedidos$Activo & !elegible, , drop = FALSE]
+  sin_trazabilidad$Motivo <- "Pedido fuera de cobertura operativa verificable; no se presume pendiente"
+  agregar(sin_trazabilidad, "Información incompleta", rep(NA_real_, nrow(sin_trazabilidad)), "Pedido")
+  activos <- pedidos[pedidos$Activo & elegible, , drop = FALSE]
   etapas <- list("Sin asignar" = activos$SinAsignar > 0.1,
     "Futuros" = activos$Pendientes > 0.1 & !is.na(activos$Fecha) & activos$Fecha > hoy,
     "Vencidos" = activos$Pendientes > 0.1 & !is.na(activos$Fecha) & activos$Fecha < hoy,
@@ -79,10 +88,10 @@
   agregar(sin_margen, "Revisar margen", sin_margen$Pendientes, "Pedido")
   filas <- which(is.na(lotes$Pedido))
   agregar(lotes[filas, ], "Sin pedido", rep(NA_real_, length(filas)), "Lote")
-  revisar <- which(is.na(lotes$Asignados) | is.na(lotes$Producidos) | is.na(lotes$Despachados) |
+  revisar <- which(is.na(lotes$Asignados) | is.na(lotes$Producidos) | is.na(lotes$Despachados) | is.na(lotes$Facturados) |
     lotes$Producidos > lotes$Asignados + 0.1 | lotes$Despachados > lotes$Producidos + 0.1 |
     lotes$Facturados > lotes$Despachados + 0.1 |
-    lotes$FacturadosPeriodo > lotes$Facturados + 0.1)
+    lotes$FacturadosPeriodo > lotes$FacturadosSYSCAFE + 0.1)
   agregar(lotes[revisar, ], "Revisar cantidades", rep(NA_real_, length(revisar)), "Lote")
   filas <- which(is.na(pedidos$Pedidos) | pedidos$Asignados > pedidos$Pedidos + 0.1 |
     pedidos$Facturados > pedidos$Pedidos + 0.1)
@@ -119,39 +128,48 @@
 
 PendientesGestionUI <- function(id) {
   ns <- shiny::NS(id)
-  racafeForms::racafeForm(variant = "plain",
-    racafeForms::racafeActionBar(left = shiny::tagList(
-      shiny::tagAppendAttributes(racafeForms::racafeButton("crear", "Nueva tarea o nota", icon = "plus", ns = ns),
-        `data-crm-crear-tarea` = "true"),
-      racafeForms::racafeButton("actualizar", "Actualizar", variant = "secondary", icon = "arrows-rotate", ns = ns))),
-    racafeForms::racafeFormRow(columns = 2, responsive = "auto",
-      .crm_select("etapa", "Pendiente", choices = .PEN_ETAPAS,
-        selected = .PEN_ETAPAS, multiple = TRUE, ns = ns),
-      racafeForms::racafeInputSwitch("incluir_futuros", "Incluir pedidos futuros", value = TRUE, ns = ns)),
-    .gc_tarjetas_ui(ns, c(pedidos = "Pedidos por gestionar", producir = "Lotes por producir",
-      despachar = "Lotes por despachar", facturar = "Lotes por facturar")),
-    .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("detalle")),
-    .crm_nota(c("Cantidades en sacos equivalentes de 70 kg; tolerancia: 0,1 sacos.",
-      "Los saldos por etapa no se suman: un pedido puede requerir varias gestiones.",
-      "Los futuros y vencidos usan la fecha estimada del pedido, sin filtrar por fecha de factura.",
-      "Unidades desconocidas se muestran vacías para revisión; el margen abierto no es margen contable.")))
+  racafeForms::racafeForm(variant = "plain", lapply(.PEN_TIPOS, function(tipo) {
+    mid <- paste0("tipo_", match(tipo, .PEN_TIPOS))
+    .crm_disclosure(tipo, .crm_tabla_ui(ns(paste0(mid, "resumen"))), .crm_plot_output(ns(paste0(mid, "grafico"))),
+      .crm_tabla_ui(ns(mid)), open = TRUE)
+  }), .crm_disclosure("Gestión documental por lote", .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("detalle"))),
+    .crm_nota_metodologica(c("Cada condición conserva su cantidad y su nivel de observación.",
+      "Los pedidos pueden aparecer en varias secciones. No se suman etapas solapadas como si fueran un total único.",
+      "Los pedidos anteriores a la cobertura operativa verificable se separan como información incompleta.",
+      "Cantidades desconocidas no se reemplazan por cero. Seleccione un pedido para consultar su trazabilidad.")))
 }
-PendientesGestion <- function(id, maestro, usuario = function() "SIN IDENTIFICAR") {
+
+PendientesGestion <- function(id, maestro, usuario = function() "SIN IDENTIFICAR", corte = function() Sys.Date()) {
   shiny::moduleServer(id, function(input, output, session) {
     lote_seleccionado <- shiny::reactiveVal(NULL)
     orden_pendiente <- shiny::reactiveVal(NULL)
     revision_ordenes <- shiny::reactiveVal(0L)
     revision_flujo <- shiny::reactiveVal(0L)
     shiny::observeEvent(input$actualizar, revision_flujo(revision_flujo() + 1L))
-    flujo <- shiny::reactive({ revision_flujo(); .pen_preparar(maestro()) })
-    datos <- shiny::reactive({
-      x <- flujo()$detalle
-      x <- x[x$Etapa %in% input$etapa, , drop = FALSE]
-      if (identical(input$incluir_futuros, FALSE)) {
-        claves <- flujo()$pedidos %>% dplyr::filter(!is.na(Fecha), Fecha > Sys.Date())
-        x <- dplyr::anti_join(x, claves[c("Pedido", "Linea")], by = c("Pedido", "Linea"))
-      }
-      x
+    flujo <- shiny::reactive({ revision_flujo(); .pen_preparar(maestro(), corte()) })
+    datos <- shiny::reactive(.pen_tipificar(flujo()$detalle, maestro()))
+    for (tipo in .PEN_TIPOS) local({
+      categoria <- tipo; mid <- paste0("tipo_", match(tipo, .PEN_TIPOS))
+      filas <- shiny::reactive({
+        x <- datos(); x[x$TipoPendiente == categoria, , drop = FALSE]
+      })
+      .crm_vancouver_server(paste0(mid, "resumen"), shiny::reactive(.pen_resumen_tipo(filas())))
+      sel <- .crm_tabla_servidor(mid, data = filas, id_col = "Registro", modo_seleccion = "fila",
+        columnas = c("Cliente", "Pedido", "Linea", "Lote", "Fecha", "Nivel", "Cantidad", "Categoria", "Producto", "CLLinNegNo", "Asesor", "Motivo", "Etapa"),
+        modal_titulo_fn = function(sel) "Trazabilidad del pedido",
+        modal_contenido_fn = function(sel) TrazabilidadPedidoUI(session$ns(paste0(mid, "traza"))))
+      TrazabilidadPedido(paste0(mid, "traza"), maestro,
+        shiny::reactive({ x <- sel$seleccion(); if (is.null(x)) NULL else x$fila$Pedido }))
+      output[[paste0(mid, "grafico")]] <- .crm_render_plotly({
+        x <- filas()
+        shiny::validate(shiny::need(nrow(x) > 0L, "No hay registros para esta condición."))
+        x$Antiguedad <- as.integer(corte() - as.Date(.gc_columna(x, c("Creacion", "FechaCreacionPedido"))))
+        x$Tramo <- dplyr::case_when(is.na(x$Antiguedad) ~ "Sin fecha", x$Antiguedad < 0 ~ "Futuro",
+          x$Antiguedad <= 30 ~ "0–30 días", x$Antiguedad <= 60 ~ "31–60 días", TRUE ~ "Más de 60 días")
+        x <- x %>% dplyr::group_by(Tramo) %>% dplyr::summarise(Registros = dplyr::n(), .groups = "drop")
+        plotly::plot_ly(x, x = ~Tramo, y = ~Registros, type = "bar", marker = list(color = "#7A2028"),
+          hovertemplate = "%{x}<br>Registros: %{y:.0f}<extra></extra>")
+      })
     })
     .gc_tarjetas_server(c(pedidos = "Pedidos por gestionar", producir = "Lotes por producir",
       despachar = "Lotes por despachar", facturar = "Lotes por facturar"), shiny::reactive({
@@ -234,4 +252,48 @@ PendientesGestion <- function(id, maestro, usuario = function() "SIN IDENTIFICAR
     .gc_descarga(output, datos, "Pendientes_gestion")
     list(total = shiny::reactive(nrow(datos())), datos = datos)
   })
+}
+
+
+# Tipificación reutilizable; las condiciones originales se conservan como motivo operativo ----
+.PEN_TIPOS <- c("Sin asignar lote", "Pendiente de producir", "Pendiente de despachar", "Pendiente de facturar",
+  "Pendiente de margen", "Inconsistencia de cantidades", "Otros pendientes")
+.pen_tipificar <- function(x, maestro = NULL) {
+  mapa <- c("Sin asignar" = "Sin asignar lote", "Por producir" = "Pendiente de producir",
+    "Por despachar" = "Pendiente de despachar", "Por facturar" = "Pendiente de facturar",
+    "Revisar margen" = "Pendiente de margen", "Revisar cantidades" = "Inconsistencia de cantidades",
+    "Sin pedido" = "Inconsistencia de cantidades", "Sin lote" = "Inconsistencia de cantidades")
+  x$TipoPendiente <- dplyr::coalesce(unname(mapa[x$Etapa]), "Otros pendientes")
+  x$TipoPendiente[x$Etapa == "Revisar margen" & x$Nivel == "Pedido"] <- "Otros pendientes"
+  dimensiones <- c("Categoria", "Producto", "CLLinNegNo", "Asesor")
+  if (is.data.frame(maestro) && nrow(maestro)) {
+    m <- maestro
+    m$Pedido <- .crm_id_texto(m$CLPdcCod); m$Linea <- .crm_id_texto(m$CLPdcLin)
+    m$Lote <- .crm_id_texto(m$CLLotCod)
+    for (clave in list(c("Pedido", "Linea", "Lote"), c("Pedido", "Linea"))) {
+      disponibles <- intersect(dimensiones, names(m))
+      meta <- m %>% dplyr::group_by(dplyr::across(dplyr::all_of(clave))) %>%
+        dplyr::summarise(dplyr::across(dplyr::all_of(disponibles), .gc_unico), .groups = "drop")
+      names(meta)[match(disponibles, names(meta))] <- paste0(disponibles, "Origen")
+      x <- dplyr::left_join(x, meta, by = clave, relationship = "many-to-one", na_matches = "never")
+      for (d in disponibles) {
+        if (!d %in% names(x)) x[[d]] <- NA_character_
+        # No repartir una cantidad entre categorías contradictorias de una línea.
+        x[[d]] <- dplyr::coalesce(as.character(x[[d]]), as.character(x[[paste0(d, "Origen")]]))
+      }
+      x <- dplyr::select(x, -dplyr::ends_with("Origen"))
+    }
+  }
+  if (!"Motivo" %in% names(x)) x$Motivo <- x$Etapa
+  x$Motivo <- dplyr::coalesce(x$Motivo, x$Etapa)
+  dplyr::distinct(x)
+}
+.pen_resumen_tipo <- function(x) {
+  contar <- function(campos) {
+    if (!all(campos %in% names(x))) return(NA_integer_)
+    z <- x[campos]; buenos <- Reduce(`&`, lapply(z, function(v) !is.na(v) & !as.character(v) %in% c("", "0")))
+    if (!any(buenos)) NA_integer_ else nrow(unique(z[buenos, , drop = FALSE]))
+  }
+  data.frame(Clientes = contar("NIT"), Pedidos = contar("Pedido"), Lineas = contar(c("Pedido", "Linea")), Lotes = contar("Lote"),
+    Sacos = if (length(unique(x$Nivel)) > 1L) NA_real_ else .com_suma(x$Cantidad), Registros = nrow(x))
 }

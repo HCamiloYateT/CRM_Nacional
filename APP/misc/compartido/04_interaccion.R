@@ -20,9 +20,30 @@
     transform = function(figura) {
       altura <- suppressWarnings(as.numeric(figura$x$layout$height))
       figura$x$layout$height <- if (length(altura) == 1L && is.finite(altura)) max(450, altura) else 450
+      ejes <- unique(c("xaxis", "yaxis", grep("^[xy]axis[0-9]*$", names(figura$x$layout), value = TRUE)))
+      for (eje in ejes) {
+        figura$x$layout[[eje]]$showgrid <- FALSE
+        figura$x$layout[[eje]]$zeroline <- FALSE
+      }
       figura$x$data <- etiqueta(figura$x$data)
       figura$x$layout <- etiqueta(figura$x$layout)
+      corporativos <- c("#7A2028", "#C8A77D", "#495057", "#9B7160", "#DA291C", "#ADB5BD",
+        "#6C5146", "#D8C5A8", "#343A40", "#B39578")
+      originales <- c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2",
+        "#7f7f7f", "#bcbd22", "#17becf")
+      figura$x$layout$colorway <- corporativos
+      normalizar_color <- function(v) {
+        if (is.character(v)) {
+          i <- match(tolower(v), originales)
+          v[!is.na(i)] <- corporativos[i[!is.na(i)]]
+        } else if (is.list(v)) v <- lapply(v, normalizar_color)
+        v
+      }
       figura$x$data <- lapply(figura$x$data, function(traza) {
+        for (campo in intersect(c("marker", "line", "fillcolor"), names(traza))) {
+          traza[[campo]] <- normalizar_color(traza[[campo]])
+        }
+        if (identical(traza$type, "heatmap")) traza$colorscale <- list(c(0, "#F5ECDD"), c(1, "#9B7160"))
         if (is.null(traza$hovertemplate) && is.null(traza$text) &&
             !any(traza$hoverinfo %in% c("skip", "none"))) {
           if (identical(traza$type, "pie")) {
@@ -60,7 +81,8 @@
 # Un único preloader de racafeShiny, también para cambios de filtros y navegación ----
 .crm_loader_ui <- function(show_logo = TRUE) {
   racafeShiny::racafeLoaderUI(startup = FALSE, busy = TRUE, show_logo = show_logo,
-      triggers = c(calculando = "crm_recalcular", actualizar = "FT_Actualizar", actualizar = "ind_kpis-actualizar",
+      triggers = c(calculando = "ConsultaIndividual-aplicar_precio", calculando = "ConsultaIndividualModal-aplicar_precio",
+        calculando = "crm_recalcular", actualizar = "FT_Actualizar", actualizar = "ind_kpis-actualizar",
         consultar = "Tareas-actualizar", consultar = "Oportunidades-actualizar",
         calculando = "Calculadora-pesos-Calcular", calculando = "Calculadora-dolares-Calcular",
         calculando = "Calculadora-coproductos-Calcular", calculando = "MarketBasket-analizar"),

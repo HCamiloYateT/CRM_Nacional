@@ -266,8 +266,9 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
       c("REC_Asesor", "REC_Canal", "REC_Fecha", "REC_Fecha", "REC_Mensaje"), function() c(
         "Seleccione el asesor" = EsVacio(input$REC_Asesor),
         "Seleccione el canal" = EsVacio(input$REC_Canal),
-        "Seleccione una fecha y hora futura" = !isTRUE(input$REC_Fecha > Sys.time()),
-        "El horario permitido es de 07:00 a 17:59" = !isTRUE(lubridate::hour(input$REC_Fecha) %in% 7:17),
+        "Seleccione una fecha y hora futura" = !.accion_fecha_hora_valida(input$REC_Fecha) || !isTRUE(input$REC_Fecha > Sys.time()),
+        "El horario permitido es de 07:00 a 17:59" = !.accion_fecha_hora_valida(input$REC_Fecha) ||
+          !isTRUE(lubridate::hour(lubridate::with_tz(input$REC_Fecha, "America/Bogota")) %in% 7:17),
         "El mensaje es obligatorio" = EsVacio(input$REC_Mensaje)))
     observeEvent(input$REC_Programar, {
       if (!validacion_recordatorio$validate()) return(invisible(NULL))

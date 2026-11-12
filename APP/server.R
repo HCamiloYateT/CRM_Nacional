@@ -46,13 +46,15 @@ server <- function(input, output, session) {
 
   filtros <- Filtros("Filtros", usuario, es_admin, dat = data_c)
   
+  exportacion_rv <- reactiveVal(list(crm_maestro = crm_maestro, homologaciones = homologaciones,
+    segmentaciones_actual = segmentaciones_actual, ord_cmp = ord_cmp, n_cliente = n_cliente))
   datos_rv <- reactiveVal(data)
   productos_cache <- reactiveVal(productos_snap)
   
   data_c <- reactive({
     req(datos_rv())
     
-    .crm_preparar_datos(datos_rv(), productos_cache(), segmentaciones_actual, ord_cmp)
+    .crm_preparar_datos(datos_rv(), productos_cache(), exportacion_rv()$segmentaciones_actual, exportacion_rv()$ord_cmp)
   })
   
   data_t <- reactive({
@@ -80,8 +82,13 @@ server <- function(input, output, session) {
   })
   
   # Maestro completo: no aplicar el filtro de fechas de facturación a saldos pendientes.
-  maestro_base_comercial <- reactive(.crm_preparar_datos(crm_maestro, productos_cache(),
-    segmentaciones_actual, ord_cmp))
+  maestro_base_comercial <- reactive({
+    h <- exportacion_rv()
+    x <- .crm_preparar_datos(h$crm_maestro, productos_cache(), h$segmentaciones_actual, h$ord_cmp)
+    if (!"FacturadosConsolidados70" %in% names(x)) x <- .crm_capa_ejecucion(x)
+    attr(x, "facturas_detalle") <- h$homologaciones$facturas_detalle
+    x
+  })
   maestro_comercial <- reactive(.gc_filtrar_dimensiones(maestro_base_comercial(), filtros()))
 
   # Carga diferida ----
@@ -138,6 +145,14 @@ server <- function(input, output, session) {
   clientes_raw_cache <- reactiveVal(CargarDatos("CRMNALCLIENTE"))
   
   observeEvent(input$FT_Actualizar, {
+    tryCatch({
+      nueva <- new.env(parent = emptyenv())
+      .crm_cargar_exportacion(file.path(.ruta_app, "data", "data.RData"), nueva)
+      exportacion_rv(as.list(nueva))
+      datos_rv(nueva$data)
+    }, error = function(e) racafeForms::racafeNotify(session, title = "No se recargó el ETL",
+      text = conditionMessage(e), type = "error"))
+    notas_revision(isolate(notas_revision()) + 1L)
     .pr_invalidar()
     productos_cache(.crm_snapshot_productos(CargarDatos("CRMNALPRODS")))
     clientes_raw_cache(CargarDatos("CRMNALCLIENTE"))
@@ -188,13 +203,13 @@ server <- function(input, output, session) {
   
   # Archivo histórico opcional: datos locales, nunca scripts de la app anterior.
   comercial_historico_r <- reactive({
-    incorporado <- homologaciones$comercial_historico
+    incorporado <- exportacion_rv()$homologaciones$comercial_historico
     if (!is.null(incorporado)) return(incorporado)
     ruta <- Sys.getenv("CRM_DATOS_COMERCIALES", unset = file.path(.ruta_app, "data", "comercial_historico.rds"))
     if (file.exists(ruta)) .com_leer_historico(ruta) else NULL
   })
   cartera_financiera_r <- reactive({
-    vigente <- homologaciones$cartera_financiera
+    vigente <- exportacion_rv()$homologaciones$cartera_financiera
     if (!is.null(vigente$cartera)) return(vigente)
     anterior <- comercial_historico_r()
     if (!is.null(anterior$cartera)) {
@@ -209,11 +224,14 @@ server <- function(input, output, session) {
 
   ## Body ----
   # Fuentes del resumen disponibles antes de abrir sus pestañas ----
-  presupuesto_mod <- Presupuesto("GC_Presupuesto_mod", dat = data_c,
-    clientes_raw = clientes_raw_cache, filtros = filtros)
+  presupuesto_mod <- Presupuesto("GC_Presupuesto_mod", dat = data_c, maestro = maestro_base_comercial,
+    clientes_raw = clientes_raw_cache, filtros = filtros,
+    margenes_pyg = reactive(exportacion_rv()$homologaciones$margenes_pyg))
   validacion_mod <- isolate(ValidacionFinanciera(id = "ValidacionFinanciera", filtros = filtros,
-    dat = data_c, fact = fact, margenes_pyg = margenes_pyg, nit_ppal = nit_ppal,
-    clientes_snap = clientes_snap, n_cliente = n_cliente))
+    dat = data_c, fact = reactive(exportacion_rv()$homologaciones$facturacion),
+    margenes_pyg = reactive(exportacion_rv()$homologaciones$margenes_pyg),
+    nit_ppal = reactive(exportacion_rv()$homologaciones$nit_principal),
+    clientes_snap = reactive(exportacion_rv()$homologaciones$clientes), n_cliente = reactive(exportacion_rv()$n_cliente)))
   reglas_productos_rv <- reactiveVal(NA_real_)
   observeEvent(filtros(), { reglas_productos_rv(NA_real_) }, ignoreInit = TRUE)
   indicadores_resumen <- reactive({
@@ -234,7 +252,7 @@ server <- function(input, output, session) {
     function() EvolucionNegocioUI("EvolucionNegocio", ultimo_periodo_pyg),
     function() EvolucionNegocio("EvolucionNegocio", maestro_base_comercial, clientes_raw_cache, filtros,
       ultimo_periodo_pyg, es_admin, historico = function() {
-        if (!is.null(homologaciones$evolucion_historica)) return(homologaciones$evolucion_historica)
+        if (!is.null(exportacion_rv()$homologaciones$evolucion_historica)) return(exportacion_rv()$homologaciones$evolucion_historica)
         ruta <- Sys.getenv("CRM_EVOLUCION_HISTORICA", unset = file.path(.ruta_app, "data", "evolucion_historica.rds"))
         if (file.exists(ruta)) .ev_leer_historico(ruta) else NULL
       }, primera_compra = function() .ev_primera_compra(fact_cliente, nit_ppal),
@@ -261,9 +279,10 @@ server <- function(input, output, session) {
     function() VariablesBono("VariablesBono", hechos_analisis_comercial, clientes_raw_cache, filtros,
       comercial_historico_r, ultimo_periodo_pyg))
   CargarTabUnaVez("GC_Oportunidades", "ui_GC_Oportunidades", function() OportunidadesGestionUI("Oportunidades"),
-    function() OportunidadesGestion("Oportunidades", usuario, es_admin, maestro_base_comercial))
+    function() OportunidadesGestion("Oportunidades", usuario, es_admin, maestro_base_comercial, filtros = filtros))
   CargarTabUnaVez("GC_Pendientes", "ui_GC_Pendientes", function() PendientesGestionUI("Pendientes"),
-    function() PendientesGestion("Pendientes", maestro_comercial, usuario))
+    function() PendientesGestion("Pendientes", maestro_comercial, usuario,
+      corte = shiny::reactive(as.Date(filtros()$fecha[[2]]))))
   CargarTabUnaVez("GC_Tareas", "ui_GC_Tareas", function() TableroTareasUI("Tareas"), function() {
     TableroTareas("Tareas", usuario = usuario, datos = menu_tareas$tareas$datos, es_admin = es_admin,
       abrir = menu_tareas$tareas$abrir, refrescar = menu_tareas$tareas$refrescar)
@@ -273,7 +292,8 @@ server <- function(input, output, session) {
     function() FidelidadRiesgo("FidelidadRiesgo",
       reactive(.gc_filtrar_dimensiones(maestro_base_comercial(), filtros())), clientes_raw_cache, filtros))
   CargarTabUnaVez("GC_Cartera", "ui_GC_Cartera", function() CarteraComercialUI("CarteraComercial"),
-    function() CarteraComercial("CarteraComercial", cartera_financiera_r, clientes_raw_cache, nit_ppal,
+    function() CarteraComercial("CarteraComercial", cartera_financiera_r, clientes_raw_cache,
+      reactive(exportacion_rv()$homologaciones$nit_principal),
       filtros, es_admin))
   
   consulta_modal_solicitada <- reactiveVal(NULL)
@@ -284,8 +304,8 @@ server <- function(input, output, session) {
     if (!nzchar(codigo) && (length(nit) != 1L || is.na(nit))) return(invisible(NULL))
     if (!consulta_modal_iniciada) {
       ConsultaIndividual("ConsultaIndividualModal", maestro_base_comercial, clientes_raw_cache, filtros,
-        usuario, es_admin, nit_ppal, cartera_financiera_r, notas_datos,
-        directorio = reactive(n_cliente), estados = data_cohortes, solicitud = consulta_modal_solicitada)
+        usuario, es_admin, reactive(exportacion_rv()$homologaciones$nit_principal), cartera_financiera_r, notas_datos,
+        directorio = reactive(exportacion_rv()$n_cliente), estados = data_cohortes, solicitud = consulta_modal_solicitada)
       consulta_modal_iniciada <<- TRUE
     }
     consulta_modal_solicitada(list(codigo = codigo, nit = nit, solicitud = Sys.time()))
@@ -358,7 +378,7 @@ server <- function(input, output, session) {
   ### Productos ----
   CargarTabUnaVez("PD_SinClasificar", "ui_PD_SinClasificar", function() ProductosSinClasificarUI("SinClasificar"),
     function() ProductosSinClasificar("SinClasificar", usuario, function(x) productos_cache(x),
-      operaciones = shiny::reactive(list(homologaciones$lotes, crm_maestro))))
+      operaciones = shiny::reactive(list(exportacion_rv()$homologaciones$lotes, exportacion_rv()$crm_maestro))))
   CargarTabUnaVez("PD_Ejecucion", "ui_PD_Ejecucion", function() ProductosEjecucionUI("ProductosEjecucion"),
     function() ProductosEjecucion("ProductosEjecucion", maestro_comercial, filtros))
   
@@ -379,8 +399,8 @@ server <- function(input, output, session) {
   ### Consulta Individual ----
   CargarTabUnaVez("IN_Consulta", "ui_IN_Consulta", function() ConsultaIndividualUI("ConsultaIndividual"),
     function() ConsultaIndividual("ConsultaIndividual", maestro_base_comercial, clientes_raw_cache, filtros,
-      usuario, es_admin, nit_ppal, cartera_financiera_r, notas_datos,
-      directorio = reactive(n_cliente), estados = data_cohortes, solicitud = consulta_solicitada))
+      usuario, es_admin, reactive(exportacion_rv()$homologaciones$nit_principal), cartera_financiera_r, notas_datos,
+      directorio = reactive(exportacion_rv()$n_cliente), estados = data_cohortes, solicitud = consulta_solicitada))
   
 }
 
