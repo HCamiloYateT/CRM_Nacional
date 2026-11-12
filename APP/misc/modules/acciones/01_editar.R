@@ -46,11 +46,8 @@ Identificacion <- function(id, usuario, codigo_contacto) {
       original <- if (nrow(actual)) as.character(actual$PerCod[[1]]) else ""
       cambio <- !EsVacio(nit) && !identical(nit, original)
       # Las consultas de unicidad se realizan únicamente si cambia un NIT válido.
-      otros <- if (cambio && EsEnteroPositivo(nit)) CargarDatos("CRMNALCONTACTO",
-        condicion = sprintf("PerCod = '%s' AND CodContacto <> '%s'", .rc_escapar_sql(nit),
-          .rc_escapar_sql(codigo_contacto()))) else data.frame()
-      marlot <- if (cambio && EsEnteroPositivo(nit)) CargarDatos("CRMNALMARLOT",
-        condicion = sprintf("PerCod = '%s'", .rc_escapar_sql(nit))) else data.frame()
+      otros <- if (cambio && EsEnteroPositivo(nit)) .accion_por_nit("CRMNALCONTACTO", nit, codigo_contacto()) else data.frame()
+      marlot <- if (cambio && EsEnteroPositivo(nit)) .accion_por_nit("CRMNALMARLOT", nit) else data.frame()
       c("Debe diligenciar Razón Social, NIT o ambos" = EsVacio(input$CampoRazonSocial) && EsVacio(nit),
         "Debe diligenciar Razón Social, NIT o ambos" = EsVacio(input$CampoRazonSocial) && EsVacio(nit),
         "El NIT debe ser un número entero positivo" = !EsVacio(nit) && !EsEnteroPositivo(nit),

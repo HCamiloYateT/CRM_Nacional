@@ -35,8 +35,7 @@
 PotencialMercadoUI <- function(id, periodo_local = FALSE) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
-    racafeForms::racafeActionBar(left = racafeForms::racafeButton("actualizar", "Actualizar", ns = ns,
-      variant = "secondary", icon = "arrows-rotate")),
+    racafeForms::racafeActionBar(left = NULL),
     racafeForms::racafeFormRow(columns = 2,
       if (periodo_local) .crm_input_mes("mes", "Año y mes de facturación", value = Sys.Date(), ns = ns),
       racafeForms::racafeInputNumeric("kg_saco", "Kg por saco declarado en el potencial", value = 70, min = 1,

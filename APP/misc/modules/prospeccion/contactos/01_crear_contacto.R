@@ -55,10 +55,10 @@ CrearContacto <- function(id, usuario) {
       if (!length(nit)) return(NULL)
       if (vigente) {
         for (tabla in c("CRMNALCONTACTO", "CRMNALMARLOT")) {
-          x <- CargarDatos(tabla, condicion = sprintf("PerCod = '%s'", .rc_escapar_sql(nit[[1]])))
+          x <- .accion_por_nit(tabla, nit[[1]])
           if (nrow(x)) return(if (tabla == "CRMNALCONTACTO") "contactos" else "registro comercial")
         }
-        x <- CargarDatos("CRMNALCLIENTE", condicion = sprintf("CLCliNit = '%s'", .rc_escapar_sql(nit[[1]])))
+        x <- .accion_por_nit("CRMNALCLIENTE", nit[[1]])
         if (nrow(x)) return("clientes")
         return(NULL)
       }

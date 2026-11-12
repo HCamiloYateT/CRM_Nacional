@@ -6,8 +6,7 @@ ConsultaIndividualUI <- function(id) {
   ns <- shiny::NS(id)
   .accion_formulario_ui(id, shiny::tags$div(class = "in-analitica",
   racafeForms::racafeForm(variant = "plain",
-    racafeForms::racafeActionBar(left = racafeForms::racafeButton("actualizar", "Actualizar",
-      icon = "arrows-rotate", variant = "secondary", ns = ns)),
+    racafeForms::racafeActionBar(left = NULL),
     .crm_select("entidad", "Buscar por nombre o NIT de facturación",
       choices = character(), ns = ns),
     shiny::uiOutput(ns("identidad")), shiny::uiOutput(ns("visibilidad_tabs")), shiny::uiOutput(ns("contenido")))))
@@ -17,8 +16,10 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
                                cargar = racafeBD::CargarDatos, directorio = function() data.frame(),
                                estados = function() data.frame(), solicitud = function() NULL) {
   shiny::moduleServer(id, function(input, output, session) {
+    mapa_nit <- shiny::reactive(if (shiny::is.reactive(nit_mapa)) nit_mapa() else nit_mapa)
     revision <- shiny::reactiveVal(0L)
     revision_modelos <- shiny::reactiveVal(0L)
+    shiny::observeEvent(.pr_fuentes()$revision(), revision(shiny::isolate(revision()) + 1L), ignoreInit = TRUE)
     solicitud_atendida <- shiny::reactiveVal(NULL)
     shiny::observeEvent(input$actualizar, revision(revision() + 1L))
     contactos <- shiny::reactive({
@@ -81,7 +82,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       x
     })
     contexto_crm <- shiny::reactive(.in_contexto_crm(entidad(), catalogo()))
-    familia <- shiny::reactive(.in_familia(entidad(), catalogo(), nit_mapa, directorio()))
+    familia <- shiny::reactive(.in_familia(entidad(), catalogo(), mapa_nit(), directorio()))
     metas_anuales <- shiny::reactive(.com_clientes(clientes(), periodo()[[2]], filtros(), anual = TRUE))
     historia <- shiny::reactive(.in_hechos(.gc_filtrar_dimensiones(hechos(), filtros()), entidad()))
     historia_completa <- shiny::reactive({
@@ -162,7 +163,6 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
           shiny::uiOutput(session$ns("alcance_seguimiento")),
           .gc_tarjetas_ui(session$ns, c(seg_gestiones = "Gestiones registradas", seg_recordatorios = "Recordatorios",
             seg_tareas = "Tareas y notas", seg_eventos = "Eventos en el recorrido")),
-          .crm_plot_output(session$ns("seguimiento_evolucion")),
           .in_panel_ui("gestiones", "Gestiones realizadas", session$ns),
           .in_panel_ui("recordatorios", "Recordatorios", session$ns),
           .in_panel_ui("tareas", "Tareas y notas visibles para usted", session$ns),
@@ -190,42 +190,50 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
             choices = c("SACOS" = "Sacos", "MARGEN" = "Margen", "PRECIO POR KG DEL PEDIDO" = "PrecioKg"),
             selected = "Sacos", ns = session$ns, empty = FALSE),
           .crm_plot_output(session$ns("tendencia"), height = "450px"),
-          .crm_tabla_ui(session$ns("estadisticas"), "Estadísticas descriptivas e intervalo del 95% para la media"),
-          .crm_nota(c("Sacos y margen: una observación por lote, cuenta y línea. El precio usa una cabecera por pedido y cuenta.",
-            "IC del 95%: t de Student; requiere dos observaciones finitas y supone unidades independientes y comparables.",
-            "Los lotes sin identificador no entran a la estadística por lote; sus importes siguen visibles en el detalle.",
-            "El margen de meses abiertos es provisional. Los valores no disponibles no se sustituyen por cero.")),
-          .crm_disclosure("Ejecución por año dentro del Período de análisis",
-            .crm_tabla_ui(session$ns("historico_anual"))),
-          .crm_descarga_ui("descargar", session$ns),
-          .crm_tabla_ui(session$ns("productos"), "Marcas y nombres comerciales comprados"),
+          .crm_select("dimension_ejecucion", "Agrupar ejecución por", choices = c(
+            "Categoría y producto" = "producto", "Categoría" = "categoria", "Línea de negocio" = "linea"),
+            selected = "producto", ns = session$ns),
+          .crm_plot_output(session$ns("productos_treemap")),
+          .crm_tabla_ui(session$ns("resumen_productos"), "Ejecución por dimensión"),
+          .crm_disclosure("Cómo se calculan los precios y las participaciones",
+            .crm_nota(c("Cada línea negociada con precio y unidad verificados tiene el mismo peso; los lotes y facturas no lo multiplican.",
+              "Un pedido puede aparecer en varios grupos: no sume sus conteos entre productos.",
+              "Las participaciones usan los totales del período y de la entidad. Margen total cero: participación no disponible.",
+              "El treemap omite tamaños negativos o inválidos; las tablas conservan todos los importes."))),
           .crm_disclosure("Comparador histórico por precio de pedido",
             .crm_nota(c("Se compara toda la historia disponible de la entidad dentro de su alcance comercial.",
-              "El precio es COP por kg de la cabecera del pedido; no es margen por kg ni un precio neto de factura inferido.")),
+              "El precio negociado proviene de la línea del pedido cuando su moneda y unidad están verificadas. No es margen ni precio neto de factura.")),
             shiny::uiOutput(session$ns("rango_precios")),
             racafeForms::racafeInputNumeric("precio_comparar", "Precio objetivo · COP/kg", value = 0, min = 0,
               decimals = 2, ns = session$ns),
+            racafeForms::racafeButton("aplicar_precio", "Aplicar", icon = "calculator", ns = session$ns),
+            shiny::uiOutput(session$ns("estado_precio")),
             .crm_tabla_ui(session$ns("precio_cercano"), "Transacciones con precios más cercanos"),
             shiny::uiOutput(session$ns("fecha_mercado")),
-            .crm_tabla_ui(session$ns("mercado_precio"), "Indicadores de mercado en el día de la factura")),
-          .crm_tabla_ui(session$ns("movimientos"), "Detalle de facturación del Período de análisis")),
+            .crm_tabla_ui(session$ns("mercado_precio"), "Indicadores de mercado en el día de la factura"))),
         tabPanel("Preferencias de compra",
           .crm_plot_output(session$ns("preferencias_grafico"), height = "450px"),
           .crm_tabla_ui(session$ns("preferencias"), "Qué productos compra, con qué frecuencia y desde cuándo"),
           .crm_nota(c("Ranking basado en las compras históricas de esta cuenta hasta el corte seleccionado.",
             "Las preferencias declaradas en Potencial muestran el último registro disponible."))),
-        tabPanel("Pendientes", .crm_plot_output(session$ns("pendientes_etapas")),
-          .crm_tabla_ui(session$ns("pendientes")),
-          .crm_nota(c("Incluye pedidos sin asignar y futuros, producción, despacho, facturación y revisión de margen.",
-            "Usa el flujo disponible y la fecha final del Período de análisis como referencia de vencimiento.",
-            "Las etapas pueden solaparse: sus cantidades no deben sumarse."))),
+        tabPanel("Pendientes", lapply(.PEN_TIPOS, function(tipo) {
+          mid <- paste0("pendiente_", match(tipo, .PEN_TIPOS))
+          .crm_disclosure(tipo, .crm_tabla_ui(session$ns(paste0(mid, "resumen"))),
+            .crm_tabla_ui(session$ns(mid)))
+        }), .crm_disclosure("Cómo leer los pendientes", .crm_nota(c(
+          "Las categorías pueden solaparse: no sume sus saldos como un total único.",
+          "Sacos no disponibles cuando se mezclan niveles operativos; consulte cada registro.",
+          "Los pedidos fuera de cobertura verificable se separan como información incompleta.")))),
         tabPanel("Cartera", shiny::uiOutput(session$ns("corte_cartera")),
+          .crm_plot_output(session$ns("cartera_cosechas")),
+          shiny::uiOutput(session$ns("limite_cosechas")),
+          .crm_disclosure("Observaciones que sustentan las cosechas", .crm_tabla_ui(session$ns("cosechas_detalle"))),
           .gc_tarjetas_ui(session$ns, c(car_saldo = "Saldo documentado · COP", car_vencido = "Saldo vencido · COP",
             car_mora = "Mora máxima · días", car_puntualidad = "Pagos puntuales acreditados")),
-          .crm_plot_output(session$ns("cartera_evolucion")),
-          .crm_plot_output(session$ns("cartera_mora")),
-          .crm_plot_output(session$ns("cartera_vencimientos")),
-          .crm_plot_output(session$ns("cartera_pagos")),
+
+
+
+
           .crm_tabla_ui(session$ns("cartera_concentracion"), "Concentración del saldo por documento"),
           .crm_tabla_ui(session$ns("pagos_detalle"), "Facturas y pagos totales acreditados"),
           .crm_tabla_ui(session$ns("cartera"), "Cartera al último corte disponible"),
@@ -369,24 +377,9 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
           .crm_tabla_ui(session$ns(paste0("detalle_kpi_", clave)))
         })
       .crm_vancouver_server(paste0("detalle_kpi_", clave), shiny::reactive({
-        x <- .in_unidades(ejecucion())
-        if (clave == "precio") return(.in_precios_pedidos(ejecucion()))
-        x[intersect(c("CLCliNit", "CLPdcCod", "CLPdcLin", "CLLotCod", "Factura", "FecFact", "LinProCod", "Marca", "MCNom", "Producto",
-          "SacosFact", "Margen", "EstadoFinanciero"), names(x))]
+        .in_detalle_indicador(ejecucion(), clave)
       }))
     })
-    .etiqueta_estadistica <- function(texto, ayuda) gt::html(as.character(shiny::tags$span(title = ayuda, texto)))
-    .crm_vancouver_server("estadisticas", shiny::reactive(.in_estadisticas(ejecucion())), col_specs = list(
-      Unidad = list(name = .etiqueta_estadistica("UNIDAD DE ANÁLISIS",
-        "Sacos y margen se agrupan por lote, cuenta y línea. Precio: una cabecera por pedido y cuenta.")),
-      Observaciones = list(name = .etiqueta_estadistica("OBSERVACIONES",
-        "Número de unidades con valor finito. Los valores desconocidos no se convierten en cero.")),
-      Promedio = list(name = .etiqueta_estadistica("PROMEDIO",
-        "Media aritmética no ponderada de las unidades indicadas en esta fila.")),
-      IC95Inferior = list(name = .etiqueta_estadistica("IC 95% · INFERIOR",
-        "Media menos t(0,975; n-1) por error estándar. Requiere al menos dos observaciones.")),
-      IC95Superior = list(name = .etiqueta_estadistica("IC 95% · SUPERIOR",
-        "Media más t(0,975; n-1) por error estándar. No es un rango predictivo de ventas futuras."))))
     output$cobertura_ejecucion <- .crm_render_ui(.crm_nota(c(paste("Período de análisis:",
       paste(periodo_ejecucion(), collapse = " a ")),
       if (is.na(valores()$facturas)) "No se recibieron identificadores de factura: ese conteo no está disponible.",
@@ -399,29 +392,40 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
         PresupuestoEnRevision = list(cell = function(x) {
         if (is.na(x)) "Sin información" else if (x) "Sí" else "No"
       })))
-    productos <- shiny::reactive({
-      ejecucion() %>%
-        dplyr::mutate(Marca = as.character(.gc_columna(ejecucion(), "Marca")),
-          NombreComercial = as.character(.gc_columna(ejecucion(), "MCNom"))) %>%
-        dplyr::group_by(Marca, NombreComercial) %>%
-        dplyr::summarise(Sacos70kg = .com_suma(SacosFact), MargenFCC = .com_suma(Margen), .groups = "drop")
+    dimensiones_ejecucion <- shiny::reactive(switch(input$dimension_ejecucion %||% "producto",
+      categoria = c("LinNegCod", "Categoria"), linea = "LinNegCod", c("LinNegCod", "Categoria", "Producto")))
+    .crm_vancouver_server("resumen_productos", shiny::reactive(.crm_resumen_dimension(ejecucion(), dimensiones_ejecucion())),
+      col_specs = list(ParticipacionSacos = list(format = list(percent = TRUE, digits = 1)),
+        ParticipacionMargen = list(format = list(percent = TRUE, digits = 1))))
+    output$productos_treemap <- .crm_render_plotly({
+      .crm_treemap_productos(.crm_resumen_dimension(ejecucion(), c("Categoria", "Producto")))
     })
-    .crm_vancouver_server("productos", productos,
-      col_labels = c(Marca = "Marca", NombreComercial = "Nombre comercial", Sacos70kg = "Sacos facturados (70 kg)",
-        MargenFCC = "Margen total FCC (COP)"))
-    .crm_vancouver_server("movimientos", shiny::reactive({
-      x <- ejecucion()
-      .crm_nits_tabla(x[intersect(c("CLCliNit", "CLPdcCod", "CLLotCod", "FecFact", "CLLinNegNo", "Categoria",
-        "Producto", "SacosFact", "Margen", "EstadoFinanciero"), names(x))])
-    }), col_labels = c(CLCliNit = "NIT", CLPdcCod = "Pedido", CLLotCod = "Lote", FecFact = "Fecha de factura",
-      CLLinNegNo = "Línea", SacosFact = "Sacos 70 kg", EstadoFinanciero = "Estado financiero"))
     pedidos_precios <- shiny::reactive(.in_precios_pedidos(historia_completa()))
     transacciones_precio <- shiny::reactive(.in_transacciones_precio(historia_completa()))
-    precio_objetivo <- shiny::debounce(shiny::reactive(input$precio_comparar), 300)
-    cercano <- shiny::reactive(.in_buscar_precio(transacciones_precio(), precio_objetivo()))
-    .crm_vancouver_server("pedidos_precios", pedidos_precios,
-      col_labels = c(PrecioKg = "Precio del pedido por kg (COP)", Sacos = "Sacos facturados (70 kg)",
-        Margen = "Margen total FCC (COP)", FechaPedido = "Creación del pedido", UltimaFactura = "Última factura"))
+    captura_precio <- shiny::reactiveVal(NULL)
+    validacion_precio <- .accion_validacion(input, session, shiny::reactive(entidad()$Clave), "precio_comparar",
+      function() c("Ingrese un precio positivo" = !isTRUE(length(input$precio_comparar) == 1L &&
+        is.finite(input$precio_comparar) && input$precio_comparar > 0)))
+    shiny::observeEvent(input$aplicar_precio, {
+      if (!validacion_precio$validate()) return(invisible(NULL))
+      captura_precio(list(precio = input$precio_comparar, entidad = entidad()$Clave, revision = revision(), instante = Sys.time()))
+    })
+    resultado_precio <- shiny::eventReactive(captura_precio(), {
+      x <- captura_precio(); .in_buscar_precio(transacciones_precio(), x$precio)
+    })
+    cercano <- shiny::reactive({
+      x <- captura_precio()
+      shiny::validate(shiny::need(!is.null(x), "Ingrese un precio y pulse Aplicar."),
+        shiny::need(identical(x$entidad, entidad()$Clave) && identical(x$revision, revision()),
+          "La entidad o la fuente cambió. Pulse Aplicar nuevamente."))
+      resultado_precio()
+    })
+    output$estado_precio <- .crm_render_ui({
+      x <- captura_precio()
+      .crm_nota(if (is.null(x) || !identical(x$entidad, entidad()$Clave)) "No hay comparación aplicada a esta entidad." else
+        if (!identical(x$precio, input$precio_comparar)) "Precio modificado: el resultado anterior se mantiene hasta pulsar Aplicar." else
+          paste("Precio aplicado:", x$precio, "COP/kg"))
+    })
     .crm_vancouver_server("precio_cercano", cercano,
       col_specs = list(DiferenciaPct = list(format = list(percent = TRUE, digits = 2))),
       col_labels = c(PrecioKg = "Precio histórico por kg (COP)", DiferenciaCOP = "Diferencia por kg (COP)",
@@ -451,8 +455,19 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
         "Los indicadores corresponden exactamente a ese día; no se sustituyen por cotizaciones de otra fecha.",
         if (!nrow(mercado_pedido())) "No hay indicadores guardados para ese día."))
     })
-    .crm_vancouver_server("pendientes", shiny::reactive(.pen_preparar(historia(), periodo()[[2]])$detalle),
-      columnas = c("Etapa", "Nivel", "Pedido", "Linea", "Lote", "Fecha", "Cantidad", "Motivo"))
+    pendientes_entidad <- shiny::reactive(.pen_tipificar(.pen_preparar(historia(), periodo()[[2]])$detalle, historia()))
+    for (tipo in .PEN_TIPOS) local({
+      grupo <- tipo; mid <- paste0("pendiente_", match(grupo, .PEN_TIPOS))
+      d <- shiny::reactive({ x <- pendientes_entidad(); x[x$TipoPendiente == grupo, , drop = FALSE] })
+      .crm_vancouver_server(paste0(mid, "resumen"), shiny::reactive(.pen_resumen_tipo(d())))
+      seleccion_tabla <- .crm_tabla_servidor(mid, data = d, columnas = c("Pedido", "Linea", "Lote", "Fecha", "Nivel", "Cantidad", "Motivo"),
+        modo_seleccion = "fila", id_col = "Registro", modal_titulo_fn = function(sel) "Trazabilidad del pedido",
+        modal_contenido_fn = function(sel) TrazabilidadPedidoUI(session$ns(paste0(mid, "traza"))))
+      TrazabilidadPedido(paste0(mid, "traza"), historia, shiny::reactive({
+        seleccion <- seleccion_tabla$seleccion()
+        if (is.null(seleccion)) NULL else seleccion$fila$Pedido
+      }))
+    })
     clientes_cartera <- shiny::reactive({
       catalogo <- catalogo_clientes()[c("CliNitPpal", "LinNegCod")]
       movimientos <- poblacion()[c("CliNitPpal", "LinNegCod")]
@@ -463,7 +478,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     cartera_entidad <- shiny::reactive({
       h <- cartera()
       shiny::validate(shiny::need(is.list(h) && is.data.frame(h$cartera), "No hay fuente de cartera disponible."))
-      x <- .car_scope(h$cartera, clientes_cartera(), nit_mapa)
+      x <- .car_scope(h$cartera, clientes_cartera(), mapa_nit())
       cortes <- sort(unique(as.Date(x$TCEFch)), decreasing = TRUE, na.last = NA)
       cortes <- cortes[cortes <= periodo()[[2]]]
       shiny::validate(shiny::need(length(cortes) > 0, "No hay corte de cartera hasta la fecha seleccionada."))
@@ -535,7 +550,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
           dplyr::summarise(Valor = .com_suma(if (variable == "Margen") Margen else SacosFact), .groups = "drop")
         unidad <- if (variable == "Margen") "Margen FCC · COP" else "Sacos facturados · 70 kg"
       }
-      shiny::validate(shiny::need(nrow(x), "NO HAY VALORES OBSERVADOS PARA ESTA VARIABLE."))
+      shiny::validate(shiny::need(nrow(x) > 0L, "NO HAY VALORES OBSERVADOS PARA ESTA VARIABLE."))
       x$Lectura <- paste(unidad, format(x$Valor, big.mark = ","))
       plotly::plot_ly(x, x = ~Mes, y = ~Valor, type = "scatter", mode = "lines+markers",
         line = list(color = "#7A2028"), text = ~Lectura,
@@ -553,10 +568,6 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       fallidas <- vapply(fuentes(), function(x) !is.null(x$error), logical(1))
       if (any(fallidas)) .crm_nota("Parte del seguimiento no pudo cargarse. Actualice para completar el recorrido.")
     })
-    anual <- shiny::reactive(.in_historico_anual(ejecucion()))
-    .crm_vancouver_server("historico_anual", anual,
-      col_labels = c(Anho = "Año", Sacos = "Sacos facturados (70 kg)", Margen = "Margen total FCC (COP)",
-        DiasConCompra = "Días con compra", Pedidos = "Pedidos facturados"))
     preferencias <- shiny::reactive(.in_preferencias(historico()))
     .crm_vancouver_server("preferencias", preferencias,
       col_labels = c(Sacos = "Sacos netos (70 kg)", Margen = "Margen FCC (COP)", DiasConCompra = "Días con compra",
@@ -595,16 +606,6 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
         seg_gestiones = nrow(.in_detalle_crm(.fuentes_cache$gestiones(), contexto_crm(), .IN_FUENTES$gestiones$campos)),
         seg_recordatorios = nrow(.in_detalle_crm(.fuentes_cache$recordatorios(), contexto_crm(),
           .IN_FUENTES$recordatorios$campos)), seg_tareas = nrow(tareas_entidad()), seg_eventos = nrow(cronologia()))))
-    output$seguimiento_evolucion <- .crm_render_plotly({
-      x <- cronologia()
-      x <- x[!is.na(x$Fecha), , drop = FALSE]
-      shiny::validate(shiny::need(nrow(x), "NO HAY EVENTOS CON FECHA PARA MOSTRAR SU EVOLUCIÓN."))
-      x <- x %>% dplyr::mutate(Mes = .gc_mes(as.Date(Fecha))) %>% dplyr::count(Mes, Evento, name = "Registros")
-      plotly::plot_ly(x, x = ~Mes, y = ~Registros, color = ~Evento, type = "bar",
-        colors = c("#7A2028", "#495057", "#C8A77D", "#9B7160", "#343a40"),
-        hovertemplate = "%{x|%Y-%m}<br>Eventos registrados: %{y:.0f}<extra>%{fullData.name}</extra>") %>%
-        plotly::layout(title = "Intensidad y tipo de seguimiento en el tiempo", barmode = "stack")
-    })
     oportunidades_actuales <- shiny::reactive(.in_oportunidades(.fuentes_cache$oportunidades(), contexto_crm()))
     .gc_tarjetas_server(c(op_total = "Oportunidades", op_activas = "Sin descartar", op_descartadas = "Descartadas",
       op_vencidas = "Fecha objetivo superada"), shiny::reactive({
@@ -618,24 +619,16 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     output$oportunidades_fechas <- .crm_render_plotly({
       x <- oportunidades_actuales() %>% dplyr::filter(!is.na(FechaObjetivo)) %>%
         dplyr::mutate(Mes = .gc_mes(FechaObjetivo)) %>% dplyr::count(Mes, EstadoActual)
-      shiny::validate(shiny::need(nrow(x), "NO HAY OPORTUNIDADES CON FECHA OBJETIVO REGISTRADA."))
+      shiny::validate(shiny::need(nrow(x) > 0L, "NO HAY OPORTUNIDADES CON FECHA OBJETIVO REGISTRADA."))
       plotly::plot_ly(x, x = ~Mes, y = ~n, color = ~EstadoActual, type = "bar",
         colors = c("#7A2028", "#495057", "#C8A77D"),
         hovertemplate = "%{x|%Y-%m}<br>Oportunidades: %{y:.0f}<extra>%{fullData.name}</extra>") %>%
         plotly::layout(title = "Distribución de fechas objetivo y estado de las oportunidades")
     })
-    output$pendientes_etapas <- .crm_render_plotly({
-      x <- .pen_preparar(historia(), periodo()[[2]])$detalle %>% dplyr::count(Etapa)
-      shiny::validate(shiny::need(nrow(x), "NO HAY PENDIENTES OBSERVADOS PARA ESTA ENTIDAD."))
-      plotly::plot_ly(x, x = ~Etapa, y = ~n, type = "bar", marker = list(color = "#7A2028"),
-        hovertemplate = "%{x}<br>Registros pendientes: %{y:.0f}<extra></extra>") %>%
-        plotly::layout(title = "En qué partes del flujo hay registros pendientes",
-          yaxis = list(title = "Registros · etapas solapables"))
-    })
     # Cartera histórica, con separación entre saldo observado y pago acreditado ----
     cartera_analitica <- shiny::reactive({
       shiny::req(input$detalle_tabs == "Cartera")
-      .in_cartera_historia(cartera(), clientes_cartera(), nit_mapa, entidad(), periodo()[[2]])
+      .in_cartera_historia(cartera(), clientes_cartera(), mapa_nit(), entidad(), periodo()[[2]])
     })
     .gc_tarjetas_server(c(car_saldo = "Saldo documentado · COP", car_vencido = "Saldo vencido · COP",
       car_mora = "Mora máxima · días", car_puntualidad = "Pagos puntuales acreditados"), shiny::reactive({
@@ -644,41 +637,25 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
         list(car_saldo = ultimo$Saldo, car_vencido = ultimo$Vencido, car_mora = ultimo$DiasMoraMaximo,
           car_puntualidad = if (any(buenos)) mean(p$DiasAtraso[buenos] == 0) else NA_real_)
       }), list(car_saldo = "dinero", car_vencido = "dinero", car_mora = "numero", car_puntualidad = "porcentaje"))
-    output$cartera_evolucion <- .crm_render_plotly({
-      x <- cartera_analitica()$evolucion
-      plotly::plot_ly(x, x = ~Corte, y = ~Saldo, type = "scatter", mode = "lines+markers", name = "SALDO",
-        line = list(color = "#7A2028"),
-        hovertemplate = "%{x|%d/%m/%Y}<br>Saldo COP: %{y:,.0f}<extra></extra>") %>%
-        plotly::add_trace(y = ~Vencido, name = "VENCIDO", line = list(color = "#495057"),
-          hovertemplate = "%{x|%d/%m/%Y}<br>Vencido COP: %{y:,.0f}<extra></extra>") %>%
-        plotly::layout(title = "Evolución del saldo observado por corte", yaxis = list(title = "COP"))
+    cosechas <- shiny::reactive({
+      fuente <- cartera(); e <- entidad()
+      shiny::validate(shiny::need(is.list(fuente) && is.data.frame(fuente$cartera) && is.data.frame(fuente$facturacion),
+        "No hay saldos históricos y facturas disponibles para reconstruir cosechas."))
+      elegir <- function(x) {
+        x <- .car_scope(x, clientes_cartera(), mapa_nit())
+        if (e$Alcance == "Cuenta principal") x[x$Principal %in% e$Principal, , drop = FALSE] else
+          x[x$NIT %in% e$NitFacturacion, , drop = FALSE]
+      }
+      facturas <- .car_facturas_autorizadas(fuente$facturacion, fuente$cartera, clientes_cartera(), mapa_nit())
+      # El alcance ya se aplicó; no repetir el join de NIT principal.
+      f <- if (e$Alcance == "Cuenta principal") facturas[facturas$Principal %in% e$Principal, , drop = FALSE] else
+        facturas[facturas$NIT %in% e$NitFacturacion, , drop = FALSE]
+      .car_cosechas(elegir(fuente$cartera), f, periodo()[[2]])
     })
-    output$cartera_mora <- .crm_render_plotly({
-      x <- cartera_analitica()$evolucion
-      shiny::validate(shiny::need(any(is.finite(x$DiasMoraPromedio)), "NO HAY VENCIMIENTOS PARA CALCULAR MORA."))
-      plotly::plot_ly(x, x = ~Corte, y = ~DiasMoraPromedio, type = "scatter", mode = "lines+markers",
-        name = "PROMEDIO POR DOCUMENTO", line = list(color = "#7A2028"),
-        hovertemplate = "%{x|%d/%m/%Y}<br>Mora promedio: %{y:.1f} días<extra></extra>") %>%
-        plotly::add_trace(y = ~DiasMoraMaximo, name = "MÁXIMO", line = list(color = "#495057"),
-          hovertemplate = "%{x|%d/%m/%Y}<br>Mora máxima: %{y:.0f} días<extra></extra>") %>%
-        plotly::layout(title = "Cambios en los días de mora", yaxis = list(title = "Días"))
-    })
-    output$cartera_vencimientos <- .crm_render_plotly({
-      x <- cartera_analitica()$actual %>% dplyr::group_by(Rango) %>%
-        dplyr::summarise(Saldo = .com_suma(Saldo), .groups = "drop")
-      plotly::plot_ly(x, x = ~Rango, y = ~Saldo, type = "bar", marker = list(color = "#7A2028"),
-        hovertemplate = "%{x}<br>Saldo COP: %{y:,.0f}<extra></extra>") %>%
-        plotly::layout(title = "Saldo por rango de vencimiento al último corte", yaxis = list(title = "COP"))
-    })
-    output$cartera_pagos <- .crm_render_plotly({
-      p <- cartera_analitica()$pagos
-      shiny::validate(shiny::need(nrow(p) && any(p$Pagada), "NO HAY PAGOS TOTALES ACREDITADOS PARA ANALIZAR."))
-      p <- p %>% dplyr::filter(Pagada) %>% dplyr::mutate(Mes = .gc_mes(FecPag)) %>% dplyr::group_by(Mes) %>%
-        dplyr::summarise(Documentos = dplyr::n_distinct(Documento), .groups = "drop")
-      plotly::plot_ly(p, x = ~Mes, y = ~Documentos, type = "bar", marker = list(color = "#495057"),
-        hovertemplate = "%{x|%Y-%m}<br>Documentos pagados: %{y:.0f}<extra></extra>") %>%
-        plotly::layout(title = "Documentos con pago total acreditado por mes", yaxis = list(title = "Documentos"))
-    })
+    output$cartera_cosechas <- .crm_render_plotly(.car_grafico_cosechas(cosechas()))
+    output$limite_cosechas <- .crm_render_ui(.crm_disclosure("Alcance y limitaciones de las cosechas",
+      .crm_nota(cosechas()$limitacion)))
+    .crm_vancouver_server("cosechas_detalle", shiny::reactive(cosechas()$observaciones))
     .crm_vancouver_server("pagos_detalle", shiny::reactive(cartera_analitica()$pagos),
       columnas = c("NIT", "Factura", "FcnFec", "FecVto", "FecPag", "Pagada", "DiasPago", "DiasAtraso", "Valor", "Saldo"),
       col_labels = c(FcnFec = "Emisión", FecVto = "Vencimiento", FecPag = "Pago total registrado",
@@ -715,15 +692,21 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
           polar = list(radialaxis = list(range = c(0, 100))))
     })
     rfm_historico <- shiny::reactive({
+      revision()
       f <- .in_fuente(cargar, "CRMNALRFMM")
       shiny::validate(shiny::need(is.null(f$error), "NO ESTÁ DISPONIBLE EL HISTÓRICO RFM."))
       x <- f$datos
+      if (!"CliNitPpal" %in% names(x) && "customer_id" %in% names(x)) x$CliNitPpal <- x$customer_id
       shiny::validate(shiny::need(all(c("CliNitPpal", "FecProceso") %in% names(x)), "LA FUENTE NO IDENTIFICA CORTES RFM."))
       e <- entidad()
       shiny::validate(shiny::need(e$Alcance == "Cuenta principal" || e$NitFacturacion %in% e$Principal,
         "EL HISTÓRICO RFM ES DE CUENTA PADRE; NO SE COPIA EL PERFIL A UNA CUENTA HIJA."))
-      x[.in_id(x$CliNitPpal) %in% .in_id_modelo(e) & !is.na(.in_fecha(x$FecProceso)) &
+      x <- x[.in_id(x$CliNitPpal) %in% .in_id_modelo(e) & !is.na(.in_fecha(x$FecProceso)) &
         .in_fecha(x$FecProceso) <= periodo()[[2]], , drop = FALSE]
+      lineas <- unique(historia_completa()$LinNegCod)
+      if ("LinNegCod" %in% names(x)) x <- x[as.character(x$LinNegCod) %in% as.character(lineas), , drop = FALSE]
+      shiny::validate(shiny::need(nrow(x) > 0L, "No existen cortes RFM para esta cuenta, líneas y fecha. No se sustituye el perfil por ceros."))
+      x
     })
     .crm_vancouver_server("rfm_historia", rfm_historico,
       columnas = c("FecProceso", "LinNegCod", "SegmentoAnalitica", "recency_days", "transaction_count", "amount",
@@ -742,7 +725,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       x$Dimension <- dplyr::recode(x$Dimension, recency_score = "RECENCIA", frequency_score = "FRECUENCIA",
         monetary_score = "MARGEN")
       x$Serie <- paste(x$Linea, x$Dimension, sep = " · ")
-      plotly::plot_ly(x, x = ~Corte, y = ~Puntaje, color = ~Serie, type = "scatter", mode = "lines+markers",
+      plotly::plot_ly(x, x = ~Corte, y = ~Puntaje, color = ~Serie, type = "scatter", mode = "lines+markers", line = list(shape = "hv"),
         colors = c("#7A2028", "#C8A77D", "#495057", "#9B7160", "#343a40", "#B39578"),
         hovertemplate = "%{x|%d/%m/%Y}<br>Puntaje: %{y:.0f}<extra>%{fullData.name}</extra>") %>%
         plotly::layout(title = "Evolución de los hábitos de compra en los cortes disponibles",
@@ -757,11 +740,20 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     })
     output$modelo_distribucion <- .crm_render_plotly({
       x <- datos_predictivos()
-      plotly::plot_ly(x, x = ~Compras, y = ~Probabilidad, color = ~Linea, type = "bar",
+      plotly::plot_ly(x, x = ~Compras, y = ~Probabilidad, color = ~Linea, type = "scatter", mode = "lines+markers",
         colors = c("#7A2028", "#C8A77D"),
         hovertemplate = "%{x:.0f} días con compra<br>Probabilidad: %{y:.1%}<extra>%{fullData.name}</extra>") %>%
-        plotly::layout(title = "Distribución predictiva de compras en los próximos 12 meses",
-          yaxis = list(title = "Probabilidad", tickformat = ".0%"), xaxis = list(title = "Días con compra"))
+        plotly::layout(title = "Probabilidades discretas de días con compra · próximos 12 meses",
+          yaxis = list(title = "Probabilidad", tickformat = ".0%"), xaxis = list(title = "Días con compra"),
+          shapes = unlist(lapply(split(x, x$Linea), function(d) list(
+            list(type = "line", x0 = d$MediaSimulada[[1]], x1 = d$MediaSimulada[[1]], y0 = 0, y1 = 1,
+              yref = "paper", line = list(color = "#7A2028", dash = "dash")),
+            list(type = "line", x0 = d$MedianaSimulada[[1]], x1 = d$MedianaSimulada[[1]], y0 = 0, y1 = 1,
+              yref = "paper", line = list(color = "#495057", dash = "dot")))), recursive = FALSE),
+          annotations = unlist(lapply(split(x, x$Linea), function(d) list(
+            list(x = d$MediaSimulada[[1]], y = 1, yref = "paper", text = paste(d$Linea[[1]], "Media"), showarrow = FALSE),
+            list(x = d$MedianaSimulada[[1]], y = .9, yref = "paper", text = paste(d$Linea[[1]], "Mediana"), showarrow = FALSE))),
+            recursive = FALSE))
     })
     output$modelo_compras <- .crm_render_plotly({
       x <- datos_predictivos() %>% dplyr::distinct(Linea, Esperadas)
@@ -811,7 +803,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       }))
     output$mba_frecuencias <- .crm_render_plotly({
       x <- frecuencias_mba() %>% dplyr::arrange(dplyr::desc(Pedidos)) %>% head(12L)
-      shiny::validate(shiny::need(nrow(x), "NO HAY PRODUCTOS IDENTIFICADOS EN LOS PEDIDOS DE ESTA ENTIDAD."))
+      shiny::validate(shiny::need(nrow(x) > 0L, "NO HAY PRODUCTOS IDENTIFICADOS EN LOS PEDIDOS DE ESTA ENTIDAD."))
       plotly::plot_ly(x, x = ~Etiqueta, y = ~ParticipacionCliente, type = "bar", name = "ENTIDAD",
         marker = list(color = "#7A2028"), hovertemplate = "%{x}<br>Presente en %{y:.1%} de sus pedidos<extra></extra>") %>%
         plotly::add_trace(y = ~ParticipacionPoblacion, name = "POBLACIÓN COMPARABLE", marker = list(color = "#C8A77D"),
@@ -843,17 +835,13 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       col_labels = c(CestasAmbos = "Pedidos que contienen ambos productos"))
     output$mba_reglas_grafico <- .crm_render_plotly({
       x <- reglas_mba()
-      shiny::validate(shiny::need(nrow(x), "NO HAY REGLAS CON EVIDENCIA SUFICIENTE."))
+      shiny::validate(shiny::need(nrow(x) > 0L, "NO HAY REGLAS CON EVIDENCIA SUFICIENTE."))
       x$Lectura <- paste(x$CompraActual, "→", x$Complemento, "· pedidos:", x$CestasAmbos)
       plotly::plot_ly(x, x = ~Confianza, y = ~Lift, size = ~CestasAmbos, text = ~Lectura,
         type = "scatter", mode = "markers", marker = list(color = "#7A2028"),
         hovertemplate = "%{text}<br>Confianza: %{x:.1%}<br>Lift: %{y:.2f}<extra></extra>") %>%
         plotly::layout(title = "Asociaciones: confianza, afinidad y respaldo", xaxis = list(tickformat = ".0%"))
     })
-    output$descargar_historico <- shiny::downloadHandler(
-      filename = function() paste0("historico_cuenta_", Sys.Date(), ".xlsx"),
-      content = function(file) writexl::write_xlsx(list(Movimientos = .crm_nits_tabla(historico()),
-        PorAnho = .crm_nits_tabla(anual()), Preferencias = preferencias()), file))
     .gc_descarga(output, ejecucion, "consulta_individual")
     invisible(list(catalogo = catalogo, entidad = entidad, ejecucion = ejecucion, historia = historia))
   })

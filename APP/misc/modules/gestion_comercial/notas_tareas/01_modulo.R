@@ -29,13 +29,11 @@ TableroTareasUI <- function(id) {
     racafeForms::racafeActionBar(left = shiny::tagList(
       shiny::tagAppendAttributes(racafeForms::racafeButton("crear", "Nueva tarea o nota", icon = "plus", ns = ns),
         `data-rf-controlbar-tab` = "Crear tareas"),
-      racafeForms::racafeButton("actualizar", "Actualizar", icon = "arrows-rotate", variant = "secondary", ns = ns))),
-    racafeForms::racafeFormRow(columns = 3, responsive = "auto",
+NULL)),
+    racafeForms::racafeFormRow(columns = 2, responsive = "auto",
       racafeForms::racafeInputText("buscar", "Buscar", placeholder = "Título, descripción o actividad", ns = ns),
       .crm_select("etiquetas", "Etiquetas", choices = c("Sin etiqueta" = "__sin__"),
-        selected = "__sin__", multiple = TRUE, gender = "f", ns = ns),
-      .crm_select("prioridades", "Prioridad", choices = .TSK_PRIORIDADES,
-        selected = .TSK_PRIORIDADES, multiple = TRUE, gender = "f", ns = ns)),
+        selected = "__sin__", multiple = TRUE, gender = "f", ns = ns)),
     shiny::tags$div(class = "crm-tareas-switches",
       racafeForms::racafeInputSwitch("archivadas", "Incluir archivadas", value = FALSE, ns = ns),
       racafeForms::racafeInputSwitch("cumplidas", "Incluir cumplidas", value = FALSE, ns = ns)),
@@ -66,7 +64,7 @@ TableroTareas <- function(id, usuario, datos, abrir, refrescar, es_admin = funct
     seleccion <- shiny::reactive({
       fuente <- fuente()
       if (!is.data.frame(fuente)) return(NULL)
-      .tareas_filtrar_tablero(fuente, usuario(), input$buscar, input$etiquetas, input$prioridades,
+      .tareas_filtrar_tablero(fuente, usuario(), input$buscar, input$etiquetas, .TSK_PRIORIDADES,
         isTRUE(input$archivadas), isTRUE(input$cumplidas), es_admin = es_admin())
     })
     output$tablero <- .crm_render_ui({
@@ -77,7 +75,7 @@ TableroTareas <- function(id, usuario, datos, abrir, refrescar, es_admin = funct
       racafeModulos::TableroTareasTarjetas(fuente, .TSK_PRIORIDADES, actividades_fn = .tareas_actividades,
         ns = session$ns, campos = c(id = "cons", titulo = "titulo", descripcion = "Descripcion",
           prioridad = "Prioridad", responsable = "Responsable", tipo = "Tipo", cumplido = "Cumplido",
-          archivado = "Archivado", vencimiento = "FechaCumplimiento"), nota_fn = .crm_nota)
+          archivado = "Archivado", vencimiento = "FechaCumplimiento"), nota_fn = .crm_nota, colores = .COLORES_PRIORIDAD)
     })
     shiny::observeEvent(input$abrir, {
       fuente <- seleccion()

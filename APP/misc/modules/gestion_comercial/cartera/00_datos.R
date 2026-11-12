@@ -12,6 +12,7 @@
   y
 }
 .car_id <- function(x) {
+  if (is.numeric(x)) x <- format(x, scientific = FALSE, trim = TRUE, digits = 22, big.mark = "")
   y <- trimws(as.character(x))
   y[is.na(y) | !nzchar(y)] <- NA_character_
   y
@@ -25,6 +26,7 @@
 }
 .car_distintos <- function(x) length(unique(x[!is.na(x) & nzchar(as.character(x))]))
 .car_scope <- function(tabla, clientes, nit_mapa, admin = FALSE) {
+  if (shiny::is.reactive(nit_mapa)) nit_mapa <- nit_mapa()
   x <- tabla
   x$NIT <- .car_id(x$PerCod)
   mapa <- nit_mapa %>% dplyr::transmute(NIT = .car_id(PerCod), Principal = .car_id(CliNitPpal)) %>%
@@ -36,7 +38,7 @@
   if ("LinNegCod" %in% names(x)) {
     linea_cli <- ifelse(clientes$LinNegCod == 20000, 21000, clientes$LinNegCod)
     linea_car <- ifelse(x$LinNegCod == 20000, 21000, x$LinNegCod)
-    x$Homologado <- x$Homologado & paste(x$Principal, linea_car) %in% paste(clientes$CliNitPpal, linea_cli)
+    x$Homologado <- x$Homologado & paste(x$Principal, linea_car) %in% paste(.car_id(clientes$CliNitPpal), linea_cli)
   }
   # El rol nunca amplía este universo: clientes ya contiene el alcance autorizado y sus filtros.
   x[x$Homologado & !is.na(x$NIT), , drop = FALSE]
@@ -171,4 +173,81 @@
   for (n in intersect(c("NumeroPedido", "Pedido"), names(salida))) salida[[n]] <- .car_id(salida[[n]])
   for (n in intersect(c("FechaFactura", "UltimaGestion"), names(salida))) salida[[n]] <- .car_fecha(salida[[n]])
   salida
+}
+
+# Cosechas: universo fijo y puntos agregados únicamente a edades realmente observadas ----
+.car_cosechas <- function(cartera, facturas, corte) {
+  error <- function(texto) list(curvas = data.frame(), documentos = data.frame(), observaciones = data.frame(),
+    limitacion = texto)
+  requeridas <- c("PerCod", "Factura", "FcnFec", "FcnVal", "FecVto")
+  if (!all(requeridas %in% names(facturas))) return(error("No hay emisión, valor original y vencimiento por factura."))
+  f <- unique(facturas)
+  f$NIT <- .car_id(f$PerCod); f$Factura <- .car_id(f$Factura)
+  f$Documento <- .car_llave(f, c("NIT", "Factura"))
+  f$Emision <- .car_fecha(f$FcnFec); f$Vencimiento <- .car_fecha(f$FecVto)
+  f$Original <- .gc_num(f$FcnVal)
+  f <- f[!is.na(f$Documento) & !is.na(f$Emision) & f$Emision <= corte, , drop = FALSE]
+  if (!nrow(f)) return(error("No hay facturas emitidas dentro del alcance y hasta el corte seleccionado."))
+  # TESHCARE no identifica prefijo: no unir números ambiguos ni elegir una versión de cabecera.
+  if (anyDuplicated(f$Documento)) return(error("Hay números de factura ambiguos por NIT o prefijo; no se construyen cosechas."))
+  incompletas <- !is.finite(f$Original) | f$Original <= 0 | is.na(f$Vencimiento)
+  if (any(incompletas)) return(error("Hay facturas sin valor original positivo o vencimiento; el denominador de sus cohortes no es verificable."))
+  f$Cohorte <- .gc_mes(f$Emision)
+  observaciones <- dplyr::bind_rows(lapply(sort(unique(.car_fecha(cartera$TCEFch))), function(fecha) {
+    fecha <- as.Date(fecha, origin = "1970-01-01")
+    if (is.na(fecha) || fecha > corte) return(NULL)
+    d <- .car_preparar(cartera, fecha) %>% dplyr::group_by(Documento) %>%
+      dplyr::summarise(SaldoObservado = .com_suma(Saldo), .groups = "drop")
+    d$Corte <- fecha; d
+  }))
+  if (!nrow(observaciones)) return(error("No existen saldos históricos observados para reconstruir las cosechas."))
+  d <- dplyr::inner_join(observaciones, f[c("Documento", "Cohorte", "Emision", "Vencimiento", "Original")],
+    by = "Documento", relationship = "many-to-one")
+  d$Dias <- as.integer(d$Corte - d$Emision)
+  d <- d[d$Dias >= 0 & is.finite(d$SaldoObservado), , drop = FALSE]
+  d$SaldoVencido <- ifelse(d$Corte > d$Vencimiento, pmax(d$SaldoObservado, 0), 0)
+  universo <- f %>% dplyr::group_by(Cohorte) %>%
+    dplyr::summarise(ValorOriginal = sum(Original), FacturasCohorte = dplyr::n(), .groups = "drop")
+  curvas <- d %>% dplyr::group_by(Cohorte, Dias) %>%
+    dplyr::summarise(SaldoVencido = sum(SaldoVencido), FacturasObservadas = dplyr::n_distinct(Documento),
+      .groups = "drop") %>% dplyr::left_join(universo, by = "Cohorte") %>%
+    dplyr::filter(FacturasObservadas == FacturasCohorte) %>%
+    dplyr::mutate(PctMora = SaldoVencido / ValorOriginal)
+  list(curvas = curvas, documentos = f, observaciones = d,
+    limitacion = paste(attr(facturas, "limite_alcance"), "Fotografías periódicas: solo se grafican edades con todas las facturas de la cohorte observadas.",
+      "La ausencia de una factura no equivale a saldo cero. No se interpolan saldos ni se infieren pagos.",
+      if (!nrow(curvas)) "No hay edades comunes completas; consulte el detalle documental." else ""))
+}
+.car_grafico_cosechas <- function(x) {
+  d <- x$curvas
+  shiny::validate(shiny::need(nrow(d) > 0L, x$limitacion))
+  d$NombreCohorte <- format(d$Cohorte, "%Y-%m")
+  d$Lectura <- paste0("Cohorte: ", d$NombreCohorte, "<br>Valor original: ", format(d$ValorOriginal, big.mark = ","),
+    " COP<br>Saldo vencido: ", format(d$SaldoVencido, big.mark = ","), " COP")
+  plotly::plot_ly(d, x = ~Dias, y = ~PctMora, color = ~NombreCohorte, text = ~Lectura,
+    type = "scatter", mode = "lines+markers", connectgaps = FALSE,
+    colors = grDevices::colorRampPalette(c("#C8A77D", "#7A2028", "#495057"))(length(unique(d$Cohorte))),
+    hovertemplate = "%{text}<br>Días desde emisión: %{x:.0f}<br>Saldo original en mora: %{y:.1%}<extra></extra>") %>%
+    plotly::layout(xaxis = list(title = "Días desde emisión de las facturas"),
+      yaxis = list(title = "% del valor original vencido y pendiente", tickformat = ".0%"))
+}
+
+.car_facturas_autorizadas <- function(facturas, cartera, clientes, nit_mapa) {
+  if (!is.data.frame(facturas)) stop("La fuente no contiene facturas históricas.")
+  f <- .car_scope(facturas, clientes, nit_mapa)
+  if ("LinNegCod" %in% names(f)) return(f)
+  if (!all(c("PerCod", "Factura", "LinNegCod") %in% names(cartera))) {
+    stop("Las facturas no identifican su línea y no se pueden conciliar con cartera.")
+  }
+  total <- unique(.car_llave(cartera, c("PerCod", "Factura")))
+  permitido <- .car_scope(cartera, clientes, nit_mapa)
+  firma <- function(d) paste(.car_llave(d, c("PerCod", "Factura")), as.character(d$LinNegCod), sep = "|")
+  lineas <- unique(data.frame(Documento = .car_llave(cartera, c("PerCod", "Factura")), Firma = firma(cartera)))
+  aceptadas <- lineas %>% dplyr::group_by(Documento) %>%
+    dplyr::summarise(Completa = all(Firma %in% firma(permitido)), .groups = "drop")
+  claves <- .car_llave(f, c("PerCod", "Factura"))
+  f <- f[!is.na(claves) & claves %in% aceptadas$Documento[aceptadas$Completa] & claves %in% total, , drop = FALSE]
+  attr(f, "limite_alcance") <- paste("Solo se incluyen facturas cuya línea se verificó en cartera y quedó íntegramente autorizada.",
+    "Los documentos sin correspondencia o con líneas fuera del alcance no se prorratean.")
+  f
 }

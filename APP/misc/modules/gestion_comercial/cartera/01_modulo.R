@@ -29,255 +29,102 @@
 }
 CarteraComercialUI <- function(id) {
   ns <- shiny::NS(id)
-  historico <- sprintf("input['%s'] == 'Comportamiento de pago' || input['%s'] == 'Rotación' || ",
-    ns("vista"), ns("vista"))
-  historico <- paste0(historico, sprintf("input['%s'] == 'Recaudos'", ns("vista")))
-  racafeForms::racafeForm(variant = "plain",
-    racafeForms::racafeActionBar(left = racafeForms::racafeButton("actualizar", "Actualizar",
-      variant = "secondary", icon = "arrows-rotate", ns = ns)),
-    racafeForms::racafeFormRow(columns = 3, responsive = "auto",
-      .crm_select("corte", "Corte disponible de cartera", choices = character(), ns = ns),
-      .crm_select("negocio", "Negocio del saldo al corte", choices = character(),
-        multiple = TRUE, ns = ns),
-      .crm_select("vista", "Consultar", choices = .CAR_VISTAS, empty = FALSE, ns = ns)),
-    shiny::conditionalPanel(historico,
-      racafeForms::racafeFormRow(columns = 3, responsive = "auto",
-        racafeForms::racafeInputDateRange("facturas", "Fecha de factura (históricos)",
-          start = Sys.Date() - 365, end = Sys.Date(), ns = ns),
-        .crm_select("cliente", "Clientes (históricos)", choices = character(),
-          multiple = TRUE, ns = ns),
-        shiny::conditionalPanel(sprintf("input['%s'] == 'Comportamiento de pago'", ns("vista")),
-          .crm_select("concepto", "Distribución por", choices = c("Valor", "Facturas", "Sacos"),
-            empty = FALSE, ns = ns)))),
-    shiny::conditionalPanel(sprintf("input['%s'] == 'Proyección de pagos'", ns("vista")),
-      .crm_select("agrupacion", "Vencimientos por",
-        choices = c("Semana" = "semana", "Mes" = "mes"), empty = FALSE, ns = ns)),
-    shiny::uiOutput(ns("fuente")),
-    shiny::conditionalPanel(sprintf("output['%s']", ns("saldo_disponible")),
-    shiny::fluidRow(lapply(c("saldo", "documentos", "sacos"), function(k) {
-      shiny::column(4, .crm_caja_output(ns(k)))
-    })),
-    .crm_nota("Los indicadores corresponden exclusivamente al corte y negocios seleccionados.")),
-    shiny::conditionalPanel(sprintf("output['%s']", ns("detalle_disponible")),
-    shiny::uiOutput(ns("nota_vista")), shiny::uiOutput(ns("grafico_ui")),
-    .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("tabla")),
-    .crm_nota(c("Seleccione una fila o TOTAL para consultar su detalle.",
-      "Importes en COP; sacos en la unidad de origen de Tesorería, sin convertir a 70 kg.",
-      "TOTAL recalcula clientes y facturas distintas; sus participaciones pueden solaparse entre grupos."))))
+  shiny::tagList(shiny::uiOutput(ns("fuente")),
+    .gc_tarjetas_ui(ns, c(saldo = "Saldo total · COP", vigente = "Saldo vigente · COP", vencido = "Saldo vencido · COP",
+      porcentaje = "Exposición positiva vencida", mora = "Mayor mora · días", documentos = "Facturas con saldo")),
+    .crm_disclosure("Cosechas de crédito", .crm_plot_output(ns("cosechas")),
+      shiny::uiOutput(ns("limite_cosechas")), .crm_tabla_ui(ns("cosechas_detalle")), open = TRUE),
+    .crm_disclosure("Antigüedad y exposición", .crm_plot_output(ns("antiguedad")),
+      .crm_tabla_ui(ns("rangos")), .crm_plot_output(ns("concentracion")), .crm_tabla_ui(ns("clientes")), open = TRUE),
+    .crm_disclosure("Comportamiento por línea de negocio", .crm_plot_output(ns("lineas")),
+      .crm_tabla_ui(ns("negocios"))),
+    .crm_disclosure("Cambios de mora entre los últimos cortes", .crm_plot_output(ns("deterioro")),
+      .crm_tabla_ui(ns("deterioro_detalle"))),
+    .crm_disclosure("Pagos documentados y condiciones de crédito", .crm_tabla_ui(ns("pagos"))),
+    .crm_disclosure("Documentos al corte observado", .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("detalle"))),
+    .crm_nota_metodologica(c("Corte: última fotografía disponible hasta la fecha final del controlbar.",
+      "El porcentaje vencido usa saldos positivos; los saldos a favor permanecen en el saldo total.",
+      "Las reducciones de saldo no se interpretan como pagos. La fuente de recibos aporta la última fecha, no cada abono.",
+      "No se distribuyen saldos entre categorías o productos. El alcance comercial conserva cliente y línea.")))
 }
 CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admin) {
   shiny::moduleServer(id, function(input, output, session) {
-    revision <- shiny::reactiveVal(0L)
-    detalle_clave <- shiny::reactiveVal(NULL)
-    fechas_iniciadas <- shiny::reactiveVal(FALSE)
-    shiny::observeEvent(input$actualizar, revision(revision() + 1L))
+    hasta <- shiny::reactive(as.Date(filtros()$fecha[[2]]))
+    catalogo <- shiny::reactive(.com_clientes(clientes(), hasta(), filtros()))
     fuente <- shiny::reactive({
-      revision()
-      historico()
+      h <- historico()
+      shiny::validate(shiny::need(is.list(h) && is.data.frame(h$cartera),
+        "No hay una fuente de cartera disponible. Actualice el ETL."))
+      h
     })
-    catalogo <- shiny::reactive(.com_clientes(clientes(), Sys.Date(), filtros()))
-    saldos <- shiny::reactive({
-      x <- fuente()$cartera
-      if (!is.data.frame(x)) return(NULL)
-      .car_scope(x, catalogo(), nit_mapa)
+    saldos <- shiny::reactive(.car_scope(fuente()$cartera, catalogo(), nit_mapa))
+    cortes <- shiny::reactive({
+      x <- .car_fecha(saldos()$TCEFch); sort(unique(x[!is.na(x) & x <= hasta()]))
     })
-    cortes_disponibles <- shiny::reactive({
-      x <- fuente()$cartera
-      if (!is.data.frame(x)) return(as.Date(character()))
-      sort(unique(.car_fecha(x$TCEFch[!is.na(x$TCEFch)])), decreasing = TRUE, na.last = NA)
+    corte <- shiny::reactive({ shiny::validate(shiny::need(length(cortes()) > 0L,
+      "No hay cortes dentro del alcance comercial y hasta la fecha seleccionada.")); max(cortes()) })
+    datos <- shiny::reactive(.car_preparar(saldos(), corte()))
+    facturas <- shiny::reactive({
+      f <- fuente()$facturacion
+      shiny::validate(shiny::need(is.data.frame(f), "La fuente no contiene facturas históricas."))
+      .car_facturas_autorizadas(f, fuente()$cartera, catalogo(), nit_mapa)
     })
-    facturacion <- shiny::reactive({
-      h <- fuente()
-      shiny::validate(shiny::need(is.data.frame(h$facturacion), "La fuente no contiene facturación histórica."))
-      .car_scope(h$facturacion, catalogo(), nit_mapa)
-    })
-    shiny::observe({
-      x <- fuente()$cartera
-      cortes <- cortes_disponibles()
-      actual <- shiny::isolate(input$corte)
-      .crm_update_select(session, "corte", choices = as.character(cortes),
-        selected = if (length(actual) && actual %in% as.character(cortes)) actual else as.character(head(cortes, 1)))
-      negocios <- sort(unique(as.character(x$Negocio[!is.na(x$Negocio)])))
-      .crm_update_select(session, "negocio", choices = negocios,
-        selected = .crm_seleccion_opciones(input, session, "negocio", negocios))
-    })
-    shiny::observe({
-      x <- facturacion()
-      directorio <- x %>% dplyr::group_by(NIT) %>%
-        dplyr::summarise(Cliente = dplyr::first(PerRazSoc), .groups = "drop")
-      opciones <- stats::setNames(directorio$NIT, paste(directorio$Cliente, directorio$NIT, sep = " | "))
-      .crm_update_select(session, "cliente", choices = opciones,
-        selected = .crm_seleccion_opciones(input, session, "cliente", opciones))
-      if (!shiny::isolate(fechas_iniciadas()) && any(!is.na(x$FcnFec))) {
-        fin <- .gc_fecha_max(as.Date(x$FcnFec))
-        racafeForms::racafeUpdateDateRange(session, "facturas",
-          start = max(.gc_fecha_min(as.Date(x$FcnFec)), fin - 365),
-          end = fin, min = .gc_fecha_min(as.Date(x$FcnFec)), max = fin)
-        fechas_iniciadas(TRUE)
-      }
-    })
-    corte <- shiny::reactive({
-      shiny::validate(shiny::need(length(input$corte) == 1L &&
-        input$corte %in% as.character(cortes_disponibles()), "Seleccione un corte disponible de cartera."))
-      as.Date(input$corte)
-    })
-    datos <- shiny::reactive({
-      x <- .car_preparar(saldos(), corte())
-      x[x$Negocio %in% input$negocio, , drop = FALSE]
-    })
-    pagos <- shiny::reactive({
-      shiny::validate(shiny::need(length(input$facturas) == 2L && !anyNA(input$facturas),
-        "Seleccione un rango válido de fecha de factura."))
-      x <- .car_pagos(facturacion(), as.Date(input$facturas[1]), as.Date(input$facturas[2]))
-      x[x$NIT %in% input$cliente & !x$FueraPeriodo, , drop = FALSE]
-    })
-    vista <- shiny::reactive(.com_elegir(input$vista, .CAR_VISTAS, "Resumen"))
-    estado <- shiny::reactive({
-      h <- fuente()
-      if (!is.data.frame(h$cartera)) {
-        return("No hay una fuente de cartera disponible. Actualice el data prep o cargue el histórico autorizado.")
-      }
-      if (!length(cortes_disponibles())) {
-        return("La fuente de cartera no contiene cortes válidos. Actualice el data prep.")
-      }
-      if (vista() %in% c("Comportamiento de pago", "Rotación", "Recaudos")) {
-        if (!is.data.frame(h$facturacion)) return("La fuente no contiene facturación histórica.")
-        if (!length(input$cliente)) return("No hay clientes seleccionados para la consulta histórica.")
-        if (length(input$facturas) != 2L || anyNA(input$facturas)) {
-          return("Seleccione un rango de fecha de factura válido.")
-        }
-        if (!nrow(pagos())) return("No hay facturas para los clientes y fechas seleccionados.")
-        return(NULL)
-      }
-      if (!length(input$corte) || !input$corte %in% as.character(cortes_disponibles())) {
-        return("Seleccione un corte disponible de cartera.")
-      }
-      if (!nrow(saldos())) {
-        return(paste("La fuente tiene cortes disponibles, pero no hay cartera que coincida con el alcance",
-          "y los filtros actuales de asesor, segmento y línea. Revise los filtros aplicados."))
-      }
-      if (!length(input$negocio)) {
-        return("No hay negocios seleccionados. Seleccione al menos uno para consultar saldos.")
-      }
-      if (!nrow(datos())) return("No hay cartera para el corte, negocios y filtros seleccionados.")
-      NULL
-    })
-    output$detalle_disponible <- shiny::reactive(is.null(estado()))
-    output$saldo_disponible <- shiny::reactive({
-      is.data.frame(fuente()$cartera) && length(input$corte) == 1L &&
-        input$corte %in% as.character(cortes_disponibles()) && length(input$negocio) > 0L && nrow(datos()) > 0L
-    })
-    shiny::outputOptions(output, "detalle_disponible", suspendWhenHidden = FALSE)
-    shiny::outputOptions(output, "saldo_disponible", suspendWhenHidden = FALSE)
-    output$fuente <- .crm_render_ui({
-      h <- fuente()
-      mensaje <- estado()
-      shiny::tagList(
-        if (is.data.frame(h$cartera)) .crm_nota(c(
-          paste("Fuente:", if (is.null(h$origen)) "Archivo histórico de cartera" else h$origen),
-          if (length(input$corte)) paste("Corte:", input$corte),
-          if (!is.null(h$importado_en)) paste("Generado:", h$importado_en), h$aviso)),
-        if (!is.null(mensaje)) racafeForms::racafeFormMessage(mensaje, type = "empty"))
-    })
-    .gc_tarjetas_server(c(saldo = "Saldo al corte · COP", documentos = "Facturas al corte", sacos = "Sacos al corte"),
+    cosechas <- shiny::reactive(.car_cosechas(saldos(), facturas(), hasta()))
+    output$fuente <- .crm_render_ui(.crm_nota(paste("Corte observado:", corte(), "· Fuente:", fuente()$origen)))
+    .gc_tarjetas_server(c(saldo = "Saldo total · COP", vigente = "Saldo vigente · COP", vencido = "Saldo vencido · COP",
+      porcentaje = "Exposición positiva vencida", mora = "Mayor mora · días", documentos = "Facturas con saldo"),
       shiny::reactive({
-        m <- .car_metricas(datos())
-        list(saldo = m$SaldoCOP, documentos = m$Facturas, sacos = m$SacosOrigen)
-      }), list(saldo = "dinero", sacos = "numero"))
-    tabla <- shiny::reactive({
-      x <- if (vista() %in% c("Resumen", "Vencida", "Proyección de pagos", "Detalle")) datos() else NULL
-      switch(vista(),
-        "Resumen" = .car_resumen(x, total = TRUE),
-        "Vencida" = .car_resumen(x[x$Tipo == "Vencida", ], "Rango", total = TRUE),
-        "Proyección de pagos" = .car_vencimientos(x, .com_elegir(input$agrupacion, c("mes", "semana"), "semana")),
-        "Comportamiento de pago" = .car_comportamiento(pagos(),
-          .com_elegir(input$concepto, c("Valor", "Facturas", "Sacos"), "Valor")),
-        "Rotación" = .car_rotacion_tabla(pagos()),
-        "Recaudos" = {
-          p <- pagos()
-          p[intersect(c("NIT", "PerRazSoc", "Factura", "PdcCod", "FcnFec", "FecVto", "FecPag",
-            "EstadoPago", "DiasPago", "DiasAtraso", "DiasMoraActual", "Valor", "Saldo"), names(p))]
-        },
-        "Detalle" = .car_detalle(x))
+        d <- datos(); positivos <- d[is.finite(d$Saldo) & d$Saldo > 0, ]
+        conocido <- !is.na(positivos$DiasVencido)
+        vencido <- if (all(conocido)) sum(positivos$Saldo[positivos$DiasVencido > 0]) else NA_real_
+        list(saldo = .com_suma(d$Saldo), vigente = if (all(conocido)) sum(positivos$Saldo[positivos$DiasVencido <= 0]) else NA_real_,
+          vencido = vencido, porcentaje = .gc_ratio(vencido, sum(positivos$Saldo)),
+          mora = if (any(conocido)) max(pmax(positivos$DiasVencido[conocido], 0)) else NA_real_,
+          documentos = .car_distintos(positivos$Documento))
+      }), list(saldo = "dinero", vigente = "dinero", vencido = "dinero", porcentaje = "porcentaje"))
+    output$cosechas <- .crm_render_plotly(.car_grafico_cosechas(cosechas()))
+    output$limite_cosechas <- .crm_render_ui(.crm_nota(c(cosechas()$limitacion, attr(facturas(), "limite_alcance"))))
+    .crm_vancouver_server("cosechas_detalle", shiny::reactive(cosechas()$observaciones))
+    rangos <- shiny::reactive(.car_resumen(datos(), "Rango"))
+    .crm_vancouver_server("rangos", rangos, col_specs = .car_specs())
+    output$antiguedad <- .crm_render_plotly(plotly::plot_ly(rangos(), x = ~Rango, y = ~SaldoCOP,
+      type = "bar", marker = list(color = "#7A2028"), hovertemplate = "%{x}<br>Saldo: %{y:,.0f} COP<extra></extra>"))
+    concentracion <- shiny::reactive({
+      x <- datos() %>% dplyr::group_by(NIT, PerRazSoc) %>%
+        dplyr::summarise(Saldo = .com_suma(Saldo), .groups = "drop") %>% dplyr::arrange(dplyr::desc(Saldo))
+      x$Participacion <- .gc_ratio(x$Saldo, .com_suma(x$Saldo)); x
     })
-    output$nota_vista <- .crm_render_ui({
-      texto <- switch(vista(),
-        "Proyección de pagos" = c("Calendario contractual de cartera por vencer; no predice recaudos.",
-          "Tabla y gráfico en COP, con el mismo acumulado cronológico. Semanas de lunes a domingo."),
-        "Comportamiento de pago" = c("Se filtra por fecha de factura y cliente, independientemente del corte/negocio.",
-          "Solo facturas con saldo cero y fecha de pago válida. Mora = pago − vencimiento, mínimo cero.",
-          "Valor se expresa en millones de COP; los tramos son proporciones del total por NIT y forma de pago.",
-          paste("Sin pago total acreditado:", sum(!pagos()$Pagada), "facturas visibles.")),
-        "Rotación" = c("Se filtra por fecha de factura y cliente, independientemente del corte/negocio.",
-          "Días factura → pago ponderados por valor positivo, solo facturas totalmente pagadas con fecha válida.",
-          "Se compara exclusivamente con el año inmediatamente anterior del mismo NIT; sin comparable, estilo neutro."),
-        "Recaudos" = c("Consulta de facturas por fecha de factura y cliente; incluye facturas sin pago acreditado.",
-          "La fecha es la del último recibo disponible. No representa cada abono ni un flujo de caja diario.",
-          "Días de pago: factura → pago. Días de atraso: vencimiento → pago.",
-          "Mora actual: saldo pendiente al día de hoy."),
-        "Vencida" = c("Mora calculada entre el corte y el vencimiento, de 1–7 a más de 30 días.",
-          "Se omiten gestiones posteriores al corte; la fuente no permite reconstruir la gestión anterior."),
-        "Resumen" = "Participaciones sobre saldo, facturas distintas y sacos de todo el universo visible al corte.",
-        "Detalle" = "El valor y el saldo se conservan numéricos hasta su presentación y exportación.")
-      .crm_nota(texto)
+    .crm_vancouver_server("clientes", concentracion)
+    output$concentracion <- .crm_render_plotly(plotly::plot_ly(head(concentracion(), 15), x = ~Saldo,
+      y = ~reorder(PerRazSoc, Saldo), type = "bar", orientation = "h", marker = list(color = "#495057"),
+      hovertemplate = "%{y}<br>Saldo: %{x:,.0f} COP<extra></extra>"))
+    negocios <- shiny::reactive(.car_resumen(datos(), "Negocio"))
+    .crm_vancouver_server("negocios", negocios, col_specs = .car_specs())
+    output$lineas <- .crm_render_plotly(plotly::plot_ly(negocios(), x = ~Negocio, y = ~SaldoCOP,
+      type = "bar", marker = list(color = "#C8A77D"), hovertemplate = "%{x}<br>Saldo: %{y:,.0f} COP<extra></extra>"))
+    deterioro <- shiny::reactive({
+      fechas <- cortes()
+      shiny::validate(shiny::need(length(fechas) >= 2L, "Se requieren dos cortes para comparar la mora."))
+      resumen <- function(fecha) .car_preparar(saldos(), fecha) %>% dplyr::group_by(NIT, Documento) %>%
+        dplyr::summarise(Mora = if (all(is.na(DiasVencido))) NA_real_ else max(pmax(DiasVencido, 0), na.rm = TRUE),
+          Saldo = .com_suma(Saldo), .groups = "drop")
+      dplyr::inner_join(resumen(tail(fechas, 1L)), resumen(tail(fechas, 2L)[[1]]), by = c("NIT", "Documento"),
+        suffix = c("Actual", "Anterior")) %>% dplyr::mutate(CambioMora = MoraActual - MoraAnterior,
+          ReduccionSaldoNoConciliada = SaldoAnterior - SaldoActual)
     })
-    output$grafico_ui <- .crm_render_ui({
-      if (vista() == "Proyección de pagos") .crm_plot_output(session$ns("grafico"), height = "330px")
+    .crm_vancouver_server("deterioro_detalle", deterioro)
+    output$deterioro <- .crm_render_plotly({
+      x <- deterioro() %>% dplyr::group_by(NIT) %>% dplyr::summarise(Cambio = if (all(is.na(CambioMora))) NA_real_ else max(CambioMora, na.rm = TRUE), .groups = "drop")
+      plotly::plot_ly(x, x = ~NIT, y = ~Cambio, type = "bar", marker = list(color = "#7A2028"),
+        hovertemplate = "NIT: %{x}<br>Mayor cambio de mora de documentos comunes: %{y:.0f}<extra></extra>")
     })
-    output$grafico <- .crm_render_plotly({
-      shiny::req(vista() == "Proyección de pagos")
-      x <- tabla()
-      shiny::validate(shiny::need(nrow(x) > 0, "No hay cartera por vencer para esta selección."))
-      plotly::plot_ly(x, x = ~Periodo, y = ~SaldoCOP, type = "scatter", mode = "lines+markers",
-        name = "Saldo COP", line = list(color = "#63666A")) %>%
-        plotly::add_trace(y = ~Acumulado, name = "Acumulado COP", line = list(color = "#DA291C")) %>%
-        plotly::layout(title = "Vencimientos contractuales", xaxis = list(title = "Inicio del periodo"),
-          yaxis = list(title = "COP", tickprefix = "$"), legend = list(orientation = "h"))
-    })
-    seleccion <- .crm_vancouver_server("tabla", tabla, col_specs = .car_specs(), modo_seleccion = "fila")
-    detalle <- shiny::reactive({
-      clave <- detalle_clave()
-      shiny::req(!is.null(clave))
-      if (clave$vista %in% c("Resumen", "Vencida")) {
-        x <- datos()
-        if (clave$vista == "Vencida") x <- x[x$Tipo == "Vencida", ]
-        if (clave$id != "TOTAL") x <- x[x[[clave$dimension]] == clave$id, ]
-        x <- .car_detalle(x)
-      } else {
-        x <- tabla()
-        if (vista() != clave$vista) return(x[0, , drop = FALSE])
-        for (n in names(clave$llave)) {
-          x <- x[!is.na(x[[n]]) & as.character(x[[n]]) == clave$llave[[n]], , drop = FALSE]
-        }
-      }
-      .car_buscar(x, input$buscar_detalle)
-    })
-    shiny::observeEvent(seleccion$seleccion(), {
-      fila <- seleccion$seleccion()$data
-      dimension <- if (vista() == "Resumen") "Tipo" else if (vista() == "Vencida") "Rango" else NULL
-      detalle_clave(list(vista = vista(), dimension = dimension,
-        id = if (!is.null(dimension)) fila[[dimension]][1] else NULL,
-        llave = lapply(fila[intersect(c("NIT", "Factura", "Anho", "FormaPago", "Periodo", "NumeroPedido"),
-          names(fila))], as.character)))
-      shiny::updateTextInput(session, "buscar_detalle", value = "")
-      shiny::showModal(racafeForms::racafeModalDetail(title = "Detalle de cartera", size = "ventana",
-        racafeForms::racafeInputText("buscar_detalle", "Buscar en el detalle", ns = session$ns),
-        shiny::uiOutput(session$ns("totales_detalle")), .crm_descarga_ui("descargar_detalle", session$ns),
-        .crm_tabla_ui(session$ns("detalle"), searchable = FALSE),
-        .crm_nota("Totales y Excel responden a la búsqueda del detalle, incluyendo todas sus páginas."),
-        footer = racafeForms::racafeModalFooter()))
-      seleccion$limpiar()
-    }, ignoreInit = TRUE)
-    .crm_vancouver_server("detalle", detalle, col_specs = .car_specs(), searchable = FALSE)
-    output$totales_detalle <- .crm_render_ui({
-      x <- detalle()
-      .crm_nota(c(paste("Filas visibles:", nrow(x)),
-        if ("Valor" %in% names(x)) paste("Valor COP:", scales::dollar(.com_suma(x$Valor))),
-        if ("Saldo" %in% names(x)) paste("Saldo COP:", scales::dollar(.com_suma(x$Saldo)))))
-    })
-    output$descargar_detalle <- shiny::downloadHandler(filename = function() "Detalle_cartera.xlsx",
-      content = function(file) writexl::write_xlsx(.crm_nits_tabla(detalle()), file))
-    .gc_descarga(output, tabla, "Cartera")
-    list(datos = datos, pagos = pagos, tabla = tabla, detalle = detalle)
+    .crm_vancouver_server("pagos", shiny::reactive({
+      x <- .car_pagos(facturas(), as.Date(filtros()$fecha[[1]]), hasta(), hoy = hasta())
+      x[!x$FueraPeriodo, , drop = FALSE]
+    }),
+      columnas = c("NIT", "Factura", "FcnFec", "FecVto", "FecPag", "Pagada", "DiasAtraso", "Valor", "Saldo"))
+    .crm_vancouver_server("detalle", datos, col_specs = .car_specs())
+    .gc_descarga(output, datos, "Cartera_al_corte")
+    list(datos = datos, cosechas = cosechas)
   })
 }

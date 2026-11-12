@@ -1140,3 +1140,19 @@ descartar_oportunidad <- function(id_oportunidad, razon, usr) {
   }, add = TRUE)
   eval.parent(substitute(expresion))
 }
+
+# Las tablas de PyG y clientes no comparten el nombre físico de la llave tributaria ----
+.accion_por_nit <- function(tabla, nit, codigo_excluir = NULL) {
+  candidatas <- switch(tabla, CRMNALCONTACTO = "PerCod", CRMNALMARLOT = c("CLIENTE", "PerCod"),
+    CRMNALCLIENTE = c("CLCliNit", "CliNitPpal"), stop("Fuente de identificación no admitida."))
+  esquema <- names(CargarDatos(tabla, condicion = "1=0"))
+  llave <- intersect(candidatas, esquema)
+  if (!length(llave)) stop(paste("La fuente", tabla, "no contiene la llave tributaria esperada."))
+  condicion <- sprintf("%s = '%s'", llave[[1]], .rc_escapar_sql(nit))
+  if (!is.null(codigo_excluir) && "CodContacto" %in% esquema) condicion <- paste(condicion,
+    sprintf("AND CodContacto <> '%s'", .rc_escapar_sql(codigo_excluir)))
+  CargarDatos(tabla, condicion = condicion)
+}
+.accion_fecha_hora_valida <- function(x) {
+  length(x) == 1L && inherits(x, "POSIXt") && !is.na(x) && is.finite(as.numeric(x))
+}

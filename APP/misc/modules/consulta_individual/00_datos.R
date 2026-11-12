@@ -6,6 +6,7 @@
   x
 }
 .in_fuente <- function(cargar, tabla) {
+  if (!is.null(shiny::getDefaultReactiveDomain())) .pr_fuentes()$revision()
   tryCatch({
     datos <- cargar(tabla)
     if (!is.data.frame(datos)) stop("La fuente no entregó una tabla.")

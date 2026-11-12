@@ -2,7 +2,7 @@
 .crm_estilos_ui <- function() {
   if (exists(".estilos_crm", inherits = TRUE)) return(get(".estilos_crm", inherits = TRUE))
   shiny::singleton(shiny::includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
-    "979c18b733ad64ad82c41c72b5392697e399a63d/Styles/crm-nacional.css")))
+    "4515c5c4dee719928265a43e7ad5a2fd0faa40eb/Styles/crm-nacional.css")))
 }
 
 # Notas compactas fuera de cajas y tablas ----
@@ -34,8 +34,9 @@
 .crm_nits_tabla <- function(datos, etiquetas = NULL) {
   nombres <- names(datos)
   es_identificador <- function(x) grepl("nit", x, ignore.case = TRUE) |
-    grepl("^(Pedido|CLPdcCod|PdcCod|NumeroPedido|Número de pedido|Año|Ano|Anio|Anho|Year|Periodo)$",
-      x, ignore.case = TRUE)
+    grepl("(^Codigo|^Código|Cod$|CodPedido$|CodLote$|NumeroFactura$)", x, ignore.case = TRUE) |
+    grepl("^(Pedido|CLPdcCod|PdcCod|NumeroPedido|Número de pedido|Lote|CLLotCod|LotCod|CLPdcLin|PdcLin|LineaPedido|LinProCod|LinNegCod|MrcCod|MCCod|Año|Ano|Anio|Anho|Year|Periodo)$",
+      x, ignore.case = TRUE) | grepl("^(Código de línea|Línea (del|de) (pedido|producto|negocio))", x, ignore.case = TRUE)
   son_nit <- es_identificador(nombres)
   if (!is.null(etiquetas)) {
     comunes <- intersect(names(etiquetas), nombres)
@@ -117,7 +118,15 @@
 
 # Etiquetas orientadas al uso comercial, compartidas por tablas y modales ----
 .crm_etiquetas <- function(nombres) {
-  mapa <- c(Anho = "Año", Anio = "Año", Ano = "Año", Year = "Año", Categoria = "Categoría",
+  mapa <- c(PrecioNegociadoOriginal = "Precio negociado · unidad original", UnidadPrecioOriginal = "Unidad original del precio",
+    MonedaPrecioOriginal = "Divisa del precio", PrecioNegociadoKg = "Precio negociado · COP/kg",
+    ParticipacionSacos = "Participación en sacos", ParticipacionMargen = "Participación en margen",
+    PrecioMinimoKg = "Menor precio negociado · COP/kg", PrecioMaximoKg = "Mayor precio negociado · COP/kg",
+    PrecioPromedioKg = "Precio negociado promedio · COP/kg", PedidosConPrecio = "Unidades de negociación con precio válido",
+    Sacos = "Sacos de 70 kg", Linea = "Línea del pedido", Motivo = "Situación por revisar",
+    SacosLoteOrigen = "Cantidad asignada · unidad original", SacosProducidosOrigen = "Producción · unidad original",
+    SacosDespachadosOrigen = "Despacho · unidad original", CantidadPedidoOrigen = "Cantidad solicitada · unidad original",
+    FechaAnalitica = "Fecha de ejecución o estimación", EstadoEjecucion = "Tipo de evidencia", Anho = "Año", Anio = "Año", Ano = "Año", Year = "Año", Categoria = "Categoría",
     Sacos70kg = "Sacos facturados (70 kg)", SacosFact = "Sacos facturados (70 kg)",
     MargenFCC = "Margen total FCC (COP)", Margen = "Margen FCC (COP)", FecFact = "Fecha de factura",
     CLCliNit = "NIT de facturación", CliNitPpal = "NIT de la cuenta principal", CLPdcCod = "Pedido",

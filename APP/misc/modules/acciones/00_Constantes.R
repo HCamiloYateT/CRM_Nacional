@@ -367,3 +367,4 @@ names(.ICONOS_RED_SOCIAL) <- toupper(names(.ICONOS_RED_SOCIAL))
 )
 ## Crear Tarea -----
 .TSK_PRIORIDADES <- c("URGENTE", "IMPORTANTE", "MEDIA", "BAJA")
+.COLORES_PRIORIDAD <- racafeModulos::PaletaPrioridadesTareas()

@@ -23,7 +23,11 @@ header <- bs4DashNavbar(status = "white", border = FALSE, sidebarIcon = icon("ba
                                                      tags$strong("ETAPA DE LA ENTIDAD"),
                                                      lapply(ETAPAS_EMBUDO, function(etapa) div(
                                                        tags$span(class = "kb-scale-swatch", style = paste0("background:",
-                                                         COLOR_ETAPA_EMBUDO[[etapa]])), etapa))))
+                                                         COLOR_ETAPA_EMBUDO[[etapa]])), etapa)),
+                                                     tags$hr(), tags$strong("PRIORIDAD DE TAREAS"),
+                                                     lapply(names(.COLORES_PRIORIDAD), function(prioridad) div(
+                                                       tags$span(class = "kb-scale-swatch", style = paste0("background:",
+                                                         .COLORES_PRIORIDAD[[prioridad]])), prioridad))))
                                                  )
                                          ),
                         rightUi = tagList(

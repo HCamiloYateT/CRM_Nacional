@@ -7,7 +7,7 @@
   }
   contactos[permitido, , drop = FALSE]
 }
-.op_preparar <- function(oportunidades, contactos, hechos, usuario, es_admin = FALSE) {
+.op_preparar <- function(oportunidades, contactos, hechos, usuario, es_admin = FALSE, corte = Sys.Date()) {
   x <- oportunidades
   id <- as.character(.gc_columna(x, "IdOportunidad"))
   x$Editable <- !is.na(id) & nzchar(id) & !duplicated(id) & !duplicated(id, fromLast = TRUE)
@@ -20,6 +20,8 @@
   antiguo <- as.character(.gc_columna(x, "PerRazSoc"))
   vacios <- is.na(x$Contacto)
   x$Contacto[vacios] <- nombres$Cod[match(antiguo[vacios], nombres$PerRazSoc)]
+  x$Tipo <- as.character(.gc_columna(x, c("TipoOportunidad", "Tipo")))
+  x$Asesor <- as.character(.gc_columna(x, "Asesor"))
   x$Autor <- as.character(.gc_columna(x, c("UsuarioCrea", "Usuario")))
   x$Linea <- .gc_num(.gc_columna(x, "LinNegCod"))
   codigos <- c(CONVENCIONALES = 10000, `A LA MEDIDA` = 21000, DIFERENCIADOS = 20000)
@@ -52,12 +54,12 @@
     fila <- x[i, ]
     if (is.na(fila$Creacion) || is.na(fila$Cumplimiento) || is.na(fila$Contacto) || is.na(fila$Linea)) next
     fac <- hechos %>% dplyr::filter(as.character(CodContacto) == fila$Contacto, LinNegCod == fila$Linea,
-      !is.na(FecFact), FecFact >= fila$Creacion, FecFact <= min(fila$Cumplimiento, Sys.Date()),
+      !is.na(FecFact), FecFact >= fila$Creacion, FecFact <= min(fila$Cumplimiento, corte),
       EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO"))
     # No asignar ventas de otros productos a la oportunidad del mismo cliente.
     if (is.na(fila$Producto) || is.na(fila$Categoria)) next
     fac <- fac %>% dplyr::filter(Producto == fila$Producto, Categoria == fila$Categoria)
-    x$SacosEjecutados[[i]] <- sum(fac$SacosFact, na.rm = TRUE)
+    x$SacosEjecutados[[i]] <- if (anyNA(fac$SacosFact)) NA_real_ else sum(fac$SacosFact)
     x$MargenEjecutado[[i]] <- if (any(fac$EstadoFinanciero != "CERRADO") || anyNA(fac$Margen)) {
       NA_real_
     } else sum(fac$Margen)
@@ -66,40 +68,41 @@
   x$CumplMargen <- .gc_ratio(x$MargenEjecutado, x$MargenObjetivo)
   x$Estado <- ifelse(x$Descartada, "Descartada", ifelse(!is.na(x$CumplSacos) & x$CumplSacos >= 1 &
     !is.na(x$CumplMargen) & x$CumplMargen >= 1, "Cumplida",
-    ifelse(!is.na(x$Cumplimiento) & x$Cumplimiento < Sys.Date(), "Vencida", "En gestión")))
+    ifelse(!is.na(x$Cumplimiento) & x$Cumplimiento < corte, "Vencida", "En gestión")))
   x
 }
 
 OportunidadesGestionUI <- function(id) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
-    racafeForms::racafeActionBar(left = shiny::tagList(
-      racafeForms::racafeButton("crear", "Nueva oportunidad", icon = "plus", ns = ns),
-      racafeForms::racafeButton("actualizar", "Actualizar", ns = ns,
-        variant = "secondary", icon = "arrows-rotate"))),
-    racafeForms::racafeFormRow(columns = 3, responsive = "auto",
-      .crm_select("contacto", "Contacto para una nueva oportunidad",
-        choices = character(), ns = ns),
-      .crm_select("estado", "Mostrar", choices = c("Activas", "Descartadas"),
-        selected = "Activas", multiple = TRUE, gender = "f", ns = ns),
-      .crm_select("dimension", "Agrupar tablero por", choices = c("Autor", "Categoria", "Producto"),
-        empty = FALSE, ns = ns)),
-    .gc_tarjetas_ui(ns, c(total = "Oportunidades activas", vencidas = "Vencidas",
-      sacos = "Objetivo de sacos 70 kg", margen = "Margen objetivo")),
-    .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("resumen"), titulo = "Tablero de oportunidades"),
-    .crm_tabla_ui(ns("detalle"), titulo = "Oportunidades y cumplimiento"),
-    .crm_nota(c("El cumplimiento cruza contacto, línea, categoría y producto entre creación y fecha objetivo.",
-      "Los objetivos de oportunidades distintas pueden solaparse: la misma venta no es ejecución exclusiva asignada.",
-      "El margen de meses abiertos no se presenta como contable; las descartadas se excluyen de los indicadores.",
-      "La frecuencia mensual solo se calcula cuando el registro histórico tiene FrecuenciaDias.")))
+    racafeForms::racafeActionBar(left = racafeForms::racafeButton("crear", "Nueva oportunidad", icon = "plus", ns = ns)),
+    racafeForms::racafeFormRow(columns = 2,
+      .crm_select("estado", "Mostrar", choices = c("Activas", "Descartadas"), selected = c("Activas", "Descartadas"),
+        multiple = TRUE, ns = ns),
+      .crm_select("dimension", "Analizar por", choices = c("Tipo", "Estado", "Categoria", "Producto", "Linea", "Asesor"),
+        selected = "Estado", ns = ns)),
+    .gc_tarjetas_ui(ns, c(total = "Total de oportunidades", activas = "Activas", cumplidas = "Cumplidas",
+      vencidas = "Vencidas", proximas = "Próximas a 30 días", descartadas = "Descartadas",
+      sacos = "Sacos potenciales · 70 kg", margen = "Margen potencial · COP")),
+    .crm_disclosure("Distribución y potencial comercial", .crm_plot_output(ns("distribucion")),
+      .crm_tabla_ui(ns("resumen")), open = TRUE),
+    .crm_disclosure("Evolución de las oportunidades", .crm_plot_output(ns("evolucion")),
+      .crm_tabla_ui(ns("evolucion_detalle"))),
+    .crm_disclosure("Cumplimiento frente a cada objetivo", .crm_plot_output(ns("cumplimiento")),
+      .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("detalle")), open = TRUE),
+    .crm_nota_metodologica(c("El potencial comercial no es ejecución financiera ni una venta asegurada.",
+      "La misma venta puede respaldar oportunidades solapadas: no sume su ejecución como si fuera exclusiva.",
+      "Los objetivos se contrastan por contacto, línea, categoría, producto y período propio de cada oportunidad.",
+      "El margen sin cierre no es definitivo. Un objetivo sin meta válida queda sin porcentaje de cumplimiento.")))
 }
-OportunidadesGestion <- function(id, usuario, es_admin, hechos, cargar = racafeBD::CargarDatos) {
+
+OportunidadesGestion <- function(id, usuario, es_admin, hechos, cargar = racafeBD::CargarDatos, filtros = function() NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     revision <- shiny::reactiveVal(0L)
     contacto_seleccionado <- shiny::reactiveVal(NULL)
     oportunidad_seleccionada <- shiny::reactiveVal(NULL)
-    fuente <- shiny::reactive({ revision(); cargar("CRMNALCLOPT") })
-    contactos <- shiny::reactive({ revision(); cargar("CRMNALCONTACTO") })
+    fuente <- shiny::reactive({ .pr_fuentes()$revision(); revision(); cargar("CRMNALCLOPT") })
+    contactos <- shiny::reactive({ .pr_fuentes()$revision(); revision(); cargar("CRMNALCONTACTO") })
     contacto_permitido <- shiny::reactive({
       cod <- contacto_seleccionado()
       permitidos <- .op_contactos_visibles(contactos(), usuario(), es_admin())
@@ -118,37 +121,67 @@ OportunidadesGestion <- function(id, usuario, es_admin, hechos, cargar = racafeB
       revision(shiny::isolate(revision()) + 1L)
     }, ignoreInit = TRUE)
     shiny::observeEvent(input$actualizar, revision(revision() + 1L))
-    shiny::observe({
-      x <- .op_contactos_visibles(contactos(), usuario(), es_admin())
-      etiquetas <- paste(x$PerCod, x$PerRazSoc, sep = " — ")
-      .crm_update_select(session, "contacto", choices = stats::setNames(x$CodContacto, etiquetas),
-        selected = shiny::isolate(input$contacto))
-    })
     datos <- shiny::reactive({
-      x <- .op_preparar(fuente(), contactos(), hechos(), usuario(), es_admin())
+      f <- filtros()
+      corte <- if (length(f$fecha) == 2L) as.Date(f$fecha[[2]]) else Sys.Date()
+      x <- .op_preparar(fuente(), contactos(), if (is.null(f)) hechos() else .gc_filtrar_dimensiones(hechos(), f),
+        usuario(), es_admin(), corte)
+      if (!is.null(f)) {
+        x <- x[.in_linea(x$Linea) %in% f$linneg & x$Categoria %in% f$categoria & x$Producto %in% f$producto, , drop = FALSE]
+        x <- x[(is.na(x$Asesor) | x$Asesor %in% f$asesor) & length(f$asesor) > 0L, , drop = FALSE]
+      }
       estados <- ifelse(x$Descartada, "Descartadas", "Activas")
       x <- x[estados %in% input$estado, , drop = FALSE]
       x
     })
-    .gc_tarjetas_server(c(total = "Oportunidades activas", vencidas = "Vencidas",
-      sacos = "Objetivo de sacos 70 kg", margen = "Margen objetivo"), shiny::reactive({
-      x <- datos(); x <- x[!x$Descartada, ]
-      list(total = nrow(x), vencidas = sum(x$Estado == "Vencida"), sacos = .gc_suma(x$Objetivo70),
-        margen = .gc_suma(x$MargenObjetivo))
-    }), formatos = list(sacos = "numero", margen = "dinero"))
+    .gc_tarjetas_server(c(total = "Total de oportunidades", activas = "Activas", cumplidas = "Cumplidas",
+      vencidas = "Vencidas", proximas = "Próximas a 30 días", descartadas = "Descartadas",
+      sacos = "Sacos potenciales · 70 kg", margen = "Margen potencial · COP"), shiny::reactive({
+        x <- datos(); corte <- if (length(filtros()$fecha) == 2L) as.Date(filtros()$fecha[[2]]) else Sys.Date()
+        activas <- !x$Descartada & x$Estado != "Cumplida"
+        list(total = nrow(x), activas = sum(activas), cumplidas = sum(x$Estado == "Cumplida"),
+          vencidas = sum(x$Estado == "Vencida"), descartadas = sum(x$Descartada),
+          proximas = sum(activas & !is.na(x$Cumplimiento) & x$Cumplimiento >= corte & x$Cumplimiento <= corte + 30),
+          sacos = .com_suma(x$Objetivo70[activas]), margen = .com_suma(x$MargenObjetivo[activas]))
+      }), formatos = list(sacos = "numero", margen = "dinero"))
     resumen <- shiny::reactive({
-      dimension <- if (length(input$dimension) == 1L && input$dimension %in% c("Autor", "Categoria", "Producto")) {
+      dimension <- if (length(input$dimension) == 1L && input$dimension %in% c("Tipo", "Estado", "Categoria", "Producto", "Linea", "Asesor")) {
         input$dimension
       } else "Autor"
       datos() %>% dplyr::group_by(.data[[dimension]]) %>%
-        dplyr::summarise(Oportunidades = dplyr::n(), SacosObjetivo70 = .gc_suma(Objetivo70),
-          MargenObjetivo = .gc_suma(MargenObjetivo), .groups = "drop")
+        dplyr::summarise(Oportunidades = dplyr::n(), SacosObjetivo70 = .com_suma(Objetivo70),
+          MargenObjetivo = .com_suma(MargenObjetivo), .groups = "drop")
     })
     .crm_vancouver_server("resumen", data = resumen)
     tabla <- .crm_vancouver_server("detalle", data = datos, id_col = "Oportunidad", modo_seleccion = "fila",
       columnas = c("Oportunidad", "NIT", "Cliente", "Autor", "Categoria", "Producto", "Creacion", "Cumplimiento",
         "Estado", "Objetivo70", "MargenObjetivo", "SacosEjecutados", "MargenEjecutado", "CumplSacos", "CumplMargen"),
       col_labels = c(Objetivo70 = "Objetivo sacos 70 kg", CumplSacos = "Cumpl. sacos", CumplMargen = "Cumpl. margen"))
+    output$distribucion <- .crm_render_plotly({
+      x <- resumen(); dimension <- names(x)[[1]]
+      x$Etiqueta <- as.character(x[[dimension]])
+      plotly::plot_ly(x, x = ~Etiqueta, y = ~SacosObjetivo70, type = "bar", marker = list(color = "#7A2028"),
+        text = ~paste("Oportunidades:", Oportunidades, "· margen potencial COP:", round(MargenObjetivo)),
+        hovertemplate = "%{x}<br>Sacos potenciales: %{y:,.2f}<br>%{text}<extra></extra>")
+    })
+    evolucion <- shiny::reactive(datos() %>% dplyr::filter(!is.na(Creacion)) %>%
+      dplyr::mutate(Mes = .gc_mes(Creacion)) %>% dplyr::count(Mes, Estado, name = "Oportunidades"))
+    .crm_vancouver_server("evolucion_detalle", evolucion)
+    output$evolucion <- .crm_render_plotly(plotly::plot_ly(evolucion(), x = ~Mes, y = ~Oportunidades,
+      color = ~Estado, type = "bar", colors = c("#7A2028", "#495057", "#C8A77D", "#9B7160"),
+      hovertemplate = "%{x|%Y-%m}<br>Oportunidades: %{y:.0f}<extra>%{fullData.name}</extra>"))
+    output$cumplimiento <- .crm_render_plotly(plotly::plot_ly(datos(), x = ~CumplSacos, y = ~CumplMargen,
+      text = ~paste(Cliente, Producto, "· objetivo:", Cumplimiento), type = "scatter", mode = "markers",
+      marker = list(color = "#7A2028"),
+      hovertemplate = "%{text}<br>Cumplimiento sacos: %{x:.1%}<br>Cumplimiento margen: %{y:.1%}<extra></extra>") %>%
+      plotly::layout(xaxis = list(title = "Cumplimiento en sacos", tickformat = ".0%"),
+        yaxis = list(title = "Cumplimiento en margen", tickformat = ".0%")))
+    pedido_oportunidad <- shiny::reactive({
+      fila <- datos()[datos()$Oportunidad %in% oportunidad_seleccionada(), , drop = FALSE]
+      if (nrow(fila) != 1L) return(NULL)
+      .gc_columna(fila, c("CLPdcCod", "PdcCod", "Pedido"))[[1]]
+    })
+    TrazabilidadPedido("pedido_asociado", hechos, pedido_oportunidad)
     abrir_creacion <- function(codigo) {
       permitidos <- .op_contactos_visibles(contactos(), usuario(), es_admin())
       if (length(codigo) != 1L || is.na(codigo) || !codigo %in% as.character(permitidos$CodContacto)) {
@@ -156,7 +189,6 @@ OportunidadesGestion <- function(id, usuario, es_admin, hechos, cargar = racafeB
         return(invisible(FALSE))
       }
       contacto_seleccionado(as.character(codigo))
-      .crm_update_select(session, "contacto", selected = as.character(codigo))
       shiny::showModal(racafeForms::racafeModalDetail(title = "Crear oportunidad", size = "subventana2",
         CrearOportunidadUI(session$ns("crear_op")),
         footer = racafeForms::racafeModalFooter(right = shiny::modalButton("Cerrar"))))
@@ -169,19 +201,14 @@ OportunidadesGestion <- function(id, usuario, es_admin, hechos, cargar = racafeB
           type = "warning", duration = 7)
         return()
       }
-      codigo <- input$contacto
-      if (length(codigo) == 1L && !is.na(codigo) && codigo %in% as.character(permitidos$CodContacto)) {
-        abrir_creacion(codigo)
-      } else {
-        etiquetas <- paste(permitidos$PerCod, permitidos$PerRazSoc, sep = " — ")
-        shiny::showModal(racafeForms::racafeModalDetail(title = "Seleccionar contacto", size = "subventana1",
-          racafeForms::racafeForm(variant = "plain",
-            .crm_select("contacto_creacion", "Contacto de la oportunidad",
-              choices = stats::setNames(as.character(permitidos$CodContacto), etiquetas), empty = FALSE,
-              ns = session$ns),
-            racafeForms::racafeButton("continuar_creacion", "Continuar", icon = "arrow-right", ns = session$ns)),
-          footer = racafeForms::racafeModalFooter(right = shiny::modalButton("Cerrar"))))
-      }
+      etiquetas <- paste(permitidos$PerCod, permitidos$PerRazSoc, sep = " — ")
+      shiny::showModal(racafeForms::racafeModalDetail(title = "Seleccionar contacto", size = "subventana1",
+        racafeForms::racafeForm(variant = "plain",
+          .crm_select("contacto_creacion", "Contacto de la oportunidad",
+            choices = stats::setNames(as.character(permitidos$CodContacto), etiquetas), empty = FALSE,
+            ns = session$ns),
+          racafeForms::racafeButton("continuar_creacion", "Continuar", icon = "arrow-right", ns = session$ns)),
+        footer = racafeForms::racafeModalFooter(right = shiny::modalButton("Cerrar"))))
     })
     shiny::observeEvent(input$continuar_creacion, abrir_creacion(input$contacto_creacion))
     shiny::observeEvent(tabla$seleccion(), {
@@ -191,6 +218,8 @@ OportunidadesGestion <- function(id, usuario, es_admin, hechos, cargar = racafeB
       oportunidad_seleccionada(fila$Oportunidad)
       shiny::showModal(racafeForms::racafeModalDetail(title = "Detalle de oportunidad", size = "subventana2",
         .crm_tabla_vancouver(.crm_nits_tabla(fila), font_size = 11, row_padding = 2),
+        if (length(pedido_oportunidad()) == 1L && !is.na(pedido_oportunidad())) .crm_disclosure("Pedido asociado",
+          TrazabilidadPedidoUI(session$ns("pedido_asociado"))),
         if (isTRUE(fila$Editable) && !fila$Descartada) DescartarOportunidadUI(session$ns("descartar_op")),
         if (!isTRUE(fila$Editable)) .crm_nota("Registro histórico de solo lectura: no tiene un ID vigente único."),
         footer = racafeForms::racafeModalFooter(right = shiny::modalButton("Cerrar"))))

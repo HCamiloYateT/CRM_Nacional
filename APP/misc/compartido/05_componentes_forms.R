@@ -3,9 +3,32 @@
   tryCatch(getExportedValue("racafeForms", nombre), error = function(e) NULL)
 }
 .crm_input_mes <- function(...) racafeForms::racafeInputMonth(...)
-.crm_disclosure <- function(title, ..., open = FALSE) {
-  racafeForms::racafeDisclosure(title, ..., open = open)
+.crm_disclosure <- local({
+  contador <- 0L
+  function(title, ..., open = FALSE) {
+    contador <<- contador + 1L
+    badge <- NULL
+    if (inherits(title, "shiny.tag.list") && is.character(title[[1L]])) {
+      badge <- shiny::tagList(title[-1L]); title <- title[[1L]]
+    } else if (!is.character(title)) {
+      badge <- title; title <- "Detalle"
+    }
+    if (!length(title)) title <- "Detalle"
+    sesion <- shiny::getDefaultReactiveDomain()
+    id <- paste0("crm_seccion_", contador)
+    if (!is.null(sesion)) id <- sesion$ns(id)
+    racafeShiny::racafeCollapsible(id, title, open = open, ..., color = "#6C757D", header_badge = badge, class = "crm-seccion")
+  }
+})
+.crm_nota_metodologica <- function(texto, title = "Cómo leer esta sección", ...) {
+  .crm_disclosure(title, .crm_nota(texto, ...))
 }
+.crm_seccion_presupuesto <- function(..., title = NULL, width = 12, collapsible = TRUE, collapsed = FALSE,
+                                     status = NULL, solidHeader = NULL, footer = NULL, elevation = NULL) {
+  shiny::column(width, if (collapsible) .crm_disclosure(title, ..., footer, open = !collapsed) else
+    racafeForms::racafePanel(title = title, ..., footer = footer))
+}
+
 # bs4Dash construye la navegación compatible con Bootstrap 4.
 .crm_tabs <- function(..., id = NULL, selected = NULL, type = "tabs") {
   racafeForms::racafeTabs(..., id = id, selected = selected, type = type, engine = "bs4dash", styled = FALSE)
