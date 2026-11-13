@@ -19,7 +19,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     mapa_nit <- shiny::reactive(if (shiny::is.reactive(nit_mapa)) nit_mapa() else nit_mapa)
     revision <- shiny::reactiveVal(0L)
     revision_modelos <- shiny::reactiveVal(0L)
-    shiny::observeEvent(.pr_fuentes()$revision(), revision(shiny::isolate(revision()) + 1L), ignoreInit = TRUE)
+    shiny::observeEvent(.pr_fuentes()$revision_total(), revision(shiny::isolate(revision()) + 1L), ignoreInit = TRUE)
     solicitud_atendida <- shiny::reactiveVal(NULL)
     shiny::observeEvent(input$actualizar, revision(revision() + 1L))
     contactos <- shiny::reactive({
@@ -43,13 +43,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     catalogo_clientes <- shiny::reactive(.com_clientes(clientes(), periodo()[[2]], filtros()))
     catalogo <- shiny::reactive({
       crm <- contactos()
-      leads <- .fuentes_cache$conversion_lead()$datos
-      if (all(c("CodContacto", "Asesor", "FechaConversion") %in% names(leads))) {
-        leads <- leads[order(leads$FechaConversion, decreasing = TRUE), , drop = FALSE]
-        indice <- match(as.character(crm$CodContacto), as.character(leads$CodContacto))
-        crm$Asesor <- dplyr::coalesce(as.character(.gc_columna(crm, "Asesor")), as.character(leads$Asesor[indice]))
-      }
-      .in_catalogo(crm, catalogo_clientes(), .fuentes_cache$etapas()$datos, vinculos()$datos, usuario(), es_admin(),
+      .in_catalogo(crm, catalogo_clientes(), data.frame(), vinculos()$datos, usuario(), es_admin(),
         filtros(), .gc_filtrar_dimensiones(hechos(), filtros()), directorio(),
         asignaciones = .com_clientes(clientes(), periodo()[[2]]))
     })
@@ -124,8 +118,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       if (is.null(x)) return(character())
       comercial <- nrow(historia()) > 0L
       crm <- !is.na(contexto_crm()$Codigo)
-      potencial <- crm && (x$Tipo %in% c("PROSPECTO", "LEAD", "CLIENTE") ||
-        .in_tiene_detalle(.fuentes_cache$potencial(), x$Codigo) || .in_tiene_detalle(.fuentes_cache$oportunidades(), x$Codigo))
+      potencial <- crm
       opciones <- c("Ficha", if (crm) "Gestión y seguimiento",
         if (potencial) "Potencial y oportunidades",
         if (comercial) c("Ejecución y productos", "Preferencias de compra",
@@ -638,6 +631,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
           car_puntualidad = if (any(buenos)) mean(p$DiasAtraso[buenos] == 0) else NA_real_)
       }), list(car_saldo = "dinero", car_vencido = "dinero", car_mora = "numero", car_puntualidad = "porcentaje"))
     cosechas <- shiny::reactive({
+      shiny::req(input$detalle_tabs == "Cartera")
       fuente <- cartera(); e <- entidad()
       shiny::validate(shiny::need(is.list(fuente) && is.data.frame(fuente$cartera) && is.data.frame(fuente$facturacion),
         "No hay saldos históricos y facturas disponibles para reconstruir cosechas."))

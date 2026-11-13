@@ -126,17 +126,41 @@
   invisible(TRUE)
 }
 
+# Navegación por unidad operativa ----
+.PEN_TABS <- c("Pedidos sin lote asignado", "Lotes pendientes", "Pendientes de margen", "Otros pendientes")
+.pen_filas_tab <- function(x, tab, condiciones = .PEN_TIPOS[2:4]) {
+  if (tab != "Lotes pendientes") {
+    tipos <- switch(tab, "Pedidos sin lote asignado" = .PEN_TIPOS[1],
+      "Pendientes de margen" = .PEN_TIPOS[5], .PEN_TIPOS[6:7])
+    return(x[x$TipoPendiente %in% tipos, , drop = FALSE])
+  }
+  x <- x[x$TipoPendiente %in% condiciones & !is.na(x$Lote), , drop = FALSE]
+  for (i in 2:4) x[[c("PorProducir", "PorDespachar", "PorFacturar")[i - 1L]]] <-
+    ifelse(x$TipoPendiente == .PEN_TIPOS[i], x$Cantidad, NA_real_)
+  x %>% dplyr::group_by(Lote) %>%
+    dplyr::summarise(dplyr::across(-dplyr::all_of(c("Registro", "Cantidad", "Motivo", "Etapa", "TipoPendiente")),
+      .gc_unico), Motivo = paste(unique(Motivo), collapse = " · "), Cantidad = NA_real_,
+      Etapa = "Lotes pendientes", TipoPendiente = "Lotes pendientes", .groups = "drop") %>%
+    dplyr::mutate(Registro = paste0("LOTE|", Lote))
+}
 PendientesGestionUI <- function(id) {
   ns <- shiny::NS(id)
-  racafeForms::racafeForm(variant = "plain", lapply(.PEN_TIPOS, function(tipo) {
-    mid <- paste0("tipo_", match(tipo, .PEN_TIPOS))
-    .crm_disclosure(tipo, .crm_tabla_ui(ns(paste0(mid, "resumen"))), .crm_plot_output(ns(paste0(mid, "grafico"))),
-      .crm_tabla_ui(ns(mid)), open = TRUE)
-  }), .crm_disclosure("Gestión documental por lote", .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("detalle"))),
-    .crm_nota_metodologica(c("Cada condición conserva su cantidad y su nivel de observación.",
-      "Los pedidos pueden aparecer en varias secciones. No se suman etapas solapadas como si fueran un total único.",
-      "Los pedidos anteriores a la cobertura operativa verificable se separan como información incompleta.",
-      "Cantidades desconocidas no se reemplazan por cero. Seleccione un pedido para consultar su trazabilidad.")))
+  racafeForms::racafeForm(variant = "plain", do.call(bs4Dash::tabsetPanel, c(list(id = ns("pendiente_tab")),
+    lapply(.PEN_TABS, function(tipo) {
+      mid <- paste0("tipo_", match(tipo, .PEN_TABS))
+      tabPanel(tipo,
+        if (tipo == "Lotes pendientes") racafeForms::racafeFormRow(columns = 3,
+          racafeForms::racafeInputSwitch("producir", "Por producir", value = TRUE, ns = ns),
+          racafeForms::racafeInputSwitch("despachar", "Por despachar", value = TRUE, ns = ns),
+          racafeForms::racafeInputSwitch("facturar", "Por facturar", value = TRUE, ns = ns)),
+        .crm_tabla_ui(ns(paste0(mid, "resumen"))), .crm_plot_output(ns(paste0(mid, "grafico"))),
+        .crm_tabla_ui(ns(mid)),
+        if (tipo == "Otros pendientes") .crm_disclosure("Gestión documental por lote",
+          .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("detalle"))))
+    }))), .crm_nota(c("Cada lote aparece una vez en Lotes pendientes, aunque tenga varias gestiones por completar.",
+      "Los interruptores incluyen lotes que cumplan al menos una condición seleccionada.",
+      "Las cantidades pendientes de producir, despachar y facturar se presentan por separado; no se suman.",
+      "Seleccione un pedido para consultar su trazabilidad.")))
 }
 
 PendientesGestion <- function(id, maestro, usuario = function() "SIN IDENTIFICAR", corte = function() Sys.Date()) {
@@ -148,14 +172,17 @@ PendientesGestion <- function(id, maestro, usuario = function() "SIN IDENTIFICAR
     shiny::observeEvent(input$actualizar, revision_flujo(revision_flujo() + 1L))
     flujo <- shiny::reactive({ revision_flujo(); .pen_preparar(maestro(), corte()) })
     datos <- shiny::reactive(.pen_tipificar(flujo()$detalle, maestro()))
-    for (tipo in .PEN_TIPOS) local({
-      categoria <- tipo; mid <- paste0("tipo_", match(tipo, .PEN_TIPOS))
+    for (tipo in .PEN_TABS) local({
+      categoria <- tipo; mid <- paste0("tipo_", match(tipo, .PEN_TABS))
       filas <- shiny::reactive({
-        x <- datos(); x[x$TipoPendiente == categoria, , drop = FALSE]
+        shiny::req(identical(input$pendiente_tab %||% .PEN_TABS[1], categoria))
+        condiciones <- .PEN_TIPOS[2:4][vapply(list(input$producir %||% TRUE,
+          input$despachar %||% TRUE, input$facturar %||% TRUE), isTRUE, logical(1))]
+        .pen_filas_tab(datos(), categoria, condiciones)
       })
       .crm_vancouver_server(paste0(mid, "resumen"), shiny::reactive(.pen_resumen_tipo(filas())))
       sel <- .crm_tabla_servidor(mid, data = filas, id_col = "Registro", modo_seleccion = "fila",
-        columnas = c("Cliente", "Pedido", "Linea", "Lote", "Fecha", "Nivel", "Cantidad", "Categoria", "Producto", "CLLinNegNo", "Asesor", "Motivo", "Etapa"),
+        columnas = c("Cliente", "Pedido", "Linea", "Lote", "Fecha", "Nivel", "Cantidad", "PorProducir", "PorDespachar", "PorFacturar", "Categoria", "Producto", "CLLinNegNo", "Asesor", "Motivo", "Etapa"),
         modal_titulo_fn = function(sel) "Trazabilidad del pedido",
         modal_contenido_fn = function(sel) TrazabilidadPedidoUI(session$ns(paste0(mid, "traza"))))
       TrazabilidadPedido(paste0(mid, "traza"), maestro,

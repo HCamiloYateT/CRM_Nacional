@@ -92,6 +92,7 @@
 VariablesBonoUI <- function(id, fecha = Sys.Date()) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
+    .crm_nota(c("Información en confirmación.", "Módulo en construcción.")),
     racafeForms::racafeFormRow(columns = 3,
       racafeForms::racafeInputDate("corte", "Mes de consulta", value = fecha, ns = ns),
       .crm_select("asesor", "Asesor", choices = character(), ns = ns),

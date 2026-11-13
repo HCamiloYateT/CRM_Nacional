@@ -1178,7 +1178,7 @@ Potencial <- function(id, usuario, codigo_contacto) {
 
 EditarUI <- function(id) {
   ns <- NS(id)
-  tagList(uiOutput(ns("Encabezado")), bs4Dash::tabsetPanel(
+  tagList(uiOutput(ns("Encabezado")), bs4Dash::tabsetPanel(id = ns("tabs_editar"),
     tabPanel("Identificación", Saltos(), IdentificacionUI(ns("Identificacion"))),
     tabPanel("Directorio", Saltos(), DirectorioUI(ns("Directorio"))),
     tabPanel("Geografía", Saltos(), GeografiaUI(ns("Geografia"))),
@@ -1188,10 +1188,14 @@ EditarUI <- function(id) {
 Editar <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
     .accion_encabezado(output, codigo_contacto)
-    modulo_identificacion <- Identificacion(id = "Identificacion", usuario = usuario, codigo_contacto = codigo_contacto)
-    Directorio(id = "Directorio", usuario = usuario, codigo_contacto = codigo_contacto)
-    Geografia(id = "Geografia", usuario = usuario, codigo_contacto = codigo_contacto)
-    Potencial(id = "Potencial", usuario = usuario, codigo_contacto = codigo_contacto)
+    codigo_tab <- function(tab) reactive({
+      req(identical(input$tabs_editar %||% "Identificación", tab))
+      codigo_contacto()
+    })
+    modulo_identificacion <- Identificacion(id = "Identificacion", usuario = usuario, codigo_contacto = codigo_tab("Identificación"))
+    Directorio(id = "Directorio", usuario = usuario, codigo_contacto = codigo_tab("Directorio"))
+    Geografia(id = "Geografia", usuario = usuario, codigo_contacto = codigo_tab("Geografía"))
+    Potencial(id = "Potencial", usuario = usuario, codigo_contacto = codigo_tab("Potencial"))
     
     list(actualizaciones = modulo_identificacion$actualizaciones)
   })

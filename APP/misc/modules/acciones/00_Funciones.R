@@ -1090,8 +1090,13 @@ descartar_oportunidad <- function(id_oportunidad, razon, usr) {
 .accion_encabezado <- function(output, codigo, revision = function() .pr_fuentes()$revision()) {
   output$Encabezado <- shiny::renderUI({
     revision(); shiny::req(codigo())
-    fila <- CargarDatos("CRMNALCONTACTO", condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(codigo())))
+    fila <- .pr_cargar("CRMNALCONTACTO")
+    fila <- fila[as.character(fila$CodContacto) %in% as.character(codigo()), , drop = FALSE]
     shiny::req(nrow(fila) == 1L)
+    unidades <- .crm_unidades_sesion()
+    unidades <- unidades[as.character(unidades$CodContacto) %in% as.character(codigo()) |
+      unidades$CliNitPpal %in% as.character(fila$PerCod), , drop = FALSE]
+    if (nrow(unidades)) return(.crm_unidad_ficha(unidades))
     etapa <- obtener_etapa_contacto(codigo(), fila = fila)
     shiny::tagList(shiny::tags$h4(.titulo_identificacion(fila$PerCod[[1]], fila$PerRazSoc[[1]])),
       shiny::tags$p("Etapa vigente: ", if (!is.na(etapa)) .badge_etapa(etapa)))

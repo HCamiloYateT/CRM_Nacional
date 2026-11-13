@@ -51,12 +51,16 @@ server <- function(input, output, session) {
   datos_rv <- reactiveVal(data)
   productos_cache <- reactiveVal(productos_snap)
   
-  data_c <- reactive({
-    req(datos_rv())
-    
-    .crm_preparar_datos(datos_rv(), productos_cache(), exportacion_rv()$segmentaciones_actual, exportacion_rv()$ord_cmp)
+  maestro_base_comercial <- reactive({
+    h <- exportacion_rv()
+    x <- .crm_medir("transformacion:base_comercial", .crm_preparar_datos(h$crm_maestro, productos_cache(),
+      h$segmentaciones_actual, h$ord_cmp))
+    if (!"FacturadosConsolidados70" %in% names(x)) x <- .crm_capa_ejecucion(x)
+    attr(x, "facturas_detalle") <- h$homologaciones$facturas_detalle
+    x
   })
-  
+  data_c <- reactive(maestro_base_comercial() %>% dplyr::filter(EstadoFinanciero != "PROYECTADO"))
+
   data_t <- reactive({
     f <- filtros()
     req(data_c(), !is.null(f))
@@ -81,15 +85,16 @@ server <- function(input, output, session) {
     }
   })
   
-  # Maestro completo: no aplicar el filtro de fechas de facturación a saldos pendientes.
-  maestro_base_comercial <- reactive({
-    h <- exportacion_rv()
-    x <- .crm_preparar_datos(h$crm_maestro, productos_cache(), h$segmentaciones_actual, h$ord_cmp)
-    if (!"FacturadosConsolidados70" %in% names(x)) x <- .crm_capa_ejecucion(x)
-    attr(x, "facturas_detalle") <- h$homologaciones$facturas_detalle
-    x
-  })
-  maestro_comercial <- reactive(.gc_filtrar_dimensiones(maestro_base_comercial(), filtros()))
+  maestro_comercial <- reactive(.crm_medir("filtros:base_comercial",
+    .gc_filtrar_dimensiones(maestro_base_comercial(), filtros())))
+
+  unidades_comerciales <- reactive(.crm_medir("construccion:unidades_comerciales", {
+    contactos <- derivar_etapa_actual(.pr_cargar("CRMNALCONTACTO"), .pr_cargar("CRMNALHISTORIALETAPA"),
+      .pr_cargar("CRMNALSEGR"))
+    .crm_unidades_comerciales(maestro_base_comercial(), clientes_raw_cache(), contactos,
+      .pr_cargar("CRMNALSEGR"), .pr_cargar("CONTACTOLEAD"))
+  }))
+  session$userData$unidades_comerciales <- unidades_comerciales
 
   # Carga diferida ----
   modulos_cargados <- reactiveValues()
@@ -343,7 +348,7 @@ server <- function(input, output, session) {
   
   ### Cohortes de Clientes ----
   segmentos_cohortes <- eventReactive(input$FT_Actualizar, {
-    racafeBD::CargarDatos("CRMNALSEGR")
+    .pr_cargar("CRMNALSEGR")
   }, ignoreNULL = FALSE)
   data_cohortes <- reactive({
     req(length(filtros()$fecha) == 2L)

@@ -19,6 +19,10 @@ ProductosEjecucionUI <- function(id, periodo_local = FALSE) {
         format = "number", decimals = 0, ns = ns),
       racafeForms::racafeInputSwitch("cerrados", "Solo meses cerrados financieramente", value = FALSE, ns = ns)),
     .gc_tarjetas_ui(ns, .PROD_CAJAS),
+    .crm_select("tamano_arbol", "Tamaño de categoría y producto", choices = c("Clientes" = "Clientes",
+      "Sacos" = "Sacos", "Margen" = "Margen"), ns = ns),
+    .crm_plot_output(ns("arbol_productos")),
+    .crm_nota("El tamaño usa valores positivos. Un cliente puede comprar varios productos; sus conteos no se suman."),
     shiny::fluidRow(shiny::column(6, .crm_plot_output(ns("ranking"), height = "340px")),
       shiny::column(6, .crm_plot_output(ns("pareto"), height = "340px"))),
     shiny::fluidRow(shiny::column(6, .crm_plot_output(ns("tendencia"), height = "280px")),
@@ -48,6 +52,32 @@ ProductosEjecucion <- function(id, hechos, filtros = NULL) {
     })
     .gc_tarjetas_server(.PROD_CAJAS, shiny::reactive(.prod_indicadores(datos())),
       list(sacos = "numero", margen = "dinero", margen_kg = "dinero", cerrado = "dinero", abierto = "dinero"))
+    output$arbol_productos <- .crm_render_plotly({
+      x <- datos()
+      resumir <- function(z, claves) z %>% dplyr::group_by(dplyr::across(dplyr::all_of(claves))) %>%
+        dplyr::summarise(Clientes = dplyr::n_distinct(NIT[!is.na(NIT) & SacosFact > 0]),
+          Unidades = dplyr::n_distinct(paste(NIT[!is.na(NIT)], Linea[!is.na(NIT)], sep = "|")),
+          Sacos = .com_suma(SacosFact), Margen = .com_suma(Margen), .groups = "drop")
+      hojas <- resumir(x, c("Linea", "Categoria", "Producto"))
+      categorias <- resumir(x, c("Linea", "Categoria"))
+      medida_arbol <- .com_elegir(input$tamano_arbol, c("Clientes", "Sacos", "Margen"), "Clientes")
+      hojas$Id <- paste("P", hojas$Linea, hojas$Categoria, hojas$Producto, sep = "|")
+      hojas$Padre <- paste("C", hojas$Linea, hojas$Categoria, sep = "|")
+      hojas$Etiqueta <- hojas$Producto
+      hojas$Tamano <- pmax(0, hojas[[medida_arbol]])
+      categorias$Id <- paste("C", categorias$Linea, categorias$Categoria, sep = "|")
+      categorias$Padre <- ""; categorias$Etiqueta <- paste(categorias$Linea, categorias$Categoria, sep = " · ")
+      categorias$Tamano <- 0
+      arbol <- dplyr::bind_rows(categorias, hojas)
+      shiny::validate(shiny::need(any(hojas$Tamano > 0, na.rm = TRUE), "No hay valores positivos para esta medida."))
+      arbol$Tamano[!is.finite(arbol$Tamano)] <- 0
+      plotly::plot_ly(arbol, type = "treemap", ids = ~Id, labels = ~Etiqueta, parents = ~Padre, values = ~Tamano,
+        branchvalues = "remainder", customdata = ~cbind(Clientes, Unidades, Sacos, Margen),
+        marker = list(colors = rep(c("#C8A77D", "#7A2028", "#9B7160", "#495057"), length.out = nrow(arbol))),
+        hovertemplate = paste0("<b>%{label}</b><br><b>CLIENTES:</b> %{customdata[0]:.0f}",
+          "<br><b>UNIDADES COMERCIALES:</b> %{customdata[1]:.0f}<br><b>SACOS:</b> %{customdata[2]:,.2f}",
+          "<br><b>MARGEN COP:</b> $%{customdata[3]:,.0f}<extra></extra>"))
+    })
     calidad <- shiny::reactive({
       x <- datos()
       data.frame(Movimientos = nrow(x), SinProductoHomologado = sum(!x$ProductoValido),

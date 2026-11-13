@@ -193,13 +193,16 @@
   incompletas <- !is.finite(f$Original) | f$Original <= 0 | is.na(f$Vencimiento)
   if (any(incompletas)) return(error("Hay facturas sin valor original positivo o vencimiento; el denominador de sus cohortes no es verificable."))
   f$Cohorte <- .gc_mes(f$Emision)
-  observaciones <- dplyr::bind_rows(lapply(sort(unique(.car_fecha(cartera$TCEFch))), function(fecha) {
-    fecha <- as.Date(fecha, origin = "1970-01-01")
-    if (is.na(fecha) || fecha > corte) return(NULL)
-    d <- .car_preparar(cartera, fecha) %>% dplyr::group_by(Documento) %>%
-      dplyr::summarise(SaldoObservado = .com_suma(Saldo), .groups = "drop")
-    d$Corte <- fecha; d
-  }))
+  base <- unique(cartera)
+  base$Corte <- .car_fecha(base$TCEFch)
+  base$Documento <- .car_llave(base, c("PerCod", "Factura"))
+  base$SaldoObservado <- .gc_num(base$SaldoCOP)
+  grano <- intersect(c("Corte", "PerCod", "Factura", "TCETipCar", "LinNegCod", "LinProCod",
+    "TCEPdcRef", "TCEPdcLin"), names(base))
+  if (anyDuplicated(base[grano])) stop("Hay líneas de cartera contradictorias para el mismo corte y documento.")
+  observaciones <- base %>% dplyr::filter(!is.na(Corte), Corte <= corte, !is.na(Documento)) %>%
+    dplyr::group_by(Corte, Documento) %>%
+    dplyr::summarise(SaldoObservado = .com_suma(SaldoObservado), .groups = "drop")
   if (!nrow(observaciones)) return(error("No existen saldos históricos observados para reconstruir las cosechas."))
   d <- dplyr::inner_join(observaciones, f[c("Documento", "Cohorte", "Emision", "Vencimiento", "Original")],
     by = "Documento", relationship = "many-to-one")
@@ -243,8 +246,9 @@
   permitido <- .car_scope(cartera, clientes, nit_mapa)
   firma <- function(d) paste(.car_llave(d, c("PerCod", "Factura")), as.character(d$LinNegCod), sep = "|")
   lineas <- unique(data.frame(Documento = .car_llave(cartera, c("PerCod", "Factura")), Firma = firma(cartera)))
+  firmas_permitidas <- unique(firma(permitido))
   aceptadas <- lineas %>% dplyr::group_by(Documento) %>%
-    dplyr::summarise(Completa = all(Firma %in% firma(permitido)), .groups = "drop")
+    dplyr::summarise(Completa = all(Firma %in% firmas_permitidas), .groups = "drop")
   claves <- .car_llave(f, c("PerCod", "Factura"))
   f <- f[!is.na(claves) & claves %in% aceptadas$Documento[aceptadas$Completa] & claves %in% total, , drop = FALSE]
   attr(f, "limite_alcance") <- paste("Solo se incluyen facturas cuya línea se verificó en cartera y quedó íntegramente autorizada.",
