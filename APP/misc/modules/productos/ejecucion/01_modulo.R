@@ -1,7 +1,8 @@
 # Tablero dinámico de ejecución por categoría y producto ----
 .PROD_CAJAS <- c(sacos = "Sacos facturados (70 kg)", margen = "Margen FCC total",
   productos = "Productos con movimiento",
-  clientes = "Clientes con compra", margen_kg = "Margen por kilo", pedidos = "Pedidos facturados",
+  clientes = "Clientes con compra", unidades = "Unidades comerciales", margen_kg = "Margen por kilo",
+    pedidos = "Pedidos facturados",
   cerrado = "Margen contable cerrado", abierto = "Margen abierto provisional")
 ProductosEjecucionUI <- function(id, periodo_local = FALSE) {
   ns <- shiny::NS(id)
@@ -13,13 +14,14 @@ ProductosEjecucionUI <- function(id, periodo_local = FALSE) {
         choices = c("Producto" = "producto", "Categoría" = "categoria"),
         ns = ns),
       .crm_select("medida", "Medida de los gráficos", choices = c("Sacos 70 kg" = "Sacos",
-        "Margen FCC" = "Margen", "Margen por kilo" = "MargenKg", "Clientes" = "Clientes"), ns = ns)),
+        "Margen FCC" = "Margen", "Margen por kilo" = "MargenKg", "Clientes" = "Clientes",
+          "Unidades comerciales" = "Unidades"), ns = ns)),
     racafeForms::racafeFormRow(columns = 2,
       racafeForms::racafeInputNumeric("top", "Productos/categorías del ranking", value = 15, min = 3, max = 40,
         format = "number", decimals = 0, ns = ns),
       racafeForms::racafeInputSwitch("cerrados", "Solo meses cerrados financieramente", value = FALSE, ns = ns)),
     .gc_tarjetas_ui(ns, .PROD_CAJAS),
-    .crm_select("tamano_arbol", "Tamaño de categoría y producto", choices = c("Clientes" = "Clientes",
+    .crm_select("tamano_arbol", "Tamaño de categoría y producto", choices = c("Unidades comerciales" = "Unidades",
       "Sacos" = "Sacos", "Margen" = "Margen"), ns = ns),
     .crm_plot_output(ns("arbol_productos")),
     .crm_nota("El tamaño usa valores positivos. Un cliente puede comprar varios productos; sus conteos no se suman."),
@@ -45,7 +47,8 @@ ProductosEjecucion <- function(id, hechos, filtros = NULL) {
     })
     nivel <- shiny::reactive(.com_elegir(input$nivel, c("producto", "categoria"), "producto"))
     tabla <- shiny::reactive(.prod_resumen(datos(), nivel()))
-    medida <- shiny::reactive(.com_elegir(input$medida, c("Sacos", "Margen", "MargenKg", "Clientes"), "Sacos"))
+    medida <- shiny::reactive(.com_elegir(input$medida, c("Sacos", "Margen", "MargenKg", "Clientes",
+      "Unidades"), "Sacos"))
     top <- shiny::reactive({
       if (length(input$top) != 1L || !is.finite(input$top)) return(15L)
       as.integer(min(40, max(3, input$top)))
@@ -54,13 +57,18 @@ ProductosEjecucion <- function(id, hechos, filtros = NULL) {
       list(sacos = "numero", margen = "dinero", margen_kg = "dinero", cerrado = "dinero", abierto = "dinero"))
     output$arbol_productos <- .crm_render_plotly({
       x <- datos()
+      mes_referencia <- as.Date(format(if (is.null(filtros)) tail(input$periodo,
+        1L) else filtros()$fecha[[2]], "%Y-%m-01"))
       resumir <- function(z, claves) z %>% dplyr::group_by(dplyr::across(dplyr::all_of(claves))) %>%
         dplyr::summarise(Clientes = dplyr::n_distinct(NIT[!is.na(NIT) & SacosFact > 0]),
           Unidades = dplyr::n_distinct(paste(NIT[!is.na(NIT)], Linea[!is.na(NIT)], sep = "|")),
-          Sacos = .com_suma(SacosFact), Margen = .com_suma(Margen), .groups = "drop")
+          Sacos = .com_suma(SacosFact), Margen = .com_suma(Margen),
+          SacosMes = .com_suma(SacosFact[FecFact >= mes_referencia]),
+          MargenMes = .com_suma(Margen[FecFact >= mes_referencia]),
+          Primera = .gc_fecha_min(FecFact), Ultima = .gc_fecha_max(FecFact), .groups = "drop")
       hojas <- resumir(x, c("Linea", "Categoria", "Producto"))
       categorias <- resumir(x, c("Linea", "Categoria"))
-      medida_arbol <- .com_elegir(input$tamano_arbol, c("Clientes", "Sacos", "Margen"), "Clientes")
+      medida_arbol <- .com_elegir(input$tamano_arbol, c("Unidades", "Sacos", "Margen"), "Unidades")
       hojas$Id <- paste("P", hojas$Linea, hojas$Categoria, hojas$Producto, sep = "|")
       hojas$Padre <- paste("C", hojas$Linea, hojas$Categoria, sep = "|")
       hojas$Etiqueta <- hojas$Producto
@@ -68,15 +76,26 @@ ProductosEjecucion <- function(id, hechos, filtros = NULL) {
       categorias$Id <- paste("C", categorias$Linea, categorias$Categoria, sep = "|")
       categorias$Padre <- ""; categorias$Etiqueta <- paste(categorias$Linea, categorias$Categoria, sep = " · ")
       categorias$Tamano <- 0
-      arbol <- dplyr::bind_rows(categorias, hojas)
+      categorias$Padre <- paste("L", categorias$Linea, sep = "|")
+      lineas <- resumir(x, "Linea")
+      lineas$Id <- paste("L", lineas$Linea, sep = "|")
+      lineas$Padre <- ""; lineas$Etiqueta <- lineas$Linea; lineas$Tamano <- 0
+      arbol <- dplyr::bind_rows(lineas, categorias, hojas)
+      arbol$Color <- c(unname(.crm_colores("linneg", lineas$Linea)),
+        unname(.crm_colores("categoria", categorias$Categoria, categorias$Linea)),
+        unname(.crm_colores("producto", hojas$Producto, hojas$Linea, hojas$Categoria)))
       shiny::validate(shiny::need(any(hojas$Tamano > 0, na.rm = TRUE), "No hay valores positivos para esta medida."))
       arbol$Tamano[!is.finite(arbol$Tamano)] <- 0
       plotly::plot_ly(arbol, type = "treemap", ids = ~Id, labels = ~Etiqueta, parents = ~Padre, values = ~Tamano,
-        branchvalues = "remainder", customdata = ~cbind(Clientes, Unidades, Sacos, Margen),
-        marker = list(colors = rep(c("#C8A77D", "#7A2028", "#9B7160", "#495057"), length.out = nrow(arbol))),
+        branchvalues = "remainder", customdata = .crm_customdata(arbol, c("Clientes", "Unidades", "Sacos",
+          "Margen", "SacosMes", "MargenMes", "Primera", "Ultima")),
+        marker = list(colors = arbol$Color),
         hovertemplate = paste0("<b>%{label}</b><br><b>CLIENTES:</b> %{customdata[0]:.0f}",
           "<br><b>UNIDADES COMERCIALES:</b> %{customdata[1]:.0f}<br><b>SACOS:</b> %{customdata[2]:,.2f}",
-          "<br><b>MARGEN COP:</b> $%{customdata[3]:,.0f}<extra></extra>"))
+          "<br><b>MARGEN DEL PERIODO COP:</b> $%{customdata[3]:,.0f}",
+          "<br><b>SACOS DEL MES DE REFERENCIA:</b> %{customdata[4]:,.2f}",
+          "<br><b>MARGEN DEL MES COP:</b> $%{customdata[5]:,.0f}",
+          "<br><b>PRIMERA FACTURA:</b> %{customdata[6]}<br><b>ÚLTIMA FACTURA:</b> %{customdata[7]}<extra></extra>"))
     })
     calidad <- shiny::reactive({
       x <- datos()
@@ -88,7 +107,7 @@ ProductosEjecucion <- function(id, hechos, filtros = NULL) {
     .crm_vancouver_server("calidad", data = calidad)
     .crm_tabla_servidor("productos", data = tabla, id_col = "Grupo", modo_seleccion = "fila",
       columnas = c("Linea", "Categoria", "Producto", "Sacos", "Margen", "MargenKg",
-        "Clientes", "Pedidos", "Lotes", "MargenCerrado", "MargenAbierto", "Participacion"),
+        "Clientes", "Unidades", "Pedidos", "Lotes", "MargenCerrado", "MargenAbierto", "Participacion"),
       col_labels = c(Linea = "Línea", Categoria = "Categoría", Sacos = "Sacos 70 kg", MargenKg = "Margen/kg",
         MargenCerrado = "Margen cerrado", MargenAbierto = "Margen provisional", Participacion = "% sacos positivos"),
       col_specs = list(Participacion = list(format = list(percent = TRUE, digits = 1))),
@@ -113,14 +132,20 @@ ProductosEjecucion <- function(id, hechos, filtros = NULL) {
     output$ranking <- .crm_render_plotly({
       x <- ranking()
       shiny::validate(shiny::need(nrow(x) > 0, "No hay ejecución para este periodo."))
-      x$Hover <- paste(htmltools::htmlEscape(x$Etiqueta), "<br>Medida:", .prod_medida_label(medida()),
-        "<br>Valor:", format(x[[medida()]], big.mark = ","), "<br>Clientes:", x$Clientes)
-      p <- ggplot2::ggplot(x, ggplot2::aes(x = stats::reorder(Etiqueta, .data[[medida()]]),
-        y = .data[[medida()]], text = Hover)) +
-        ggplot2::geom_col(fill = "#DA291C", na.rm = TRUE) + ggplot2::coord_flip() +
-        ggplot2::labs(x = NULL, y = .prod_medida_label(medida()), title = "Ranking de contribución neta") +
-        .crm_tema_grafico()
-      plotly::ggplotly(p, tooltip = "text")
+      colores <- unname(.crm_colores(if (nivel() == "categoria") "categoria" else "producto",
+        if (nivel() == "categoria") x$Categoria else x$Producto, x$Linea,
+        if (nivel() == "categoria") "" else x$Categoria))
+      x$Valor <- x[[medida()]]
+      moneda <- medida() %in% c("Margen", "MargenKg")
+      plotly::plot_ly(x, x = ~Valor, y = ~Etiqueta, type = "bar", orientation = "h", marker = list(color = colores),
+        customdata = .crm_customdata(x, c("Clientes", "Unidades", "Sacos", "Margen")),
+        hovertemplate = paste0("<b>%{y}</b><br><b>", .prod_medida_label(medida()), ":</b> ",
+          if (moneda) "$" else "", "%{x:,.2f}<br><b>CLIENTES:</b> %{customdata[0]:.0f}",
+          "<br><b>UNIDADES:</b> %{customdata[1]:.0f}<br><b>SACOS:</b> %{customdata[2]:,.2f}",
+          "<br><b>MARGEN COP:</b> $%{customdata[3]:,.0f}<extra></extra>")) %>%
+        plotly::layout(title = "Ranking de contribución neta", xaxis = list(title = .prod_medida_label(medida())),
+          yaxis = list(title = "", categoryorder = "array", categoryarray = rev(x$Etiqueta)))
+
     })
     output$pareto <- .crm_render_plotly({
       x <- tabla(); x <- x[order(x$Participacion, decreasing = TRUE), ]
@@ -147,20 +172,27 @@ ProductosEjecucion <- function(id, hechos, filtros = NULL) {
       principales <- head(etiquetas, 5)
       x$Serie[!x$Serie %in% principales] <- "Otros"
       x %>% dplyr::group_by(Mes, Serie) %>% dplyr::summarise(Sacos = .prod_suma(SacosFact),
-        Margen = .prod_suma(Margen), Clientes = dplyr::n_distinct(NIT[!is.na(NIT)]), .groups = "drop") %>%
+        Margen = .prod_suma(Margen), Clientes = dplyr::n_distinct(NIT[!is.na(NIT)]),
+        Unidades = dplyr::n_distinct(paste(NIT[!is.na(NIT)], Linea[!is.na(NIT)], sep = "|")), .groups = "drop") %>%
         dplyr::mutate(MargenKg = .prod_div(Margen, Sacos * 70))
     })
     output$tendencia <- .crm_render_plotly({
       x <- serie()
       shiny::validate(shiny::need(nrow(x) > 0, "Sin serie temporal."))
+      mapa <- datos() %>% dplyr::distinct(Etiqueta, Linea, Categoria, Producto)
+      color <- .crm_colores(if (nivel() == "categoria") "categoria" else "producto",
+        if (nivel() == "categoria") mapa$Categoria else mapa$Producto, mapa$Linea,
+        if (nivel() == "categoria") "" else mapa$Categoria)
+      if (nivel() == "categoria") mapa$Etiqueta <- paste(mapa$Linea, mapa$Categoria, sep = " › ")
+      names(color) <- mapa$Etiqueta
+      color <- c(color[!duplicated(names(color))], Otros = "#ADB5BD")
       p <- ggplot2::ggplot(x, ggplot2::aes(x = Mes, y = .data[[medida()]], colour = Serie, group = Serie,
         text = paste(htmltools::htmlEscape(Serie), "<br>Mes:", format(Mes, "%Y-%m"),
           "<br>Sacos:", scales::comma(Sacos), "<br>Margen COP:", scales::comma(Margen),
           "<br>Margen/kg COP:", scales::comma(MargenKg), "<br>Clientes:", Clientes))) +
         ggplot2::geom_line(data = x %>% dplyr::group_by(Serie) %>% dplyr::filter(dplyr::n() > 1L),
           linewidth = 0.6, na.rm = TRUE) + ggplot2::geom_point(size = 1.6, na.rm = TRUE) +
-        ggplot2::scale_colour_manual(values = grDevices::colorRampPalette(
-          c("#DA291C", "#6C757D", "#212529"))(dplyr::n_distinct(x$Serie))) +
+        ggplot2::scale_colour_manual(values = color) +
         ggplot2::labs(x = NULL, y = .prod_medida_label(medida()),
           title = "Evolución de los cinco principales y resto") +
         .crm_tema_grafico() + ggplot2::theme(legend.position = "bottom")

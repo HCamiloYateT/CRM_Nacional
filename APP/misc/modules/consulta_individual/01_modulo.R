@@ -108,15 +108,19 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     })
     output$identidad <- .crm_render_ui({
       x <- entidad()
+      unidades <- .crm_unidades_sesion()
+      if (nrow(unidades) && identical(x$Alcance[[1]], "Cuenta principal")) {
+        elegidas <- unidades[unidades$CliNitPpal %in% .crm_id_texto(x$Principal), , drop = FALSE]
+        if (nrow(elegidas)) return(.crm_unidad_ficha(elegidas))
+      }
       shiny::tagList(.in_ficha_identidad(x, contexto_crm(), contactos(), familia(),
-        if (nrow(historia()) || (x$Tipo == "CLIENTE" && nrow(presupuesto_ficha()))) .in_estado_presupuesto(metas_anuales(), x, periodo()[[2]]) else NULL,
-        .in_clasificacion_badges(estado_comercial(), x)),
+        if (x$Tipo == "CLIENTE") .in_estado_presupuesto(metas_anuales(), x, periodo()[[2]]) else NULL, NULL),
         if (x$VinculoEnRevision) .crm_nota("Hay varios NIT vinculados. Revise el vínculo de facturación."))
     })
     tabs_disponibles <- shiny::reactive({
       x <- tryCatch(entidad(), error = function(e) NULL)
       if (is.null(x)) return(character())
-      comercial <- nrow(historia()) > 0L
+      comercial <- identical(x$Tipo[[1]], "CLIENTE")
       crm <- !is.na(contexto_crm()$Codigo)
       potencial <- crm
       opciones <- c("Ficha", if (crm) "Gestión y seguimiento",
@@ -138,7 +142,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
         }, character(1))
       }
       x <- tryCatch(entidad(), error = function(e) NULL)
-      if (!is.null(x) && !nrow(historia()) && x$Tipo != "CLIENTE") {
+      if (!is.null(x) && x$Tipo != "CLIENTE") {
         reglas <- c(reglas, paste0("#", session$ns("ficha_box_presupuesto"), "{display:none!important;}"))
       }
       shiny::tags$style(shiny::HTML(paste(reglas, collapse = "\n")))
@@ -306,12 +310,18 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
         paste(unique(stats::na.omit(as.character(v))), collapse = " | ")
       }, character(1)))
     })
-    output[["ficha-tabla"]] <- .crm_render_ui(.in_ficha_crm_ui(
-      .in_ficha_crm_registros(contexto_crm(), contactos())))
-    output$presupuesto_ficha <- .crm_render_ui(.in_ficha_presupuesto_ui(presupuesto_ficha(),
+    output[["ficha-tabla"]] <- .crm_render_ui({
+      shiny::req(isTRUE(input$ficha_box_crm))
+      .in_ficha_crm_ui(.in_ficha_crm_registros(contexto_crm(), contactos()))
+    })
+    output$presupuesto_ficha <- .crm_render_ui({
+      shiny::req(isTRUE(input$ficha_box_presupuesto))
+      .in_ficha_presupuesto_ui(presupuesto_ficha(),
       .in_estado_presupuesto(metas_anuales(), entidad(), periodo()[[2]]),
-      .crm_tabla_ui(session$ns("presupuesto"), searchable = FALSE), ns = session$ns))
+      .crm_tabla_ui(session$ns("presupuesto"), searchable = FALSE), ns = session$ns)
+    })
     output[["antiguedad-tabla"]] <- .crm_render_ui({
+      shiny::req(isTRUE(input$ficha_box_antiguedad))
       if (!nrow(historia())) {
         x <- .in_ficha_crm_registros(contexto_crm(), contactos())
         return(.in_ficha_info(list("Antigüedad desde el registro en CRM" =
@@ -320,6 +330,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       .in_ficha_antiguedad_ui(antiguedad_ficha(), ns = session$ns)
     })
     output[["contacto_sistema-tabla"]] <- .crm_render_ui({
+      shiny::req(isTRUE(input$ficha_box_contacto))
       if (!nrow(historia()) && entidad()$Tipo != "CLIENTE" && contexto_crm()$OrigenCRM == "Propio") {
         obtener <- function(clave) .in_detalle_crm(.fuentes_cache[[clave]](), contexto_crm(), .IN_FUENTES[[clave]]$campos)
         empresa <- obtener("directorio"); telefonos <- obtener("telefonos"); ubicaciones <- obtener("ubicaciones")
@@ -336,8 +347,15 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       paste(length(familia()$hijos), if (length(familia()$hijos) == 1L) "hija visible" else {
         "hijas visibles"
       }), variant = "neutral"))
-    complementos_ficha <- shiny::reactive(.in_ficha_complementos(lapply(.fuentes_cache[names(.IN_COMPLEMENTOS)], function(f) f()), contexto_crm()))
-    output$complementarios_contador <- .crm_render_ui(.in_ficha_complementos_badge(complementos_ficha()))
+    complementos_ficha <- shiny::reactive({
+      shiny::req(isTRUE(input$ficha_box_complementarios))
+      .in_ficha_complementos(lapply(.fuentes_cache[names(.IN_COMPLEMENTOS)], function(f) f()), contexto_crm())
+    })
+    output$complementarios_contador <- .crm_render_ui({
+      if (!isTRUE(input$ficha_box_complementarios)) return(racafeForms::racafeStatusBadge("CONSULTAR",
+        "neutral", size = "xs"))
+      .in_ficha_complementos_badge(complementos_ficha())
+    })
     output$complementarios <- .crm_render_ui(.in_ficha_complementos_ui(complementos_ficha(), session$ns))
     for (nombre in names(.IN_FUENTES)) local({
       clave <- nombre

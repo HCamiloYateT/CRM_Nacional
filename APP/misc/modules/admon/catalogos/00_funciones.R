@@ -6,6 +6,7 @@
       !all(vapply(catalogos, is.character, logical(1)))) {
     stop("El archivo de catálogos debe ser una lista nombrada de vectores de texto.", call. = FALSE)
   }
+  if (!is.null(attr(catalogos, "colores"))) .admon_choices_colores(catalogos)
   tipos <- catalogos$tipo_nota
   if (length(tipos) && (any(!tipos %in% c("text", "list")) || anyDuplicated(tipos) ||
       is.null(names(tipos)) || anyNA(names(tipos)) || any(!nzchar(trimws(names(tipos)))) ||
@@ -298,4 +299,33 @@
   rotulos <- names(valores)
   if (is.null(rotulos)) return(toupper(as.character(valores)))
   toupper(ifelse(!is.na(rotulos) & nzchar(rotulos), rotulos, as.character(valores)))
+}
+
+# Colores de dimensiones dentro del mismo RDS y guardado confirmado ----
+.admon_choices_colores <- function(datos) {
+  colores <- attr(datos, "colores")
+  if (is.null(colores)) return(data.frame(catalogo = character(), padre = character(), padre2 = character(),
+    opcion = character(), color = character()))
+  campos <- c("catalogo", "padre", "padre2", "opcion", "color")
+  if (!is.data.frame(colores) || !all(campos %in% names(colores)) ||
+      anyNA(colores[campos]) || any(!grepl("^#[[:xdigit:]]{6}$", colores$color))) {
+    stop("La configuración de colores del catálogo no es válida.", call. = FALSE)
+  }
+  colores[campos]
+}
+.admon_choices_color_local <- function(datos, catalogo, opcion, color, padre = "", padre2 = "") {
+  if (length(color) != 1L || is.na(color) || !grepl("^#[[:xdigit:]]{6}$", color)) {
+    stop("El color debe tener formato hexadecimal #RRGGBB.", call. = FALSE)
+  }
+  if (!opcion %in% .admon_choices_valores(datos, catalogo, padre, padre2)) {
+    stop("La opción ya no pertenece al catálogo seleccionado.", call. = FALSE)
+  }
+  colores <- .admon_choices_colores(datos)
+  misma <- colores$catalogo == catalogo & colores$padre == padre & colores$padre2 == padre2 &
+    colores$opcion == opcion
+  colores <- colores[!misma, , drop = FALSE]
+  colores <- rbind(colores, data.frame(catalogo = catalogo, padre = padre, padre2 = padre2,
+    opcion = opcion, color = toupper(color), stringsAsFactors = FALSE))
+  attr(datos, "colores") <- colores
+  datos
 }

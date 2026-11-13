@@ -44,6 +44,7 @@
       MargenCerrado = .prod_suma(Margen[EstadoFinanciero == "CERRADO"]),
       MargenAbierto = .prod_suma(Margen[EstadoFinanciero == "FACTURADO_ABIERTO"]),
       Clientes = dplyr::n_distinct(NIT[!is.na(NIT) & SacosFact > 0 & !is.na(SacosFact)]),
+      Unidades = dplyr::n_distinct(paste(NIT[!is.na(NIT)], Linea[!is.na(NIT)], sep = "|")),
       Pedidos = dplyr::n_distinct(paste(NITFactura[!is.na(Pedido)], Pedido[!is.na(Pedido)], sep = "|")),
       Lotes = dplyr::n_distinct(Lote[!is.na(Lote)]), .groups = "drop") %>%
     dplyr::mutate(MargenKg = .prod_div(Margen, Sacos * 70),
@@ -59,6 +60,7 @@
   listado <- datos %>% dplyr::filter(ProductoValido) %>% dplyr::distinct(Item)
   list(sacos = .prod_suma(datos$SacosFact), margen = .prod_suma(datos$Margen), productos = nrow(listado),
     clientes = dplyr::n_distinct(datos$NIT[!is.na(datos$NIT) & datos$SacosFact > 0 & !is.na(datos$SacosFact)]),
+    unidades = dplyr::n_distinct(paste(datos$NIT[!is.na(datos$NIT)], datos$Linea[!is.na(datos$NIT)], sep = "|")),
     margen_kg = .prod_div(.prod_suma(datos$Margen), .prod_suma(datos$SacosFact) * 70),
     pedidos = dplyr::n_distinct(paste(datos$NITFactura[!is.na(datos$Pedido)],
       datos$Pedido[!is.na(datos$Pedido)], sep = "|")),
@@ -160,5 +162,5 @@
 
 .prod_medida_label <- function(x) {
   unname(c(Sacos = "Sacos netos de 70 kg", Margen = "Margen FCC · COP",
-    MargenKg = "Margen por kilo · COP", Clientes = "Clientes con compra")[[x]])
+    MargenKg = "Margen por kilo · COP", Clientes = "Clientes con compra", Unidades = "Unidades comerciales")[[x]])
 }

@@ -120,3 +120,27 @@
   x %>% dplyr::group_by(Mes, EstadoEjecucion) %>% dplyr::summarise(
     Sacos = estricto(SacosAnaliticos70), Margen = estricto(MargenAnalitico), Registros = dplyr::n(), .groups = "drop")
 }
+
+# Una venta por pedido; estados operativos no generan operaciones adicionales ----
+.crm_ventas_comerciales <- function(x) {
+  if (!all(c("CLPdcCod", "CLPdcLin", "EstadoFinanciero") %in% names(x))) {
+    stop("La fuente no contiene la identificación de pedidos y líneas.")
+  }
+  if (!"MetricaSacosEscenario70" %in% names(x)) x <- .crm_capa_ejecucion(x)
+  x$Pedido <- .crm_id_texto(x$CLPdcCod)
+  x <- x[!is.na(x$Pedido) & x$Pedido != "0", , drop = FALSE]
+  x$Linea <- .crm_id_texto(x$CLPdcLin)
+  x$Lote <- .crm_id_texto(.gc_columna(x, "CLLotCod"))
+  if ("IdRegistroCRM" %in% names(x) && anyDuplicated(x$IdRegistroCRM[!is.na(x$IdRegistroCRM)])) {
+    stop("Hay hechos duplicados por IdRegistroCRM. Revise la cardinalidad antes de consolidar ventas.")
+  }
+  estricto <- function(v) if (anyNA(v)) NA_real_ else sum(v)
+  x %>% dplyr::group_by(Pedido) %>% dplyr::summarise(Ventas = 1L,
+    Lineas = dplyr::n_distinct(Linea[!is.na(Linea)]),
+    Lotes = dplyr::n_distinct(Lote[!is.na(Lote) & Lote != "0"]),
+    SacosComerciales = estricto(MetricaSacosEscenario70), MargenComercial = estricto(MetricaMargenEscenario),
+    SacosFacturados = estricto(MetricaSacosFacturados70),
+    MargenFinanciero = estricto(MetricaMargenContable),
+    MargenProvisional = estricto(MetricaMargenAbiertoEstimado), MargenEstimado = estricto(MetricaMargenProyectado),
+    EstadosFinancieros = paste(sort(unique(EstadoFinanciero)), collapse = " · "), .groups = "drop")
+}

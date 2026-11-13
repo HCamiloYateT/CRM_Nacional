@@ -92,9 +92,71 @@ server <- function(input, output, session) {
     contactos <- derivar_etapa_actual(.pr_cargar("CRMNALCONTACTO"), .pr_cargar("CRMNALHISTORIALETAPA"),
       .pr_cargar("CRMNALSEGR"))
     .crm_unidades_comerciales(maestro_base_comercial(), clientes_raw_cache(), contactos,
-      .pr_cargar("CRMNALSEGR"), .pr_cargar("CONTACTOLEAD"))
+      .pr_cargar("CRMNALSEGR"), .pr_cargar("CONTACTOLEAD"),
+      nit_mapa = exportacion_rv()$homologaciones$nit_principal)
   }))
-  session$userData$unidades_comerciales <- unidades_comerciales
+  ventas_comerciales <- reactive(.crm_medir("agregacion:ventas_comerciales",
+    .crm_ventas_comerciales(maestro_comercial())))
+  session$userData$ventas_comerciales <- ventas_comerciales
+
+  indicadores_unidades <- reactive(.crm_medir("agregacion:indicadores_unidades", {
+    f <- filtros()
+    .crm_metricas_unidades(maestro_comercial(), clientes_raw_cache(), f$fecha[[1]], f$fecha[[2]])
+  }))
+  rfm_resultado <- reactiveVal(NULL)
+  revision_datos_comerciales <- reactiveVal(0L)
+  observeEvent(list(exportacion_rv(), productos_cache()), {
+    revision_datos_comerciales(isolate(revision_datos_comerciales()) + 1L)
+  }, priority = 100)
+  rfm_comercial <- reactive(.crm_medir("agregacion:rfm", {
+    x <- .fid_rfm(maestro_comercial(), as.Date(filtros()$fecha[[2]]))
+    rfm_resultado(list(filtros = filtros(), revision = revision_datos_comerciales(), datos = x))
+    x
+  }))
+  session$userData$rfm <- rfm_comercial
+  datos_unidades <- reactive({
+    x <- unidades_comerciales()
+    x <- dplyr::left_join(x, indicadores_unidades(), by = c("CliNitPpal", "LinNegCod"), relationship = "one-to-one")
+    modelo <- rfm_resultado()
+    x$SegmentoRFM <- rep(NA_character_, nrow(x))
+    if (!is.null(modelo) && identical(modelo$filtros, filtros()) &&
+        identical(modelo$revision, revision_datos_comerciales())) {
+      clave <- function(d) paste(.crm_id_texto(d$CliNitPpal), .crm_id_texto(d$LinNegCod), sep = "|")
+      x$SegmentoRFM <- modelo$datos$SegmentoRFM[match(clave(x), clave(modelo$datos))]
+    }
+    x
+  })
+  session$userData$unidades_comerciales <- datos_unidades
+  output$leyenda_dimensiones <- .crm_render_ui({
+    u <- datos_unidades()
+    campos <- c(linneg = "CLLinNegNo", segmento = "Segmento", estado = "EstadoCliente", rfm = "SegmentoRFM", origen = "Origen")
+    titulos <- c(linneg = "LÍNEA DE NEGOCIO", segmento = "SEGMENTO COMERCIAL", estado = "ESTADO OFICIAL",
+      rfm = "SEGMENTO RFM", origen = "ORIGEN")
+    tagList(lapply(names(campos), function(dimension) {
+      valores <- sort(unique(stats::na.omit(u[[campos[[dimension]]]])))
+      valores <- head(valores[nzchar(valores)], 50L)
+      if (!length(valores)) return(NULL)
+      tagList(tags$strong(titulos[[dimension]]), lapply(valores, function(v) div(
+        tags$span(class = "kb-scale-swatch", style = paste0("background:", .crm_colores(dimension, v)[[1]], ";")),
+        .crm_label_comercial(v))), tags$hr())
+    }))
+  })
+
+
+  # Pedido accesible desde las tablas sin consultas adicionales al histórico ----
+  pedido_consulta <- reactiveVal(NULL)
+  session$userData$trazabilidad_disponible <- TRUE
+  TrazabilidadPedido("TrazabilidadGlobal", maestro_comercial, pedido_consulta)
+  observeEvent(input$crm_ver_pedido, {
+    codigo <- .crm_id_texto(input$crm_ver_pedido$pedido)
+    req(length(codigo) == 1L, !is.na(codigo), codigo != "0",
+      codigo %in% .crm_id_texto(maestro_comercial()$CLPdcCod))
+    pedido_consulta(codigo)
+    showModal(racafeForms::racafeModal(title = paste("Pedido", codigo), size = "ventana", easy_close = FALSE,
+      TrazabilidadPedidoUI("TrazabilidadGlobal"), footer = racafeForms::racafeModalFooter(
+        right = racafeForms::racafeButton("cerrar_pedido_global", "Cerrar", variant = "secondary"))))
+  })
+  observeEvent(input$cerrar_pedido_global, { pedido_consulta(NULL); removeModal() })
 
   # Carga diferida ----
   modulos_cargados <- reactiveValues()
@@ -290,6 +352,7 @@ server <- function(input, output, session) {
       corte = shiny::reactive(as.Date(filtros()$fecha[[2]]))))
   CargarTabUnaVez("GC_Tareas", "ui_GC_Tareas", function() TableroTareasUI("Tareas"), function() {
     TableroTareas("Tareas", usuario = usuario, datos = menu_tareas$tareas$datos, es_admin = es_admin,
+      actuar = menu_tareas$tareas$actuar,
       abrir = menu_tareas$tareas$abrir, refrescar = menu_tareas$tareas$refrescar)
   })
   CargarTabUnaVez("GC_Alertas", "ui_GC_Alertas", function() AlertasNotificacionesUI("AlertasNotificaciones"))

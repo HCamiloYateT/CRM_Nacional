@@ -50,11 +50,16 @@
   x$SacosMes <- ifelse(x$Frecuencia > 0, x$Objetivo70 * 30 / x$Frecuencia, NA_real_)
   x$MargenMes <- ifelse(x$Frecuencia > 0, x$MargenObjetivo * 30 / x$Frecuencia, NA_real_)
   x$SacosEjecutados <- x$MargenEjecutado <- rep(NA_real_, nrow(x))
+  clave_ejecucion <- function(contacto, linea, categoria, producto) paste(as.character(contacto),
+    as.character(linea), categoria, producto, sep = "\r")
+  indices_ejecucion <- split(seq_len(nrow(hechos)), clave_ejecucion(hechos$CodContacto,
+    hechos$LinNegCod, hechos$Categoria, hechos$Producto))
   for (i in seq_len(nrow(x))) {
     fila <- x[i, ]
     if (is.na(fila$Creacion) || is.na(fila$Cumplimiento) || is.na(fila$Contacto) || is.na(fila$Linea)) next
-    fac <- hechos %>% dplyr::filter(as.character(CodContacto) == fila$Contacto, LinNegCod == fila$Linea,
-      !is.na(FecFact), FecFact >= fila$Creacion, FecFact <= min(fila$Cumplimiento, corte),
+    clave <- clave_ejecucion(fila$Contacto, fila$Linea, fila$Categoria, fila$Producto)
+    fac <- hechos[indices_ejecucion[[clave]], , drop = FALSE] %>%
+      dplyr::filter(!is.na(FecFact), FecFact >= fila$Creacion, FecFact <= min(fila$Cumplimiento, corte),
       EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO"))
     # No asignar ventas de otros productos a la oportunidad del mismo cliente.
     if (is.na(fila$Producto) || is.na(fila$Categoria)) next
@@ -202,9 +207,9 @@ OportunidadesGestion <- function(id, usuario, es_admin, hechos, cargar = racafeB
         return()
       }
       etiquetas <- paste(permitidos$PerCod, permitidos$PerRazSoc, sep = " — ")
-      shiny::showModal(racafeForms::racafeModalDetail(title = "Seleccionar contacto", size = "subventana1",
+      shiny::showModal(racafeForms::racafeModalDetail(title = "Seleccionar entidad", size = "subventana1",
         racafeForms::racafeForm(variant = "plain",
-          .crm_select("contacto_creacion", "Contacto de la oportunidad",
+          .crm_select("contacto_creacion", "Entidad de la oportunidad",
             choices = stats::setNames(as.character(permitidos$CodContacto), etiquetas), empty = FALSE,
             ns = session$ns),
           racafeForms::racafeButton("continuar_creacion", "Continuar", icon = "arrow-right", ns = session$ns)),

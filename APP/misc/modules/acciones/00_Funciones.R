@@ -9,18 +9,11 @@
 .rc_escapar_sql <- function(x) gsub("'", "''", x)
 # Card generico de resumen (borde de color, header y cuerpo)
 .rc_card <- function(borde_color, header, cuerpo, extra_header = NULL, bg = "#FFFFFF") {
-  tags$div(
-    style = paste0(
-      "flex:1; min-width:220px; background:", bg, "; border-left:4px solid ", borde_color, ";",
-      "border-radius:6px; padding:14px; box-shadow:0 1px 4px rgba(0,0,0,.08); margin-bottom:10px;"
-    ),
-    tags$div(
-      style = "display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:6px;",
-      tags$div(style = "font-weight:700; font-size:13px; color:#5a6370;", header),
-      extra_header
-    ),
-    tags$p(style = "font-size:12px; margin:0; color:#555;", cuerpo)
-  )
+  tarjeta <- racafeForms::racafeCard(padding = "compact",
+    shiny::tags$div(class = "crm-timeline-header", shiny::tags$div(header), extra_header),
+    shiny::tags$div(class = "crm-timeline-text", cuerpo))
+  shiny::tagAppendAttributes(tarjeta, class = "crm-timeline-item",
+    style = paste0("background:", bg, ";border-left:2px solid ", borde_color, ";"))
 }
 # Badge con icono y color por etapa del embudo
 .badge_etapa <- function(etapa) {
@@ -220,10 +213,7 @@ RegistrarError <- function(error, operacion, usuario = NULL, codigo_contacto = N
 .generar_id_telefono  <- function() paste0("TL-", format(Sys.time(), "%Y%m%d%H%M%OS3") %>% gsub("\\.", "", .))
 # Carga el correo empresarial del directorio de un contacto
 cargar_info_empresarial_directorio <- function(cod_contacto) {
-  tryCatch({
-    CargarDatos("CRMNALDIRECTORIOEMPRESARIAL",
-      condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(cod_contacto)))
-  }, error = function(e) data.frame())
+  .accion_cargar_contacto("CRMNALDIRECTORIOEMPRESARIAL", cod_contacto)
 }
 # Guarda (upsert) el correo empresarial del directorio de un contacto
 guardar_info_empresarial_directorio <- function(cod_contacto, correo_empresarial, usr) {
@@ -233,10 +223,7 @@ guardar_info_empresarial_directorio <- function(cod_contacto, correo_empresarial
 }
 # Lista los telefonos del directorio de un contacto
 listar_telefonos_directorio <- function(cod_contacto) {
-  tryCatch({
-    CargarDatos("CRMNALDIRECTORIOTELEFONO",
-      condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(cod_contacto)))
-  }, error = function(e) data.frame(IdTelefono = character(), Telefono = character()))
+  .accion_cargar_contacto("CRMNALDIRECTORIOTELEFONO", cod_contacto)
 }
 # Registra un telefono en el directorio de un contacto
 registrar_telefono_directorio <- function(cod_contacto, telefono, usr) {
@@ -252,11 +239,7 @@ eliminar_telefono_directorio <- function(id_telefono) {
 }
 # Lista las redes sociales del directorio de un contacto
 listar_redes_directorio <- function(cod_contacto) {
-  tryCatch({
-    CargarDatos("CRMNALDIRECTORIORED",
-      condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(cod_contacto)))
-  }, error = function(e) data.frame(IdRed = character(), TipoRedSocial = character(),
-                                    UsuarioRed = character()))
+  .accion_cargar_contacto("CRMNALDIRECTORIORED", cod_contacto)
 }
 # Registra una red social en el directorio de un contacto
 registrar_red_social_directorio <- function(cod_contacto, tipo_red, usuario_red) {
@@ -355,20 +338,11 @@ guardar_ubicacion_contacto <- function(cod_contacto, pais, depto, mpio, direccio
 }
 # Carga la ubicacion principal de un contacto
 cargar_ubicacion_contacto <- function(cod_contacto) {
-  tryCatch({
-    CargarDatos("CRMNALUBICACION",
-      condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(cod_contacto)))
-  }, error = function(e) data.frame())
+  .accion_cargar_contacto("CRMNALUBICACION", cod_contacto)
 }
 # Lista las sucursales de un contacto
 listar_sucursales_contacto <- function(cod_contacto) {
-  tryCatch({
-    CargarDatos("CRMNALSUCURSALES",
-      condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(cod_contacto)))
-  }, error = function(e) data.frame(IdSucursal = character(), Nombre = character(), Tipo = character(),
-                                    Depto = character(), Mpio = character(), Localidad = character(),
-                                    Barrio = character(), Direccion = character(), lat = double(),
-                                    lng = double(), EsPrincipal = numeric()))
+  .accion_cargar_contacto("CRMNALSUCURSALES", cod_contacto)
 }
 # Registra una sucursal; si es principal, desmarca las demas del contacto
 registrar_sucursal_contacto <- function(cod_contacto, nombre, tipo, depto, mpio, direccion, lat, lng, es_principal, usr,
@@ -500,11 +474,8 @@ google_obtener_detalle_lugar <- function(place_id) {
   )
 }
 # Carga la informacion de potencial de un contacto
-cargar_potencial_contacto <- function(cod_contacto) {  # sin cambio de nombre; tabla renombrada
-  tryCatch({
-    CargarDatos("CRMNALPOTENCIAL",
-      condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(cod_contacto)))
-  }, error = function(e) data.frame())
+cargar_potencial_contacto <- function(cod_contacto) {
+  .accion_cargar_contacto("CRMNALPOTENCIAL", cod_contacto)
 }
 # Guarda (upsert) la informacion de potencial de un contacto
 guardar_potencial_contacto <- function(cod_contacto, es_tostador, alianza, detalle_alianza,
@@ -1160,4 +1131,27 @@ descartar_oportunidad <- function(id_oportunidad, razon, usr) {
 }
 .accion_fecha_hora_valida <- function(x) {
   length(x) == 1L && inherits(x, "POSIXt") && !is.na(x) && is.finite(as.numeric(x))
+}
+
+# Consultas por entidad cacheadas sin alterar las verificaciones previas a escritura ----
+.accion_cargar_contacto <- function(tabla, codigo, cargar = CargarDatos) {
+  if (length(codigo) != 1L || is.na(codigo) || !nzchar(as.character(codigo))) stop("Seleccione una entidad válida.")
+  fuentes <- .pr_fuentes()
+  consultar <- function() .crm_medir(paste0("SQL:entidad:", tabla),
+    cargar(tabla, condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(codigo))))
+  if (is.null(fuentes)) return(consultar())
+  .pr_revision(tabla)
+  if (exists(tabla, fuentes$tablas, inherits = FALSE)) {
+    x <- fuentes$tablas[[tabla]]
+    if ("CodContacto" %in% names(x)) return(x[as.character(x$CodContacto) %in% as.character(codigo), , drop = FALSE])
+  }
+  clave <- paste("entidad", tabla, codigo, sep = "|")
+  if (!exists(clave, fuentes$tablas, inherits = FALSE)) {
+    fuentes$tablas[[clave]] <- tryCatch(consultar(), error = function(e) {
+      racafeForms::racafeNotify(shiny::getDefaultReactiveDomain(), "No fue posible cargar la información",
+        "Intente actualizar. Si el problema continúa, contacte a soporte.", type = "error")
+      stop(e)
+    })
+  }
+  fuentes$tablas[[clave]]
 }

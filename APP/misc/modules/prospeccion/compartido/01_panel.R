@@ -461,6 +461,8 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
     )
     
     accion_seleccionada <- reactiveVal(NULL)
+    modal_activo <- reactiveVal(FALSE)
+    observeEvent(input$CerrarAccion, modal_activo(FALSE), ignoreInit = TRUE)
     codigo_reactivar    <- reactiveVal(NULL)
     trigger_reactivar   <- reactiveVal(0)
     
@@ -488,6 +490,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
         )
       }
       
+      modal_activo(TRUE)
       codigo_seleccionado(
         seleccion$codigo
       )
@@ -505,9 +508,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
         title = titulo_modal_actual(),
         tagList(
           
-          uiOutput(
-            ns("ModalContenido")
-          )
+          shiny::tagAppendAttributes(uiOutput(ns("ModalContenido")), `data-crm-action-close` = ns("CerrarAccion"))
         ),
         easy_close = TRUE,
         footer = modalButton("Cerrar"))
@@ -546,7 +547,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
       "Editar",
       usuario = usuario,
       codigo_contacto = reactive({
-        req(identical(accion_seleccionada(), "Editar"))
+        req(modal_activo(), identical(accion_seleccionada(), "Editar"))
         codigo_seleccionado()
       })
     )
@@ -555,7 +556,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
       "Relacionamiento",
       usuario = usuario,
       codigo_contacto = reactive({
-        req(identical(accion_seleccionada(), "Relacionamiento"))
+        req(modal_activo(), identical(accion_seleccionada(), "Relacionamiento"))
         codigo_seleccionado()
       })
     )
@@ -564,7 +565,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
       "Promover",
       usuario = usuario,
       codigo_contacto = reactive({
-        req(identical(accion_seleccionada(), "Promover"))
+        req(modal_activo(), identical(accion_seleccionada(), "Promover"))
         codigo_seleccionado()
       })
     )
@@ -573,7 +574,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
       "Descartar",
       usuario = usuario,
       codigo_contacto = reactive({
-        req(identical(accion_seleccionada(), "Descartar"))
+        req(modal_activo(), identical(accion_seleccionada(), "Descartar"))
         codigo_seleccionado()
       })
     )
@@ -582,7 +583,7 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
       "CrearOportunidad",
       usuario = usuario,
       codigo_contacto = reactive({
-        req(identical(accion_seleccionada(), "CrearOportunidad"))
+        req(modal_activo(), identical(accion_seleccionada(), "CrearOportunidad"))
         codigo_seleccionado()
       })
     )

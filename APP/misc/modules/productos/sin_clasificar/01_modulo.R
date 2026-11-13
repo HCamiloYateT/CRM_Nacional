@@ -23,10 +23,14 @@ ProductosSinClasificar <- function(id, usuario, al_actualizar,
         accion <- paste0("Shiny.setInputValue(", jsonlite::toJSON(session$ns("clasificar"), auto_unbox = TRUE),
           ",", jsonlite::toJSON(as.character(v), auto_unbox = TRUE), ",{priority: 'event'})")
         shiny::tagAppendAttributes(racafeForms::racafeButton(paste0("clasificar_", i), label = NULL, icon = "pen",
-          variant = "secondary", size = "xs", title = "Clasificar referencia"), onclick = accion)
+          variant = "secondary", size = "xs", title = "Clasificar referencia", ns = session$ns), onclick = accion)
       })),
-      columnas = c("Accion", "NumeroLotes", "Marca", "NombreComercial", "Presentacion", "Linea", "Categoria", "Producto"),
-      col_labels = c(NumeroLotes = "Lotes distintos", NombreComercial = "Nombre comercial", Presentacion = "Presentación / referencia del sistema",
+      columnas = c("Accion", "NumeroLotes", "MrcCod", "Marca", "NombreComercial", "Presentacion", "Linea",
+        "Categoria", "Producto",
+        "SacosVendidos", "PrimeraFactura", "UltimaFactura"),
+      col_labels = c(MrcCod = "Código de marca", SacosVendidos = "Sacos facturados · 70 kg",
+        PrimeraFactura = "Primera factura", UltimaFactura = "Última factura", NumeroLotes = "Lotes distintos",
+          NombreComercial = "Nombre comercial", Presentacion = "Presentación / referencia del sistema",
         Linea = "Línea de negocio", Categoria = "Categoría actual", Producto = "Producto actual"))
     elegida <- shiny::reactive({
       filas()[filas()$Referencia %in% referencia_elegida(), , drop = FALSE]

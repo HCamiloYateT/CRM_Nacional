@@ -183,7 +183,7 @@
     }))
 }
 # El contador se monta una vez en summary, también con versiones anteriores de racafeShiny.
-.in_ficha_caja <- function(ns, clave, titulo, contenido, open = TRUE, badge = NULL) {
+.in_ficha_caja <- function(ns, clave, titulo, contenido, open = FALSE, badge = NULL) {
   funcion <- racafeShiny::racafeCollapsible
   argumentos <- list(id = ns(paste0("ficha_box_", clave)), title = titulo, open = open,
     contenido, color = "#DA291C", class = "in-ficha-caja")

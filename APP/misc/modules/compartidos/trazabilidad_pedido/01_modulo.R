@@ -1,8 +1,9 @@
 # Vista transversal sobre el maestro ya autorizado y cargado; nunca consulta el histórico completo de nuevo ----
 .TZ_CAJAS <- c(solicitados = "Sacos solicitados", asignados = "Sacos asignados", producidos = "Sacos producidos",
   despachados = "Sacos despachados", facturados = "Sacos facturados", cerrados = "Sacos con cierre financiero",
-  margen = "Margen financiero · COP", pendiente = "Saldo pendiente · sacos 70 kg")
-.tz_preparar <- function(x, pedido) {
+  margen = "Margen financiero · COP", margen_estimado = "Margen residual estimado · COP",
+  margen_comercial = "Margen comercial consolidado · COP", pendiente = "Saldo pendiente · sacos 70 kg")
+.tz_preparar <- function(x, pedido, detalle = TRUE) {
   if (length(pedido) != 1L || is.na(pedido)) return(list(datos = x[0, ], indicadores = list(), eventos = data.frame(), conciliacion = data.frame(), facturas = data.frame()))
   d <- x[.crm_id_texto(x$CLPdcCod) %in% .crm_id_texto(pedido), , drop = FALSE]
   if (!nrow(d)) return(list(datos = d, indicadores = list(), eventos = data.frame(), conciliacion = data.frame(), facturas = data.frame()))
@@ -24,10 +25,14 @@
   facturados <- if ("FacturadosConsolidados70" %in% names(d)) por_lote("FacturadosConsolidados70") else
     if ("FacturadosOperativos70" %in% names(d)) por_lote("FacturadosOperativos70") else
     .com_suma(d$SacosFact[reales])
+  capas <- if ("MetricaMargenEscenario" %in% names(d)) d else .crm_capa_ejecucion(d)
   indicadores <- list(solicitados = solicitados, asignados = por_lote("SacosLote70"),
     producidos = por_lote("SacosProducidos70"), despachados = por_lote("SacosDespachados70"),
     facturados = facturados, cerrados = .com_suma(d$SacosFact[d$EstadoFinanciero == "CERRADO"]),
-    margen = .com_suma(d$Margen[d$EstadoFinanciero == "CERRADO"]), pendiente = pmax(solicitados - facturados, 0))
+    margen = .com_suma(d$Margen[d$EstadoFinanciero == "CERRADO"]),
+    margen_estimado = .com_suma(capas$MetricaMargenProyectado),
+    margen_comercial = .com_suma(capas$MetricaMargenEscenario), pendiente = pmax(solicitados - facturados, 0))
+  if (!detalle) return(list(datos = d, indicadores = indicadores))
   eventos <- dplyr::bind_rows(lapply(c(Creación = "FechaCreacionPedido", Asignación = "FechaAsignacionLote",
       Producción = "FechaProduccion", Despacho = "FechaDespachoReal", Facturación = "FecFact"), function(campo) {
     if (!campo %in% names(d)) return(NULL)
@@ -58,39 +63,85 @@
 }
 TrazabilidadPedidoUI <- function(id) {
   ns <- shiny::NS(id)
-  shiny::tagList(shiny::uiOutput(ns("encabezado")), .gc_tarjetas_ui(ns, .TZ_CAJAS),
-    .crm_plot_output(ns("cronologia")), .crm_disclosure("Conciliación entre etapas",
-      .crm_tabla_ui(ns("conciliacion")), .crm_nota(c(
-        "Una diferencia no demuestra un error: puede corresponder a ejecución parcial o a un desfase de actualización.",
-        "Las cantidades desconocidas se conservan vacías. Los importes financieros solo incluyen meses cerrados."))),
-    .crm_disclosure("Líneas y lotes observados", .crm_tabla_ui(ns("detalle"))),
-    .crm_disclosure("Facturas nacionales y exteriores", .crm_tabla_ui(ns("facturas"))))
+  shiny::tagList(shiny::uiOutput(ns("encabezado")), bs4Dash::tabsetPanel(id = ns("pedido_tab"),
+    tabPanel("Resumen", .gc_tarjetas_ui(ns, .TZ_CAJAS),
+      .crm_nota("Una venta corresponde a un pedido; sus líneas, lotes y facturas no son ventas adicionales.")),
+    tabPanel("Líneas", .crm_tabla_ui(ns("lineas"))),
+    tabPanel("Lotes", .crm_tabla_ui(ns("lotes"))),
+    tabPanel("Facturación", .crm_tabla_ui(ns("facturas"))),
+    tabPanel("Margen", .crm_tabla_ui(ns("margen"))),
+    tabPanel("Conciliación", .crm_tabla_ui(ns("conciliacion")), .crm_nota(c(
+      "Las diferencias pueden corresponder a ejecución parcial o a un desfase de actualización.",
+      "Las cantidades desconocidas permanecen vacías; las cantidades se expresan en sacos equivalentes de 70 kg."))),
+    tabPanel("Cronología", .crm_plot_output(ns("cronologia")))))
 }
+
 TrazabilidadPedido <- function(id, maestro, pedido) {
   shiny::moduleServer(id, function(input, output, session) {
-    datos <- shiny::reactive(.tz_preparar(maestro(), pedido()))
+    datos <- shiny::reactive(.tz_preparar(maestro(), pedido(), detalle = FALSE))
+    contenido <- shiny::reactive({
+      shiny::req(!is.null(input$pedido_tab), input$pedido_tab != "Resumen")
+      .tz_preparar(maestro(), pedido())
+    })
     output$encabezado <- .crm_render_ui({
       x <- datos()$datos
       shiny::validate(shiny::need(nrow(x) > 0L, "No hay un pedido identificado dentro del alcance autorizado."))
+      shiny::tagList(shiny::tags$div(class = "crm-identidad-badges",
+        racafeForms::racafeStatusBadge("1 VENTA / PEDIDO", "neutral", size = "xs"),
+        racafeForms::racafeStatusBadge(paste(dplyr::n_distinct(x$CLPdcLin[!is.na(x$CLPdcLin)]), "LÍNEAS"),
+          "neutral", size = "xs"),
+        racafeForms::racafeStatusBadge(paste(dplyr::n_distinct(x$CLLotCod[!is.na(x$CLLotCod) & x$CLLotCod != 0]),
+          "LOTES"), "neutral", size = "xs")),
       racafeForms::racafeInfoGrid(racafeForms::racafeInfoItem("Pedido", .crm_id_texto(pedido())),
         racafeForms::racafeInfoItem("Cliente", paste(unique(x$PerRazSoc), collapse = " | ")),
         racafeForms::racafeInfoItem("Línea de negocio", paste(unique(x$CLLinNegNo), collapse = " | ")),
         racafeForms::racafeInfoItem("Creación", paste(unique(as.Date(x$FechaCreacionPedido)), collapse = " | ")),
         racafeForms::racafeInfoItem("Precio negociado · COP/kg", paste(unique(x$PrecioNegociadoKg), collapse = " | ")),
         racafeForms::racafeInfoItem("Estado", paste(unique(x$EstadoFinanciero), collapse = " | ")),
-        racafeForms::racafeInfoItem("Alcance", "Líneas y productos dentro de los filtros autorizados"))
+        racafeForms::racafeInfoItem("Estado operativo", paste(unique(.gc_columna(x, "EstadoPedido")),
+          collapse = " | ")),
+        racafeForms::racafeInfoItem("Alcance", "Líneas y productos dentro de los filtros autorizados")))
     })
-    .gc_tarjetas_server(.TZ_CAJAS, shiny::reactive(datos()$indicadores))
-    .crm_vancouver_server("detalle", shiny::reactive(datos()$datos), columnas = c("CLPdcCod", "CLPdcLin", "CLLotCod",
-      "CLCliNit", "LinNegCod", "FechaCreacionPedido", "FechaAsignacionLote", "FechaProduccion", "FechaDespachoReal",
-      "FecFact", "FacturasSYSCAFE", "EstadoFinanciero", "SacosFact", "Margen", "PrecioNegociadoOriginal",
-      "UnidadPrecioOriginal", "MonedaPrecioOriginal", "PrecioNegociadoKg", "CantidadPedidoOrigen", "UnidadKgPedido",
-      "SacosLoteOrigen", "SacosProducidosOrigen", "SacosDespachadosOrigen", "SacosLote70", "SacosProducidos70", "SacosDespachados70", "FacturadosOperativos70", "FacturadosConsolidados70"))
-    .crm_vancouver_server("facturas", shiny::reactive(datos()$facturas),
+    .gc_tarjetas_server(.TZ_CAJAS, shiny::reactive(datos()$indicadores),
+      c(stats::setNames(rep(list("numero"), 7L), c("solicitados", "asignados", "producidos", "despachados",
+        "facturados", "cerrados", "pendiente")),
+        list(margen = "dinero", margen_estimado = "dinero", margen_comercial = "dinero")))
+    lineas <- shiny::reactive({
+      shiny::req(input$pedido_tab == "Líneas")
+      x <- contenido()$datos
+      columnas <- intersect(c("CLCliNit", "Categoria", "Producto", "FechaCreacionPedido", "PdcFecEst",
+        "SacosPedido70Linea", "PrecioNegociadoKg", "MonedaPrecioOriginal"), names(x))
+      x %>% dplyr::group_by(CLPdcCod, CLPdcLin) %>%
+        dplyr::summarise(dplyr::across(dplyr::all_of(columnas), .gc_unico), .groups = "drop")
+    })
+    lotes <- shiny::reactive({
+      shiny::req(input$pedido_tab == "Lotes")
+      x <- contenido()$datos
+      columnas <- intersect(c("CLPdcCod", "CLPdcLin", "FechaAsignacionLote", "FechaProduccion", "FechaDespachoReal",
+        "SacosLote70", "SacosProducidos70", "SacosDespachados70", "FacturadosConsolidados70"), names(x))
+      x %>% dplyr::filter(!is.na(CLLotCod), as.character(CLLotCod) != "0") %>%
+        dplyr::group_by(CLLotCod) %>%
+        dplyr::summarise(dplyr::across(dplyr::all_of(columnas), .gc_unico), .groups = "drop")
+    })
+    .crm_vancouver_server("lineas", lineas)
+    .crm_vancouver_server("lotes", lotes)
+    .crm_vancouver_server("margen", shiny::reactive({
+      shiny::req(input$pedido_tab == "Margen")
+      x <- .crm_capa_ejecucion(contenido()$datos)
+      x %>% dplyr::group_by(EstadoFinanciero) %>% dplyr::summarise(
+        SacosFacturados = .com_suma(MetricaSacosFacturados70),
+        MargenFinanciero = .com_suma(MetricaMargenContable),
+        MargenProvisional = .com_suma(MetricaMargenAbiertoEstimado),
+        MargenEstimado = .com_suma(MetricaMargenProyectado), .groups = "drop")
+    }))
+    .crm_vancouver_server("facturas",
+      shiny::reactive({ shiny::req(input$pedido_tab == "Facturación"); contenido()$facturas }),
       col_labels = c(CLLotCod = "Lote", FecFact = "Fecha de factura", TipoFactura = "Origen", NumeroFactura = "Factura"))
-    .crm_vancouver_server("conciliacion", shiny::reactive(datos()$conciliacion))
+    .crm_vancouver_server("conciliacion",
+      shiny::reactive({ shiny::req(input$pedido_tab == "Conciliación"); contenido()$conciliacion }))
     output$cronologia <- .crm_render_plotly({
-      d <- datos()$eventos
+      shiny::req(input$pedido_tab == "Cronología")
+      d <- contenido()$eventos
       shiny::validate(shiny::need(nrow(d) > 0L, "No hay eventos con fecha documentada."))
       d$Detalle <- paste("Pedido", d$Pedido, "· línea", d$Linea, "· lote", d$Lote)
       plotly::plot_ly(d, x = ~Fecha, y = ~Evento, text = ~Detalle, type = "scatter", mode = "markers",

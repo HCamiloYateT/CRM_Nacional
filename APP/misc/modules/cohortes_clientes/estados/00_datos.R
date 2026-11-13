@@ -82,3 +82,52 @@
   inicio <- as.Date(format(fin, "%Y-01-01"))
   max(inicio, min(as.Date(format(as.Date(fecha), "%Y-%m-01")), fin))
 }
+
+# Una celda corresponde exclusivamente a una transición de estado ----
+.coha_transicion_detalle <- function(transiciones, mensual, origen, destino) {
+  if (!origen %in% c("ACTIVO", "INACTIVO") || !destino %in% c("ACTIVO", "INACTIVO")) {
+    stop("Seleccione una transición entre estados válidos.")
+  }
+  x <- transiciones %>% dplyr::filter(as.character(EstadoInicial) == origen, as.character(EstadoFinal) == destino)
+  claves <- c("CliNitPpal", "LinNegCod")
+  if (anyDuplicated(x[claves])) stop("La transición contiene unidades comerciales duplicadas.")
+  mensual$Linea <- .gc_columna(mensual, c("CLLinNegNo", "LinNeg", "LinNegocio"))
+  meta <- mensual %>% dplyr::group_by(dplyr::across(dplyr::all_of(claves))) %>%
+    dplyr::summarise(Cliente = .gc_unico(PerRazSoc), Linea = .gc_unico(Linea),
+      Sacos = .com_suma(Sacos), Margen = .com_suma(Margen), .groups = "drop")
+  dplyr::left_join(x, meta, by = claves, relationship = "one-to-one")
+}
+
+# Proyección comercial del mes calendario sin modificar el cierre oficial ----
+.coha_proyecciones_mes <- function(oficial, hechos, hoy = Sys.Date(), corte = hoy) {
+  claves <- c("CliNitPpal", "LinNegCod")
+  for (k in claves) {
+    oficial[[k]] <- .crm_id_texto(oficial[[k]])
+    hechos[[k]] <- .crm_id_texto(hechos[[k]])
+  }
+  if (anyDuplicated(oficial[claves])) stop("El cierre oficial tiene unidades duplicadas.")
+  mes <- as.Date(format(hoy, "%Y-%m-01"))
+  fin_mes <- seq(mes, by = "month", length.out = 2L)[[2]] - 1L
+  h <- hechos[hechos$EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO") &
+    !is.na(hechos$FecFact) & hechos$FecFact <= min(as.Date(hoy), as.Date(corte)), , drop = FALSE]
+  ultima <- h %>% dplyr::filter(!is.na(SacosFact), SacosFact > 0) %>%
+    dplyr::group_by(dplyr::across(dplyr::all_of(claves))) %>%
+    dplyr::summarise(UltimaDisponible = .gc_fecha_max(FecFact), .groups = "drop")
+  movimiento <- h %>% dplyr::filter(FecFact >= mes) %>%
+    dplyr::group_by(dplyr::across(dplyr::all_of(claves))) %>%
+    dplyr::summarise(ComprasMes = sum(SacosFact > 0, na.rm = TRUE), MovimientosMes = dplyr::n(),
+      SacosMesVigente = .com_suma(SacosFact), MargenMesVigente = .com_suma(Margen), .groups = "drop")
+  x <- oficial %>% dplyr::left_join(ultima, by = claves, relationship = "one-to-one") %>%
+    dplyr::left_join(movimiento, by = claves, relationship = "one-to-one")
+  sin_movimiento <- is.na(x$MovimientosMes)
+  x$SacosMesVigente[sin_movimiento] <- 0
+  x$MargenMesVigente[sin_movimiento] <- 0
+  x$UltimaDisponible <- pmax(as.Date(x$UltFecFact), x$UltimaDisponible, na.rm = TRUE)
+  x$FechaLimite <- x$UltimaDisponible %m+% lubridate::period(month = as.numeric(x$NumMesesRecuperar))
+  x$EstadoOficial <- as.character(x$EstadoPanel)
+  x$EstadoProyectado <- dplyr::case_when(x$EstadoOficial == "INACTIVO" & x$ComprasMes > 0 ~ "ACTIVO",
+    x$EstadoOficial == "ACTIVO" & !is.na(x$FechaLimite) & x$FechaLimite <= fin_mes ~ "INACTIVO",
+    TRUE ~ x$EstadoOficial)
+  x$MesProyeccion <- rep(mes, nrow(x))
+  x
+}

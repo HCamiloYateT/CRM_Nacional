@@ -117,7 +117,7 @@ library("racafeForms")
 library("racafeModulos")
 # APIs mínimas requeridas por los adaptadores compartidos.
 .versiones_componentes <- c(racafeCore = "1.0.1", racafeGraph = "1.0.1", racafeForecast = "1.0.1",
-  racafeForms = "0.8.0", racafeShiny = "1.5.0", racafeModulos = "0.6.3")
+  racafeForms = "0.8.0", racafeShiny = "1.5.0", racafeModulos = "0.6.4")
 for (.paquete in names(.versiones_componentes)) {
   if (!requireNamespace(.paquete, quietly = TRUE) ||
       utils::packageVersion(.paquete) < .versiones_componentes[[.paquete]]) {
@@ -141,7 +141,7 @@ racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", 
 }
 
 .ruta_app <- .crm_ruta_app()
-.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/4515c5c4dee719928265a43e7ad5a2fd0faa40eb"
+.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/3fc6b20f62a47f18a8b35ec37512af56223ffb1e"
 .estilos_crm <- shiny::singleton(shiny::includeCSS(paste0(.url_compartido, "/Styles/crm-nacional.css")))
 .recursos_compartidos <- shiny::tagList(
   shiny::tags$span(hidden = "hidden", `data-rf-interactions` = "true"),

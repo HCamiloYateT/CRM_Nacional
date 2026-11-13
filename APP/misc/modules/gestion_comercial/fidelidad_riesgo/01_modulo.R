@@ -101,26 +101,56 @@ FidelidadRiesgo <- function(id, hechos, clientes, filtros) {
     .crm_vancouver_server("validacion", shiny::reactive({
       m <- modelo(); shiny::validate(shiny::need(is.null(m$error), m$error)); m$validacion
     }))
-    rfm <- shiny::reactive(.fid_rfm(hechos(), as.Date(corte())))
-    output$rfm_segmentos <- .crm_render_plotly({
-      x <- rfm() %>% dplyr::count(SegmentoRFM, name = "Unidades")
-      shiny::validate(shiny::need(nrow(x) > 0L, "No hay compras para calcular RFM."))
-      plotly::plot_ly(x, type = "treemap", labels = ~SegmentoRFM, parents = rep("", nrow(x)), values = ~Unidades,
-        marker = list(colors = rep(c("#7A2028", "#C8A77D", "#9B7160", "#495057"), length.out = nrow(x))),
-        hovertemplate = "<b>%{label}</b><br><b>UNIDADES COMERCIALES:</b> %{value:.0f}<extra></extra>")
+    rfm <- shiny::reactive({
+      compartido <- session$userData$rfm %||% session$rootScope()$userData$rfm
+      if (is.null(compartido)) .fid_rfm(hechos(), as.Date(corte())) else compartido()
     })
+    unidades_rfm <- shiny::reactive({
+      u <- .crm_unidades_sesion()
+      shiny::validate(shiny::need(nrow(u) > 0L, "No hay indicadores de unidades comerciales disponibles."))
+      u$SegmentoRFM <- NULL
+      r <- rfm()
+      for (k in c("CliNitPpal", "LinNegCod")) r[[k]] <- .crm_id_texto(r[[k]])
+      dplyr::inner_join(u, r[c("CliNitPpal", "LinNegCod", "SegmentoRFM")],
+        by = c("CliNitPpal", "LinNegCod"), relationship = "one-to-one")
+    })
+    arbol_comercial <- function(u, grupo, dimension) {
+      x <- .crm_agregar_indicadores(u, grupo)
+      shiny::validate(shiny::need(nrow(x) > 0L, "No hay unidades para los filtros seleccionados."))
+      plotly::plot_ly(x, type = "treemap", labels = x[[grupo]], parents = rep("", nrow(x)), values = ~Unidades,
+        customdata = .crm_customdata(x, c("SacosMes", "MargenMes", "SacosPeriodo", "MargenPeriodo",
+          "CumplimientoSacos", "CumplimientoMargen", "PrimeraFacturacion", "UltimaFacturacion")),
+        marker = list(colors = unname(.crm_colores(dimension, x[[grupo]]))),
+        hovertemplate = paste0("<b>%{label}</b><br><b>UNIDADES COMERCIALES:</b> %{value:.0f}",
+          "<br><b>SACOS DEL MES DE REFERENCIA:</b> %{customdata[0]:,.2f}",
+          "<br><b>MARGEN DEL MES COP:</b> $%{customdata[1]:,.0f}",
+          "<br><b>SACOS DEL PERIODO:</b> %{customdata[2]:,.2f}",
+          "<br><b>MARGEN DEL PERIODO COP:</b> $%{customdata[3]:,.0f}",
+          "<br><b>CUMPLIMIENTO SACOS:</b> %{customdata[4]:.1%}",
+          "<br><b>CUMPLIMIENTO MARGEN:</b> %{customdata[5]:.1%}",
+          "<br><b>PRIMERA FACTURA:</b> %{customdata[6]}<br><b>ÚLTIMA FACTURA:</b> %{customdata[7]}<extra></extra>"))
+    }
+    output$rfm_segmentos <- .crm_render_plotly(arbol_comercial(unidades_rfm(), "SegmentoRFM", "rfm"))
     for (campo in c("RecenciaDias", "Compras", "Margen")) local({
       variable <- campo
       output[[paste0("densidad_", variable)]] <- .crm_render_plotly({
-        v <- rfm()[[variable]]; v <- v[is.finite(v)]
-        shiny::validate(shiny::need(length(unique(v)) > 1L, "Se requieren al menos dos valores distintos."))
-        d <- stats::density(v)
+        x <- rfm()
+        segmentos <- sort(unique(x$SegmentoRFM))
         titulo <- c(RecenciaDias = "Días sin compra", Compras = "Compras observadas", Margen = "Margen FCC · COP")[[variable]]
-        plotly::plot_ly(x = d$x, y = d$y, type = "scatter", mode = "lines", fill = "tozeroy",
-          line = list(color = "#7A2028"), fillcolor = "rgba(200,167,125,0.35)",
-          hovertemplate = paste0("<b>", titulo, "</b><br><b>VALOR:</b> %{x:,.2f}",
-            "<br><b>DENSIDAD:</b> %{y:.4f}<extra></extra>")) %>%
-          plotly::layout(title = titulo, xaxis = list(title = titulo), yaxis = list(title = "Densidad"))
+        p <- plotly::plot_ly()
+        n <- 0L
+        for (segmento in segmentos) {
+          v <- x[[variable]][x$SegmentoRFM == segmento]
+          v <- v[is.finite(v)]
+          if (length(unique(v)) < 2L) next
+          d <- stats::density(v); n <- n + 1L
+          p <- plotly::add_trace(p, x = d$x, y = d$y, type = "scatter", mode = "lines", name = segmento,
+            line = list(color = unname(.crm_colores("rfm", segmento))),
+            hovertemplate = paste0("<b>", htmltools::htmlEscape(segmento), "</b><br><b>", titulo,
+              ":</b> %{x:,.2f}<br><b>DENSIDAD:</b> %{y:.4f}<extra></extra>"))
+        }
+        shiny::validate(shiny::need(n > 0L, "Se necesitan dos valores distintos dentro de un mismo segmento."))
+        plotly::layout(p, title = titulo, xaxis = list(title = titulo), yaxis = list(title = "Densidad"))
       })
     })
     .gc_tarjetas_server(.FID_CAJAS, shiny::reactive({
@@ -173,15 +203,12 @@ FidelidadRiesgo <- function(id, hechos, clientes, filtros) {
       x
     })
     output$estados_arbol <- .crm_render_plotly({
-      x <- datos() %>% dplyr::group_by(Estado) %>%
-        dplyr::summarise(Unidades = dplyr::n(), Sacos = .com_suma(SacosAnho),
-          Margen = .com_suma(MargenAnho), .groups = "drop")
-      shiny::validate(shiny::need(nrow(x) > 0L, "No hay clientes para los estados seleccionados."))
-      plotly::plot_ly(x, type = "treemap", labels = ~Estado, parents = rep("", nrow(x)), values = ~Unidades,
-        customdata = ~cbind(Sacos, Margen),
-        marker = list(colors = rep(c("#7A2028", "#C8A77D", "#9B7160", "#495057"), length.out = nrow(x))),
-        hovertemplate = paste0("<b>%{label}</b><br><b>UNIDADES COMERCIALES:</b> %{value:.0f}",
-          "<br><b>SACOS DEL AÑO:</b> %{customdata[0]:,.2f}<br><b>MARGEN COP:</b> $%{customdata[1]:,.0f}<extra></extra>"))
+      u <- .crm_unidades_sesion()
+      x <- datos()
+      llave <- function(d) paste(.crm_id_texto(d$CliNitPpal), .crm_id_texto(d$LinNegCod), sep = "|")
+      u <- u[llave(u) %in% llave(x), , drop = FALSE]
+      u$EstadoCliente[is.na(u$EstadoCliente)] <- "SIN ESTADO OFICIAL"
+      arbol_comercial(u, "EstadoCliente", "estado")
     })
     resumen <- shiny::reactive(datos() %>% dplyr::group_by(Estado) %>%
       dplyr::summarise(ClientesLinea = dplyr::n(), SacosAnho = .com_suma(SacosAnho), .groups = "drop"))

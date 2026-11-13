@@ -50,6 +50,8 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
     refresh_trigger <- reactiveVal(0L)
     codigo_seleccionado <- reactiveVal(NULL)
     accion_seleccionada <- reactiveVal(NULL)
+    modal_activo <- reactiveVal(FALSE)
+    observeEvent(input$CerrarAccion, modal_activo(FALSE), ignoreInit = TRUE)
     titulo_modal_actual <- reactiveVal(NULL)
     destino_arrastre <- reactiveVal(NULL)
     pipeline_raw <- reactive({
@@ -157,13 +159,15 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
         trigger_reactivar(isolate(trigger_reactivar()) + 1L)
         return(invisible(NULL))
       }
+      modal_activo(TRUE)
       destino_arrastre(seleccion$destino)
       codigo_seleccionado(seleccion$codigo)
       accion_seleccionada(seleccion$accion)
       titulo_modal_actual(.CONFIG_ACCIONES_EMBUDO[[seleccion$accion]]$etiqueta)
       showModal(racafeForms::racafeModal(
         size = .CONFIG_ACCIONES_EMBUDO[[seleccion$accion]]$modal %||% "subventana2",
-        title = titulo_modal_actual(), uiOutput(ns("ModalContenido")), easy_close = TRUE,
+        title = titulo_modal_actual(), shiny::tagAppendAttributes(uiOutput(ns("ModalContenido")),
+          `data-crm-action-close` = ns("CerrarAccion")), easy_close = TRUE,
         footer = modalButton("Cerrar")))
     }
     observeEvent(input$AccionSeleccionada, abrir_accion(input$AccionSeleccionada))
@@ -193,12 +197,21 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
     outputOptions(output, "ModalContenido", suspendWhenHidden = FALSE)
     
     # Instanciacion unica de cada submodulo genérico
-    modulo_editar      <- Editar("Editar", usuario = usuario, codigo_contacto = reactive(codigo_seleccionado()))
-    modulo_relacion    <- Relacionamiento("Relacionamiento", usuario = usuario, codigo_contacto = reactive(codigo_seleccionado()))
-    modulo_promover    <- Promover("Promover", usuario = usuario, codigo_contacto = reactive(codigo_seleccionado()),
+    modulo_editar      <- Editar("Editar", usuario = usuario, codigo_contacto = reactive({ req(modal_activo(),
+      identical(accion_seleccionada(), "Editar")); codigo_seleccionado() }))
+    modulo_relacion    <- Relacionamiento("Relacionamiento", usuario = usuario,
+      codigo_contacto = reactive({ req(modal_activo(), identical(accion_seleccionada(),
+      "Relacionamiento")); codigo_seleccionado() }))
+    modulo_promover    <- Promover("Promover", usuario = usuario,
+      codigo_contacto = reactive({ req(modal_activo(), identical(accion_seleccionada(),
+      "Promover")); codigo_seleccionado() }),
       destino_inicial = reactive(destino_arrastre()))
-    modulo_descartar   <- Descartar("Descartar", usuario = usuario, codigo_contacto = reactive(codigo_seleccionado()))
-    modulo_oportunidad <- CrearOportunidad("CrearOportunidad", usuario = usuario, codigo_contacto = reactive(codigo_seleccionado()))
+    modulo_descartar   <- Descartar("Descartar", usuario = usuario,
+      codigo_contacto = reactive({ req(modal_activo(), identical(accion_seleccionada(),
+      "Descartar")); codigo_seleccionado() }))
+    modulo_oportunidad <- CrearOportunidad("CrearOportunidad", usuario = usuario,
+      codigo_contacto = reactive({ req(modal_activo(), identical(accion_seleccionada(),
+      "CrearOportunidad")); codigo_seleccionado() }))
     # Reactivar recibe su propio par codigo/disparador — nunca el
     # codigo_seleccionado compartido (ver nota arriba)
     modulo_reactivar   <- Reactivar("Reactivar", usuario = usuario, codigo_contacto = reactive(codigo_reactivar()),

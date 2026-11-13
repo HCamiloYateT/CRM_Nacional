@@ -20,7 +20,8 @@ RelacionamientoUI <- function(id) {
           ),
           column(6,
                  h5("Historial de Gestiones"),
-                 tags$div(class = "rc-scroll-box", style = "height:320px;overflow-y:auto;padding-right:4px;",
+                 tags$div(class = "rc-scroll-box crm-timeline",
+                   style = "height:320px;overflow-y:auto;padding-right:4px;",
                           uiOutput(ns("GES_Timeline"))
                  )
           )
@@ -46,7 +47,8 @@ RelacionamientoUI <- function(id) {
           ),
           column(6,
                  h5("Recordatorios Programados"),
-                 tags$div(class = "rc-scroll-box", style = "height:320px;overflow-y:auto;padding-right:4px;",
+                 tags$div(class = "rc-scroll-box crm-timeline",
+                   style = "height:320px;overflow-y:auto;padding-right:4px;",
                           uiOutput(ns("REC_Lista")))
           )
         )
