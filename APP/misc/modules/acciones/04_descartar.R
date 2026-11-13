@@ -43,9 +43,14 @@ FormularioDescartar <- function(id, usuario, cod_contacto, etapa, data_contacto 
     
     # Choices resueltas de la lista vigente (evita recalcular Choices()/BD
     # dos veces — una para pintar el select y otra para detectar "Otro...")
+    catalogos_descarte <- ChoicesReactivos()
     choices_lista <- reactive({
       cfg <- detalle_config()
       req(identical(cfg$tipo, "lista"))
+      catalogos <- catalogos_descarte()
+      if (input$DES_Razon %in% catalogos$detalle_raz_descarte) {
+        return(.admon_choices_valores(catalogos, "detalle_raz_descarte", input$DES_Razon))
+      }
       if (is.function(cfg$choices)) cfg$choices() else cfg$choices
     })
     

@@ -27,13 +27,13 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
       personas = "Personas", segmento = "Segmentos",
       linneg = "Líneas de negocio → Categorías → Productos",
       origen = "Orígenes → Detalles del origen",
-      raz_descarte = "Razones de descarte", formapago = "Formas de pago del cotizador",
+      raz_descarte = "Razones de descarte → Detalles", formapago = "Formas de pago del cotizador",
       cot_presentacion = "Presentaciones del cotizador", cot_empaque = "Empaques del cotizador",
       pot_tipo_compra = "Potencial: tipos de compra", pot_frecuencia_compra = "Potencial: frecuencia de compra",
       pot_unidad_consumo = "Potencial: unidades", pot_certificaciones = "Potencial: certificaciones",
       directorio_red_social = "Directorio: redes sociales", cot_divisa = "Divisas del cotizador", tipo_nota = "Tipos de nota o tarea"
     )
-    excluidos <- c("categoria", "producto", "detalle_origen", "paises", "deptos",
+    excluidos <- c("categoria", "producto", "detalle_origen", "detalle_raz_descarte", "paises", "deptos",
                    "direccion_via", "direccion_cardinalidad")
     
     # Reactivos ----
@@ -65,6 +65,7 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
     jerarquia_r <- shiny::reactive({
       switch(catalogo_r(),
              origen = c("origen", "detalle_origen"),
+             raz_descarte = c("raz_descarte", "detalle_raz_descarte"),
              linneg = c("linneg", "categoria", "producto"),
              catalogo_r()
       )
@@ -157,6 +158,7 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
              linneg = "Línea de negocio", categoria = "Categoría",
              producto = "Producto", origen = "Origen",
              detalle_origen = "Detalle del origen",
+             detalle_raz_descarte = "Detalle de la razón",
              if (tipo %in% names(etiquetas)) etiquetas[[tipo]] else
                tools::toTitleCase(gsub("_", " ", tipo))
       )
@@ -322,7 +324,7 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
       }
       
       for (clave in claves) {
-        if (clave %in% c("categoria", "producto", "detalle_origen")) next
+        if (clave %in% c("categoria", "producto", "detalle_origen", "detalle_raz_descarte")) next
         anterior <- base[[clave]] %||% character()
         actual <- nuevo[[clave]] %||% character()
         if (identical(clave, "tipo_nota")) {

@@ -357,6 +357,7 @@ server <- function(input, output, session) {
   })
   CargarTabUnaVez("CO_Estados", "ui_CO_Estados", function() CohortesEstadosUI("CohortesEstados"),
     function() CohortesEstados("CohortesEstados", bd = data_cohortes, data_t = maestro_comercial,
+      cierre_oficial = reactive(.gc_fecha_max(segmentos_cohortes()$FecProceso)),
       fecha_limite = reactive(as.Date(filtros()$fecha[[2]]))))
 
   CargarTabUnaVez("CO_Retencion", "ui_CO_Retencion", function() CohorteRetencionUI("CohorteRetencion"),

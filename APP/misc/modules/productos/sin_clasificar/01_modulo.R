@@ -3,25 +3,40 @@ ProductosSinClasificarUI <- function(id) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
     racafeForms::racafeActionBar(left = NULL),
-    .crm_nota("Seleccione una referencia y complete su categoría y producto para incluirla en los análisis."),
-    .crm_tabla_ui(ns("referencias"), titulo = "Referencias pendientes de clasificación"),
-    shiny::uiOutput(ns("edicion")))
+    .crm_nota("Use la acción de cada referencia para completar su categoría y producto."),
+    .crm_tabla_ui(ns("referencias"), titulo = "Referencias pendientes de clasificación"))
 }
 ProductosSinClasificar <- function(id, usuario, al_actualizar,
                                   cargar = racafeBD::CargarDatos, guardar = .clas_actualizar_bd, operaciones = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     revision <- shiny::reactiveVal(0L)
     pendiente <- shiny::reactiveVal(NULL)
-    fuente <- shiny::reactive({ .pr_fuentes()$revision(); revision(); .clas_validar(cargar("CRMNALPRODS")) })
-    filas <- shiny::reactive(.clas_pendientes(fuente(), if (is.null(operaciones)) list() else operaciones()))
-    tabla <- .crm_vancouver_server("referencias", filas, id_col = "Referencia", modo_seleccion = "fila",
-      columnas = c("NumeroLotes", "Marca", "NombreComercial", "Presentacion", "Linea", "Categoria", "Producto"),
+    referencia_elegida <- shiny::reactiveVal(NULL)
+    fuente <- shiny::reactive({ revision(); .clas_validar(.pr_cargar("CRMNALPRODS", cargar)) })
+    filas <- shiny::reactive({
+      x <- .clas_pendientes(fuente(), if (is.null(operaciones)) list() else operaciones())
+      x$Accion <- x$Referencia
+      x
+    })
+    tabla <- .crm_vancouver_server("referencias", filas, id_col = "Referencia", modo_seleccion = "ninguno",
+      col_specs = list(Accion = list(name = "Clasificar", html = TRUE, minWidth = 70, cell = function(v, i) {
+        accion <- paste0("Shiny.setInputValue(", jsonlite::toJSON(session$ns("clasificar"), auto_unbox = TRUE),
+          ",", jsonlite::toJSON(as.character(v), auto_unbox = TRUE), ",{priority: 'event'})")
+        shiny::tagAppendAttributes(racafeForms::racafeButton(paste0("clasificar_", i), label = NULL, icon = "pen",
+          variant = "secondary", size = "xs", title = "Clasificar referencia"), onclick = accion)
+      })),
+      columnas = c("Accion", "NumeroLotes", "Marca", "NombreComercial", "Presentacion", "Linea", "Categoria", "Producto"),
       col_labels = c(NumeroLotes = "Lotes distintos", NombreComercial = "Nombre comercial", Presentacion = "Presentación / referencia del sistema",
         Linea = "Línea de negocio", Categoria = "Categoría actual", Producto = "Producto actual"))
     elegida <- shiny::reactive({
-      seleccion <- tabla$seleccion()
-      if (is.null(seleccion)) return(filas()[0, , drop = FALSE])
-      filas()[filas()$Referencia %in% seleccion$id, , drop = FALSE]
+      filas()[filas()$Referencia %in% referencia_elegida(), , drop = FALSE]
+    })
+    shiny::observeEvent(input$clasificar, {
+      shiny::req(input$clasificar %in% filas()$Referencia)
+      referencia_elegida(input$clasificar)
+      pendiente(NULL)
+      shiny::showModal(racafeForms::racafeModal(title = "Clasificar referencia", size = "subventana2",
+        shiny::uiOutput(session$ns("edicion")), footer = shiny::modalButton("Cerrar")))
     })
     output$edicion <- .crm_render_ui({
       x <- elegida()
@@ -40,7 +55,9 @@ ProductosSinClasificar <- function(id, usuario, al_actualizar,
       tryCatch({
         nuevo <- .crm_snapshot_productos(.clas_validar(cargar("CRMNALPRODS")))
         al_actualizar(nuevo)
+        .pr_invalidar("CRMNALPRODS")
         revision(revision() + 1L)
+        referencia_elegida(NULL)
         tabla$limpiar()
       }, error = function(e) shiny::showNotification(conditionMessage(e), type = "error"))
     })
@@ -65,7 +82,9 @@ ProductosSinClasificar <- function(id, usuario, al_actualizar,
       tryCatch({
         nuevo <- .clas_guardar(x$fila, x$categoria, x$producto, usuario(), cargar, guardar)
         al_actualizar(nuevo)
+        .pr_invalidar("CRMNALPRODS")
         revision(revision() + 1L)
+        referencia_elegida(NULL)
         tabla$limpiar()
         shiny::showNotification("Clasificación guardada. Los tableros se actualizaron con sus filtros actuales.", type = "message")
       }, error = function(e) shiny::showNotification(conditionMessage(e), type = "error", duration = 8))
