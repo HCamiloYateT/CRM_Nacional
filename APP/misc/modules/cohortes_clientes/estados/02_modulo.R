@@ -564,31 +564,26 @@ CohortesEstados <- function(id, bd, data_t, fecha_limite = shiny::reactive(Sys.D
       bd_f() %>% filter(FecProceso == mes_inicio())
     })
     
-    # Alertas — activos que llegan al límite de inactivación este mes
-    alertas_inactivar <- reactive({
-      req(bd_vig(), mes_vigente())
-      ucs <- bd_vig() %>%
-        filter(EstadoPanel == "ACTIVO") %>%
-        mutate(
-          meses_rec = dplyr::coalesce(as.numeric(NumMesesRecuperar), 4),
-          fec_lim   = UltFecFact %m+% lubridate::period(month = meses_rec)
-        ) %>%
-        filter(!is.na(fec_lim), month(fec_lim) == month(mes_vigente())) %>%
-        select(LinNegCod, CliNitPpal)
-      bd_f() %>%
-        semi_join(ucs, by = join_by(LinNegCod, CliNitPpal))
+    # Las alertas usan el calendario actual y el último cierre oficial ----
+    mes_proyeccion <- reactive(as.Date(format(Sys.Date(), "%Y-%m-01")))
+    proyecciones <- reactive({
+      dat <- bd() %>% dplyr::filter(FecProceso == limite_meses()) %>%
+        dplyr::semi_join(ucs_activas(), by = c("LinNegCod", "CliNitPpal"))
+      .coha_proyecciones_mes(dat, data_t(), hoy = Sys.Date(), corte = as.Date(fecha_limite()))
     })
-    
-    # Alertas — inactivos que facturaron en el mes vigente (próximos a reactivarse)
-    alertas_recuperados <- reactive({
-      req(bd_vig())
-      ucs <- bd_vig() %>%
-        filter(EstadoPanel == "INACTIVO", Sacos != 0) %>%
-        select(LinNegCod, CliNitPpal)
-      bd_f() %>%
-        semi_join(ucs, by = join_by(LinNegCod, CliNitPpal))
-    })
-    
+    alertas_inactivar <- reactive(proyecciones() %>%
+      dplyr::filter(EstadoOficial == "ACTIVO", EstadoProyectado == "INACTIVO"))
+    alertas_recuperados <- reactive(proyecciones() %>%
+      dplyr::filter(EstadoOficial == "INACTIVO", EstadoProyectado == "ACTIVO"))
+    detalle_proyeccion <- function(x) {
+      columnas <- intersect(c("CliNitPpal", "PerRazSoc", "LinNegCod", "EstadoOficial", "EstadoProyectado",
+        "FecProceso", "MesProyeccion", "FechaLimite", "SacosMesVigente", "MargenMesVigente"), names(x))
+      shiny::tagList(.crm_nota(c("Estado oficial: último cierre financiero disponible.",
+        "Proyección: evidencia del mes calendario vigente; no modifica el estado oficial.",
+        "El margen del mes abierto es provisional. El límite de inactividad conserva la regla de cada unidad.")),
+        .crm_tabla_vancouver(.crm_nits_tabla(x[columnas]), font_size = 11, row_padding = 2))
+    }
+
     # Estado inicial/final por UC (excluye NUEVO para la matriz de transición)
     trans_ucs <- reactive({
       req(bd_f(), mes_inicio(), mes_vigente())
@@ -985,11 +980,11 @@ CohortesEstados <- function(id, bd, data_t, fecha_limite = shiny::reactive(Sys.D
       colores         = c(fondo = "white"),
       mostrar_boton   = TRUE,
       titulo_modal    = reactive(paste0(
-        "En Riesgo de Inactivarse \u2014 ", .coha_mes(mes_vigente())
+        "En Riesgo de Inactivarse \u2014 ", .coha_mes(mes_proyeccion())
       )),
       icono_modal     = NULL,
       tamano_modal    = "xl",
-      contenido_modal = function() .coha_detalle_ui(ns("tbl_mod_vig_en_riesgo")),
+      contenido_modal = function() detalle_proyeccion(alertas_inactivar()),
       footer          = reactive(paste0(
         n_en_riesgo(), " activos llegan al l\u00edmite de inactivaci\u00f3n este mes"
       )),
@@ -1001,7 +996,7 @@ CohortesEstados <- function(id, bd, data_t, fecha_limite = shiny::reactive(Sys.D
       data      = alertas_inactivar,
       mes_vig   = mes_vigente,
       titulo    = reactive(paste0(
-        "En Riesgo de Inactivarse \u2014 ", .coha_mes(mes_vigente())
+        "En Riesgo de Inactivarse \u2014 ", .coha_mes(mes_proyeccion())
       )),
       subtitulo = "Activos cuya \u00faltima factura alcanza el umbral de inactivaci\u00f3n este mes",
       footer    = reactive(paste0(
@@ -1020,11 +1015,11 @@ CohortesEstados <- function(id, bd, data_t, fecha_limite = shiny::reactive(Sys.D
       colores         = c(fondo = "white"),
       mostrar_boton   = TRUE,
       titulo_modal    = reactive(paste0(
-        "Inactivos que Facturaron \u2014 ", .coha_mes(mes_vigente())
+        "Inactivos que Facturaron \u2014 ", .coha_mes(mes_proyeccion())
       )),
       icono_modal     = NULL,
       tamano_modal    = "xl",
-      contenido_modal = function() .coha_detalle_ui(ns("tbl_mod_vig_por_recuperar")),
+      contenido_modal = function() detalle_proyeccion(alertas_recuperados()),
       footer          = reactive(paste0(
         n_recuperando(), " inactivos con factura en el mes \u2014 pr\u00f3ximos a reactivarse"
       )),
@@ -1036,7 +1031,7 @@ CohortesEstados <- function(id, bd, data_t, fecha_limite = shiny::reactive(Sys.D
       data      = alertas_recuperados,
       mes_vig   = mes_vigente,
       titulo    = reactive(paste0(
-        "Inactivos que Facturaron \u2014 ", .coha_mes(mes_vigente())
+        "Inactivos que Facturaron \u2014 ", .coha_mes(mes_proyeccion())
       )),
       subtitulo = "Inactivos con compra en el mes vigente \u2014 candidatos a reactivaci\u00f3n",
       footer    = reactive(paste0(
@@ -1047,35 +1042,6 @@ CohortesEstados <- function(id, bd, data_t, fecha_limite = shiny::reactive(Sys.D
     
     
     ## Indicadores de Transición ----
-    
-    ### Modal de detalle de la matriz absoluta ----
-    # FIX YTD: data pasa el acumulado completo del panel para las UCs seleccionadas,
-    # y mes_vig apunta al mes vigente global (cierre del período de transición).
-    .coha_detalle(
-      id        = "tbl_mod_matriz_total",
-      data      = reactive({
-        req(sel_matriz_estado(), trans_ucs())
-        ucs_sel <- trans_ucs() %>%
-          dplyr::filter(EstadoInicial == sel_matriz_estado()) %>%
-          dplyr::select(LinNegCod, CliNitPpal)
-        bd_f() %>%
-          dplyr::semi_join(ucs_sel, by = dplyr::join_by(LinNegCod, CliNitPpal))
-      }),
-      mes_vig   = mes_vigente,
-      titulo    = reactive(paste0(
-        "Detalle \u2014 Estado Inicial: ", sel_matriz_estado() %||% "", " \u2014 ",
-        .coha_mes(mes_inicio()), " \u2192 ", .coha_mes(mes_vigente())
-      )),
-      subtitulo = "Clientes cuyo estado inicial corresponde a la fila seleccionada",
-      footer    = reactive({
-        req(sel_matriz_estado(), trans_ucs())
-        n <- trans_ucs() %>%
-          dplyr::filter(EstadoInicial == sel_matriz_estado()) %>%
-          nrow()
-        paste0(n, " unidades comerciales con estado inicial '", sel_matriz_estado(), "'")
-      }),
-      footer_tipo = "info"
-    )
     
     ### Matriz absoluta — modo fila para habilitar modal ----
     .coha_tabla(
@@ -1112,14 +1078,21 @@ CohortesEstados <- function(id, bd, data_t, fecha_limite = shiny::reactive(Sys.D
         TOTAL    = list(name = "Total",    minWidth = 80,
                                      style = list(fontWeight = "bold", whiteSpace = "nowrap"))
       ),
-      modo_seleccion   = "fila",
+      modo_seleccion   = "celda",
+      columnas_permitidas = c("ACTIVO", "INACTIVO"),
       filas_bloqueadas = as.character(length(.niveles_trans)),
       searchable       = FALSE,
       sortable         = FALSE,
       page_size        = 10L,
-      modal_titulo_fn  = function(sel) paste0("Detalle \u2014 ", sel$id),
-      modal_pre_fn     = function(sel) sel_matriz_estado(as.character(sel$id)),
-      modal_contenido_fn = function(sel) .coha_detalle_ui(session$ns("tbl_mod_matriz_total")),
+      modal_titulo_fn  = function(sel) paste(sel$id, "→", sel$col),
+      modal_contenido_fn = function(sel) {
+        x <- .coha_transicion_detalle(trans_ucs(), bd_f(), sel$id, sel$col)
+        m <- matriz_trans()
+        esperado <- m[m$EstadoInicial == sel$id, sel$col, drop = TRUE]
+        if (length(esperado) != 1L || nrow(x) != esperado) stop("El detalle no coincide con la celda seleccionada.")
+        shiny::tagList(.crm_nota(paste(nrow(x), "unidades comerciales en esta transición.")),
+          .crm_tabla_vancouver(.crm_nits_tabla(x), font_size = 11, row_padding = 2))
+      },
       modal_size       = "xl"
     )
     

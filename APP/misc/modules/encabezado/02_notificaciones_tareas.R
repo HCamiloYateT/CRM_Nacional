@@ -66,12 +66,13 @@
 }
 
 .tareas_modificar_bd <- function(original, accion, cumplidas = NULL, respuesta = NULL, usuario = NULL,
-                                  es_admin = FALSE) {
+                                  es_admin = FALSE, prioridad = NULL, cambios = NULL) {
   con <- racafeBD::ConectarBD()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   DBI::dbWithTransaction(con, {
     sql <- DBI::sqlInterpolate(
-      con, "SELECT cons, Actividades, Cumplidas, Archivado, Cumplido, Respuesta, Usuario, Responsable
+      con, "SELECT cons, Actividades, Cumplidas, Archivado, Cumplido, Respuesta, Usuario, Responsable,
+                   titulo, Descripcion, Prioridad, Tipo
             FROM CRMNALNOTAS WHERE cons = ?id FOR UPDATE",
       id = as.numeric(original$cons[[1]])
     )
@@ -82,7 +83,8 @@
     }
     igual <- function(a, b) identical(as.character(a), as.character(b)) ||
       (length(a) == 1L && length(b) == 1L && is.na(a) && is.na(b))
-    campos <- c("Actividades", "Cumplidas", "Archivado", "Cumplido", "Respuesta", "Usuario", "Responsable")
+    campos <- c("Actividades", "Cumplidas", "Archivado", "Cumplido", "Respuesta", "Usuario", "Responsable",
+      "titulo", "Descripcion", "Prioridad", "Tipo")
     if (!all(vapply(campos, function(campo) {
       igual(actual[[campo]][[1]], original[[campo]][[1]])
     }, logical(1)))) {
@@ -118,6 +120,7 @@
         valor = valor, id = as.numeric(original$cons[[1]])
       )
     } else if (accion == "cumplir") {
+      if (!identical(as.character(actual$Tipo[[1]]), "list")) stop("Solo las tareas pueden marcarse como cumplidas.")
       comando <- DBI::sqlInterpolate(
         con, "UPDATE CRMNALNOTAS SET Cumplido = 1 WHERE cons = ?id",
         id = as.numeric(original$cons[[1]])
@@ -127,6 +130,24 @@
         con, "UPDATE CRMNALNOTAS SET Archivado = 1 WHERE cons = ?id",
         id = as.numeric(original$cons[[1]])
       )
+    } else if (accion == "desarchivar") {
+      comando <- DBI::sqlInterpolate(con, "UPDATE CRMNALNOTAS SET Archivado = 0 WHERE cons = ?id",
+        id = as.numeric(original$cons[[1]]))
+    } else if (accion == "prioridad") {
+      if (length(prioridad) != 1L || !prioridad %in% names(.COLORES_PRIORIDAD)) stop("La prioridad no es válida.")
+      comando <- DBI::sqlInterpolate(con, "UPDATE CRMNALNOTAS SET Prioridad = ?valor WHERE cons = ?id",
+        valor = prioridad, id = as.numeric(original$cons[[1]]))
+    } else if (accion == "editar") {
+      if (!isTRUE(es_admin) && !identical(as.character(actual$Usuario[[1]]), as.character(usuario))) {
+        stop("Solo el creador o un administrador puede editar el registro.")
+      }
+      if (length(cambios$titulo) != 1L || is.na(cambios$titulo) || !nzchar(trimws(cambios$titulo)) ||
+          nchar(cambios$titulo) > 250L || length(cambios$Descripcion) != 1L || is.na(cambios$Descripcion)) {
+        stop("Ingrese un título de máximo 250 caracteres y revise la descripción.")
+      }
+      comando <- DBI::sqlInterpolate(con,
+        "UPDATE CRMNALNOTAS SET titulo = ?titulo, Descripcion = ?descripcion WHERE cons = ?id",
+        titulo = trimws(cambios$titulo), descripcion = cambios$Descripcion, id = as.numeric(original$cons[[1]]))
     } else stop("Acción no reconocida.", call. = FALSE)
     if (DBI::dbExecute(con, comando) != 1L) {
       stop("No fue posible actualizar el registro.", call. = FALSE)
@@ -226,13 +247,13 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
           },
           racafeForms::racafeButton("archivar", "Archivar", icon = "archive",
                                     variant = "secondary", ns = ns, size = "xs"),
-          racafeForms::racafeButton("cumplir", "Marcar cumplida",
+          if (es_tarea) racafeForms::racafeButton("cumplir", "Marcar cumplida",
                                     icon = "check", variant = "primary",
                                     ns = ns, size = "xs")
         )
       ))
     }
-    guardar <- function(accion, estados = NULL, respuesta = NULL) {
+    guardar <- function(accion, estados = NULL, respuesta = NULL, prioridad = NULL, cambios = NULL) {
       if (isTRUE(guardando_rv())) return(invisible(NULL))
       original <- shiny::isolate(seleccionado_rv())
       shiny::req(!is.null(original))
@@ -240,7 +261,7 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
       on.exit(guardando_rv(FALSE), add = TRUE)
       tryCatch({
         .tareas_modificar_bd(original, accion, estados, respuesta = respuesta, usuario = usuario(),
-          es_admin = es_admin())
+          es_admin = es_admin(), prioridad = prioridad, cambios = cambios)
         seleccionado_rv(NULL)
         registro_pendiente_rv(NULL)
         shiny::removeModal()
@@ -322,7 +343,7 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
     
     shiny::observeEvent(input$cumplir, {
       registro <- shiny::isolate(seleccionado_rv())
-      shiny::req(registro)
+      shiny::req(registro, identical(as.character(registro$Tipo[[1]]), "list"))
       actividades <- .tareas_actividades(registro)
       pendientes <- length(actividades$textos) - sum(actividades$cumplidas)
       registro_pendiente_rv("cumplir")
@@ -378,9 +399,61 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
       abrir(fila)
     }
 
+    # Las tarjetas y el header usan la misma selección, confirmación y escritura ----
+    actuar <- function(id, accion, destino = NULL) {
+      todos <- shiny::isolate(resultado_r()$todos)
+      fila <- todos[as.character(todos$cons) %in% as.character(id), , drop = FALSE]
+      shiny::req(nrow(fila) == 1L)
+      registro_pendiente_rv(NULL)
+      if (accion == "abrir") return(abrir(fila))
+      if (accion == "eliminar" && !identical(as.character(fila$Usuario[[1]]), as.character(usuario()))) {
+        stop("Solo el creador puede eliminar el registro.")
+      }
+      if (accion == "editar" && !isTRUE(es_admin()) &&
+          !identical(as.character(fila$Usuario[[1]]), as.character(usuario()))) stop("No tiene permiso para editar.")
+      shiny::req(accion %in% c("archivar", "desarchivar", "eliminar", "editar", "cumplir", "prioridad"))
+      if (accion == "cumplir") shiny::req(identical(as.character(fila$Tipo[[1]]), "list"))
+      seleccionado_rv(fila)
+      if (accion == "editar") {
+        shiny::showModal(racafeForms::racafeModal(title = "Editar nota o tarea", size = "subventana1",
+          racafeForms::racafeInputText("editar_titulo", "Título", value = as.character(fila$titulo[[1]]), ns = ns),
+          racafeForms::racafeInputTextArea("editar_descripcion", "Descripción", rows = 4,
+            value = as.character(fila$Descripcion[[1]] %||% ""), ns = ns),
+          racafeForms::racafeButton("solicitar_edicion", "Guardar", icon = "floppy-disk", ns = ns),
+          footer = racafeForms::racafeModalFooter(right = shiny::modalButton("Cerrar"))))
+        return(invisible(NULL))
+      }
+      if (accion == "prioridad") shiny::req(destino %in% names(.COLORES_PRIORIDAD))
+      registro_pendiente_rv(list(accion = accion, prioridad = destino))
+      detalle <- if (accion == "cumplir") {
+        a <- .tareas_actividades(fila)
+        paste("Actividades pendientes:", sum(!a$cumplidas))
+      } else if (accion == "prioridad") paste("Nueva prioridad:", destino) else as.character(fila$titulo[[1]])
+      racafeForms::racafeConfirm(session, "confirm_accion_tablero", title = paste("Confirmar", accion),
+        text = detalle, ns = ns, confirm_label = "Confirmar")
+    }
+    shiny::observeEvent(input$solicitar_edicion, {
+      fila <- seleccionado_rv()
+      shiny::req(fila)
+      if (is.null(input$editar_titulo) || !nzchar(trimws(input$editar_titulo)) || nchar(input$editar_titulo) > 250L) {
+        shiny::showNotification("Ingrese un título de máximo 250 caracteres.", type = "warning")
+        return()
+      }
+      registro_pendiente_rv(list(accion = "editar", cambios = list(titulo = trimws(input$editar_titulo),
+        Descripcion = input$editar_descripcion %||% "")))
+      racafeForms::racafeConfirm(session, "confirm_accion_tablero", title = "Guardar cambios",
+        text = input$editar_titulo, ns = ns, confirm_label = "Guardar")
+    })
+    shiny::observeEvent(input$confirm_accion_tablero, {
+      pendiente <- registro_pendiente_rv()
+      registro_pendiente_rv(NULL)
+      if (!isTRUE(input$confirm_accion_tablero) || !is.list(pendiente)) return()
+      guardar(pendiente$accion, prioridad = pendiente$prioridad, cambios = pendiente$cambios)
+    })
+
     # Retorno ----
     list(n = total_r, items = items_r, datos = shiny::reactive(resultado_r()$todos),
-         abrir = abrir_id, refrescar = refrescar,
+         abrir = abrir_id, actuar = actuar, refrescar = refrescar,
          badge_st = shiny::reactive(if (total_r()) "danger" else NULL),
          actualizaciones = shiny::reactive(revision_rv()))
   })

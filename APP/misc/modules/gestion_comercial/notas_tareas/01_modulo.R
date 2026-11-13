@@ -40,7 +40,7 @@ NULL)),
     shiny::uiOutput(ns("tablero"))))
 }
 
-TableroTareas <- function(id, usuario, datos, abrir, refrescar, es_admin = function() FALSE) {
+TableroTareas <- function(id, usuario, datos, abrir, refrescar, es_admin = function() FALSE, actuar = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     etiquetas_iniciadas <- shiny::reactiveVal(FALSE)
     etiquetas_previas <- shiny::reactiveVal(character())
@@ -75,12 +75,41 @@ TableroTareas <- function(id, usuario, datos, abrir, refrescar, es_admin = funct
       racafeModulos::TableroTareasTarjetas(fuente, .TSK_PRIORIDADES, actividades_fn = .tareas_actividades,
         ns = session$ns, campos = c(id = "cons", titulo = "titulo", descripcion = "Descripcion",
           prioridad = "Prioridad", responsable = "Responsable", tipo = "Tipo", cumplido = "Cumplido",
-          archivado = "Archivado", vencimiento = "FechaCumplimiento"), nota_fn = .crm_nota, colores = .COLORES_PRIORIDAD)
+          archivado = "Archivado", vencimiento = "FechaCumplimiento"), nota_fn = .crm_nota,
+            colores = .COLORES_PRIORIDAD, arrastrable = !is.null(actuar),
+        acciones_fn = function(fila) {
+          acciones <- c(abrir = "Abrir detalle")
+          creador <- identical(as.character(fila$Usuario[[1]]), as.character(usuario()))
+          if (creador || isTRUE(es_admin())) acciones <- c(acciones, editar = "Editar")
+          acciones <- c(acciones, if (isTRUE(as.integer(fila$Archivado[[1]]) == 1L)) {
+            c(desarchivar = "Desarchivar")
+          } else c(archivar = "Archivar"))
+          if (identical(as.character(fila$Tipo[[1]]), "list") && !isTRUE(as.integer(fila$Cumplido[[1]]) == 1L)) {
+            acciones <- c(acciones, cumplir = "Marcar cumplida")
+          }
+          if (creador) acciones <- c(acciones, eliminar = "Eliminar")
+          acciones
+        })
     })
     shiny::observeEvent(input$abrir, {
       fuente <- seleccion()
       shiny::req(is.data.frame(fuente), as.character(input$abrir) %in% as.character(fuente$cons))
       abrir(input$abrir)
+    })
+    shiny::observeEvent(input$AccionTarea, {
+      x <- input$AccionTarea
+      fila <- seleccion()[as.character(seleccion()$cons) %in% as.character(x$codigo), , drop = FALSE]
+      shiny::req(nrow(fila) == 1L)
+      if (is.null(actuar)) {
+        if (identical(x$accion, "abrir")) abrir(x$codigo)
+      } else actuar(x$codigo, x$accion)
+    })
+    shiny::observeEvent(input$MoverTarjeta, {
+      x <- input$MoverTarjeta
+      fila <- seleccion()[as.character(seleccion()$cons) %in% as.character(x$codigo), , drop = FALSE]
+      shiny::req(!is.null(actuar), nrow(fila) == 1L, identical(as.character(fila$Prioridad), x$desde),
+        x$hacia %in% .TSK_PRIORIDADES)
+      actuar(x$codigo, "prioridad", x$hacia)
     })
     list(datos = seleccion)
   })

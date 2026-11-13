@@ -1,7 +1,8 @@
 # Constantes Embudo ----
 ## Generales ----
 # Icono, color, etiqueta y modal por accion
-.CONFIG_ACCIONES_EMBUDO <- list(Editar = list(etiqueta = "Editar", icono = "pen", color = "#0d6efd", modal = "ventana"),
+.CONFIG_ACCIONES_EMBUDO <- list(Editar = list(etiqueta = "Editar", icono = "pen", color = "#0d6efd",
+  modal = "subventana2"),
                                 Relacionamiento = list(etiqueta = "Gestión Comercial", icono = "comments", color = "#6f42c1", modal = "ventana"),
                                 Promover = list(etiqueta = "Promover Etapa", icono = "arrow-up", color = "#198754", modal = "subventana4"),
                                 Descartar = list(etiqueta = "Descartar", icono = "ban", color = "#C11007", modal = "subventana4"),

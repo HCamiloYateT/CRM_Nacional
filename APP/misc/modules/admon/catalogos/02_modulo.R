@@ -210,6 +210,17 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
       )
     }
     
+    shiny::observeEvent(input$ADM_Color, {
+      shiny::req(isTRUE(es_admin()))
+      x <- input$ADM_Color
+      tipos <- jerarquia_r()
+      nivel <- as.integer(x$nivel)
+      shiny::req(length(nivel) == 1L, nivel %in% seq_along(tipos))
+      padre <- if (nivel >= 2L) padre_1_r() else ""
+      padre2 <- if (nivel >= 3L) padre_2_r() else ""
+      tryCatch(borrador_rv(.admon_choices_color_local(borrador_rv(), tipos[[nivel]], x$opcion, x$color,
+        padre, padre2)), error = function(e) shiny::showNotification(conditionMessage(e), type = "error"))
+    })
     .tabla_gt <- function(nivel) {
       valores <- switch(as.character(nivel),
                         `1` = valores_1_r(), `2` = valores_2_r(), `3` = valores_3_r()
@@ -217,11 +228,11 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
       total <- length(valores)
       tabla <- data.frame(
         Numero = seq_len(total), Opcion = .admon_choices_rotulos(valores),
-        Orden = rep("", total), Eliminar = rep("", total),
+        Orden = rep("", total), Color = rep("", total), Eliminar = rep("", total),
         stringsAsFactors = FALSE
       )
       gt::gt(tabla) |>
-        gt::cols_label(Numero = "#", Opcion = "OPCIÓN", Orden = "", Eliminar = "") |>
+        gt::cols_label(Numero = "#", Opcion = "OPCIÓN", Orden = "", Color = "COLOR", Eliminar = "") |>
         gt::cols_width(Numero ~ gt::px(28), Orden ~ gt::px(65), Eliminar ~ gt::px(25)) |>
         gt::cols_align(align = "center", columns = "Numero") |>
         gt::text_transform(
@@ -259,6 +270,24 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
             })
           }
         ) |>
+        gt::text_transform(locations = gt::cells_body(columns = "Color"), fn = function(x) {
+          tipo <- jerarquia_r()[[nivel]]
+          padre <- if (nivel >= 2L) padre_1_r() else ""
+          padre2 <- if (nivel >= 3L) padre_2_r() else ""
+          colores <- .admon_choices_colores(borrador_rv())
+          lapply(seq_along(valores), function(i) {
+            valor <- valores[[i]]
+            configurado <- colores$color[colores$catalogo == tipo & colores$padre == padre &
+              colores$padre2 == padre2 & colores$opcion == valor]
+            color <- if (length(configurado)) configurado[[1]] else unname(.crm_colores(tipo, valor, padre, padre2))
+            js <- paste0("Shiny.setInputValue(", jsonlite::toJSON(ns("ADM_Color"), auto_unbox = TRUE),
+              ",{nivel:", nivel, ",opcion:", jsonlite::toJSON(valor, auto_unbox = TRUE),
+              ",color:this.value},{priority:'event'});")
+            gt::html(as.character(shiny::tags$input(type = "color", value = color,
+              title = paste("Color de", valor), `aria-label` = paste("Color de", valor),
+              style = "width:32px;height:22px;padding:0;border:1px solid #adb5bd;", onchange = js)))
+          })
+        }) |>
         racafeShiny::gt_minimal_style() |>
         gt::tab_options(table.width = gt::pct(100),
                         container.width = gt::pct(100),
@@ -348,7 +377,14 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
                    paste(g$catalogo, g$padre, g$padre2, sep = " / "))
         }
       }
-      list(agregados = agregados, eliminados = eliminados,
+      if (!identical(.admon_choices_colores(base), .admon_choices_colores(nuevo))) {
+        afectados <- c(afectados, "Colores de las dimensiones")
+      }
+      colores_anteriores <- .admon_choices_colores(base)
+      colores_nuevos <- .admon_choices_colores(nuevo)
+      firma_color <- function(d) do.call(paste, c(d, sep = "|"))
+      colores_modificados <- length(setdiff(firma_color(colores_nuevos), firma_color(colores_anteriores)))
+      list(colores = colores_modificados, agregados = agregados, eliminados = eliminados,
            reorganizados = reorganizados, afectados = unique(afectados))
     }
     
@@ -632,6 +668,7 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
     
     # Guardar ----
     confirmacion_guardado_rv <- shiny::reactiveVal(FALSE)
+    catalogos_confirmados_rv <- shiny::reactiveVal(NULL)
     
     shiny::observeEvent(input$ADM_Guardar, {
       shiny::req(isTRUE(es_admin()), usuario(), borrador_rv(), base_rv())
@@ -642,6 +679,7 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
       }
       resumen <- .resumen_cambios(shiny::isolate(base_rv()),
                                   shiny::isolate(borrador_rv()))
+      catalogos_confirmados_rv(list(base = shiny::isolate(base_rv()), nuevo = shiny::isolate(borrador_rv())))
       confirmacion_guardado_rv(TRUE)
       shiny::showModal(racafeForms::racafeModal(
         title = "Confirmar actualización de catálogos", size = "subventana3",
@@ -650,7 +688,7 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
           racafeForms::racafeInfoItem("OPCIONES NUEVAS", as.character(resumen$agregados)),
           racafeForms::racafeInfoItem("OPCIONES ELIMINADAS", as.character(resumen$eliminados)),
           racafeForms::racafeInfoItem("LISTAS REORDENADAS", as.character(resumen$reorganizados)),
-          columns = 3
+          racafeForms::racafeInfoItem("COLORES MODIFICADOS", as.character(resumen$colores)), columns = 4
         ),
         if (length(resumen$afectados)) shiny::tags$p(
           shiny::tags$strong("Catálogos afectados: "),
@@ -667,18 +705,24 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
     
     shiny::observeEvent(input$ADM_CancelarGuardar, {
       confirmacion_guardado_rv(FALSE)
+      catalogos_confirmados_rv(NULL)
       shiny::removeModal()
     })
     
     shiny::observeEvent(input$ADM_ConfirmarGuardar, {
       shiny::req(isTRUE(es_admin()), isTRUE(confirmacion_guardado_rv()))
       confirmacion_guardado_rv(FALSE)
-
+      confirmado <- catalogos_confirmados_rv()
+      catalogos_confirmados_rv(NULL)
+      if (is.null(confirmado) || !identical(confirmado$nuevo, shiny::isolate(borrador_rv()))) {
+        shiny::showNotification("El borrador cambió. Revise y confirme nuevamente.", type = "warning")
+        return(invisible(NULL))
+      }
       shiny::removeModal()
 
       tryCatch({
         .admon_choices_guardar_cambios(
-          shiny::isolate(borrador_rv()), shiny::isolate(base_rv())
+          confirmado$nuevo, confirmado$base
         )
         base_rv(shiny::isolate(borrador_rv()))
         actualizaciones_rv(shiny::isolate(actualizaciones_rv()) + 1L)

@@ -71,7 +71,8 @@
   plotly::plot_ly(type = "treemap", ids = c("total", padres$Id, ids), labels = c("Total", padres$Categoria, x$Producto),
     parents = c("", rep("total", nrow(padres)), padres$Id[match(x$Categoria, padres$Categoria)]),
     values = valores, branchvalues = "total", text = texto,
-    customdata = cbind(c(NA_real_, rep(NA_real_, nrow(padres)), x$ParticipacionSacos), colores),
+    customdata = .crm_customdata(data.frame(Participacion = c(NA_real_, rep(NA_real_, nrow(padres)),
+      x$ParticipacionSacos), Margen = colores), c("Participacion", "Margen")),
     marker = list(colors = colores, colorscale = list(c(0, "#E9DDC8"), c(1, "#7A2028")),
       colorbar = list(title = "Margen · COP")),
     hovertemplate = "%{text}<br>Sacos: %{value:,.2f}<br>Participación: %{customdata[0]:.1%}<br>Margen: %{customdata[1]:,.0f} COP<extra></extra>")

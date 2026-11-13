@@ -15,7 +15,7 @@
 .coha_tabla <- function(id, data, titulo = NULL, subtitulo = NULL, footer = NULL, footer_tipo = "info",
                         col_specs = NULL, id_col = NULL, modo_seleccion = "ninguno", searchable = TRUE,
                         sortable = TRUE, page_size = 15L, filas_bloqueadas = NULL, modal_titulo_fn = NULL,
-                        modal_pre_fn = NULL, modal_contenido_fn = NULL, modal_size = "xl") {
+                        modal_pre_fn = NULL, modal_contenido_fn = NULL, modal_size = "xl", columnas_permitidas = NULL) {
   .permitida <- function(sel) !is.null(sel) && !identical(as.character(sel$id), "TOTAL")
   if (modo_seleccion != "celda") {
     if (!is.null(modal_contenido_fn)) {
@@ -46,6 +46,7 @@
     col_specs = col_specs, id_col = id_col, modal_titulo_fn = modal_titulo_fn,
     modal_pre_fn = modal_pre_fn, modal_contenido_fn = modal_contenido_fn,
     modal_size = .crm_tamano_modal(modal_size), datos_fn = .crm_tabla_datos,
-    nota_fn = .crm_nota, seleccion_permitida = .permitida)
+    nota_fn = .crm_nota, seleccion_permitida = function(sel) .permitida(sel) &&
+      (is.null(columnas_permitidas) || sel$col %in% columnas_permitidas))
 }
 

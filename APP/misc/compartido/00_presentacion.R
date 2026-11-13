@@ -13,7 +13,7 @@
 .crm_estilos_ui <- function() {
   if (exists(".estilos_crm", inherits = TRUE)) return(get(".estilos_crm", inherits = TRUE))
   shiny::singleton(shiny::includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
-    "4515c5c4dee719928265a43e7ad5a2fd0faa40eb/Styles/crm-nacional.css")))
+    "3fc6b20f62a47f18a8b35ec37512af56223ffb1e/Styles/crm-nacional.css")))
 }
 
 # Notas compactas fuera de cajas y tablas ----
@@ -58,6 +58,16 @@
     if (!is.numeric(datos[[nombre]])) next
     datos[[nombre]] <- racafeCore::IdentificadorTexto(datos[[nombre]])
   }
+  formatos <- list()
+  for (nombre in names(datos)) {
+    if (!is.numeric(datos[[nombre]]) || inherits(datos[[nombre]], c("Date", "POSIXt"))) next
+    conteo <- grepl("^(Numero)?(Clientes|Unidades|Pedidos|Facturas|Lotes|Registros)|^n_|^Dias|^Meses", nombre)
+    dinero <- grepl("Margen|MNFCC|Precio|Saldo|Monto|CLV|ValorCOP|Recaudo", nombre, ignore.case = TRUE) &&
+      !grepl("cumpl|pct|porcentaje|prob|var|particip|ratio|riesgo", nombre, ignore.case = TRUE)
+    if (conteo) formatos[[nombre]] <- list(digits = 0L)
+    if (dinero) formatos[[nombre]] <- list(prefix = "$", digits = 0L)
+  }
+  attr(datos, "formatos_vancouver") <- formatos
   datos
 }
 
@@ -124,8 +134,18 @@
     if (is.factor(x)) x <- as.character(x)
     if (is.character(x)) gsub("convencionales", "Coproductos", x, ignore.case = TRUE) else x
   })
-  do.call(racafeShiny::racafeTableVancouver,
+  tabla <- do.call(racafeShiny::racafeTableVancouver,
     c(list(data = datos, header_color = "#495057", header_width = 1.5, decimals = NULL), argumentos))
+  formatos <- attr(datos, "formatos_vancouver")
+  for (columna in names(formatos)) {
+    f <- formatos[[columna]]
+    tabla <- gt::fmt_number(tabla, columns = tidyselect::all_of(columna), decimals = f$digits,
+      pattern = paste0(f$prefix %||% "", "{x}"))
+  }
+  fechas <- names(datos)[vapply(datos, inherits, logical(1), "Date")]
+  if (length(fechas)) tabla <- gt::fmt(tabla, columns = tidyselect::all_of(fechas), fn = function(x) format(x,
+    "%d/%m/%Y"))
+  tabla
 }
 
 # Etiquetas orientadas al uso comercial, compartidas por tablas y modales ----
@@ -186,6 +206,7 @@
 .crm_vancouver_server <- function(id, data, columnas = NULL, col_specs = NULL, col_labels = NULL,
                                    id_col = NULL, modo_seleccion = "ninguno", sortable = TRUE,
                                    searchable = TRUE, page_size = 15, titulo = NULL, subtitulo = NULL, ...) {
+  col_specs <- .crm_specs_pedidos(col_specs %||% list(), id)
   racafeModulos::TablaVancouverServer(id, data, columnas, col_specs, col_labels, id_col, modo_seleccion,
     sortable, searchable, page_size, titulo, subtitulo, ..., preparar_fn = .crm_nits_tabla,
     etiquetas_fn = .crm_etiquetas, tabla_fn = .crm_tabla_vancouver, texto_fn = .crm_label_comercial,
@@ -195,17 +216,42 @@
 .crm_tabla_servidor <- function(..., footer = NULL, footer_tipo = "info", modal_titulo_fn = NULL,
                                 modal_contenido_fn = NULL, modal_pre_fn = NULL, modal_size = "xl",
                                 modal_icon = NULL, modal_footer = NULL, modal_footer_tipo = "info") {
-  racafeModulos::TablaVancouver(..., footer = footer, footer_tipo = footer_tipo,
+  argumentos <- list(...)
+  identificador <- argumentos$id %||% argumentos[[1]]
+  argumentos$col_specs <- .crm_specs_pedidos(argumentos$col_specs %||% list(), identificador)
+  do.call(racafeModulos::TablaVancouver, c(argumentos, list(footer = footer, footer_tipo = footer_tipo,
     modal_titulo_fn = modal_titulo_fn, modal_contenido_fn = modal_contenido_fn, modal_pre_fn = modal_pre_fn,
     modal_size = .crm_tamano_modal(modal_size), modal_footer = modal_footer,
     modal_footer_tipo = modal_footer_tipo, preparar_fn = .crm_nits_tabla, etiquetas_fn = .crm_etiquetas,
-    tabla_fn = .crm_tabla_vancouver, texto_fn = .crm_label_comercial, nota_fn = .crm_nota)
+    tabla_fn = .crm_tabla_vancouver, texto_fn = .crm_label_comercial, nota_fn = .crm_nota)))
 }
 
 
 
 # Ayuda contextual de parámetros ----
 .crm_label_ayuda <- function(texto, ayuda) {
-  shiny::tagList(texto, shiny::tags$button(type = "button", class = "btn btn-link btn-sm p-0 ml-1",
+  shiny::tagList(texto, shiny::tags$button(type = "button", class = "btn btn-secondary btn-sm ml-1 crm-ayuda",
     title = ayuda, `aria-label` = paste(texto, ayuda), shiny::icon("circle-question")))
+}
+
+# Acceso transversal al pedido respetando el alcance del maestro de la sesión ----
+.crm_specs_pedidos <- function(specs, id) {
+  sesion <- shiny::getDefaultReactiveDomain()
+  if (is.null(sesion) || !isTRUE(sesion$userData$trazabilidad_disponible)) return(specs)
+  for (campo in c("Pedido", "CLPdcCod", "PdcCod", "NumeroPedido")) local({
+    columna <- campo
+    if (!is.null(specs[[columna]]$cell)) return(invisible(NULL))
+    spec <- specs[[columna]] %||% list()
+    spec$html <- TRUE
+    spec$cell <- function(v, i) {
+      pedido <- .crm_id_texto(v)
+      if (is.na(pedido) || pedido == "0") return("—")
+      js <- paste0("event.stopPropagation();Shiny.setInputValue('crm_ver_pedido',{pedido:",
+        jsonlite::toJSON(pedido, auto_unbox = TRUE), ",nonce:Date.now()},{priority:'event'});")
+      shiny::tagAppendAttributes(racafeForms::racafeButton(paste0(id, "_", columna, "_", i), pedido,
+        icon = "timeline", variant = "ghost", size = "xxs", ns = sesion$ns, title = "Consultar pedido"), onclick = js)
+    }
+    specs[[columna]] <<- spec
+  })
+  specs
 }

@@ -40,7 +40,7 @@ CrearOportunidad <- function(id, usuario, codigo_contacto) {
     
     # Catalogo completo de productos; no depende del contacto, se carga una
     # sola vez por sesion del modulo y se reutiliza en las dos cascadas
-    prods <- reactive(CargarDatos("CRMNALPRODS"))
+    prods <- reactive(.pr_cargar("CRMNALPRODS"))
     
     # Datos del contacto filtrados en SQL — no full scan de CRMNALCONTACTO,
     # mismo patron que data_contacto() en Relacionamiento.R

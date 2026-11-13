@@ -1,5 +1,6 @@
 # Maestro de unidades comerciales y procedencia de atributos ----
-.crm_unidades_comerciales <- function(hechos, clientes, contactos, estados, leads = data.frame()) {
+.crm_unidades_comerciales <- function(hechos, clientes, contactos, estados, leads = data.frame(),
+  nit_mapa = data.frame()) {
   ultimo <- function(d, claves, fecha, campos) {
     for (campo in setdiff(c(claves, campos), names(d))) d[[campo]] <- rep(NA_character_, nrow(d))
     d$FechaAtributo <- if (fecha %in% names(d)) as.Date(d[[fecha]]) else rep(as.Date(NA), nrow(d))
@@ -17,6 +18,21 @@
   crm <- contactos
   crm$CliNitPpal <- .crm_id_texto(.gc_columna(crm, c("CliNitPpal", "PerCod")))
   crm$LinNegCod <- .crm_id_texto(.gc_columna(crm, "LinNegCod"))
+  if (nrow(nit_mapa)) {
+    nits <- .crm_id_texto(.gc_columna(nit_mapa, c("CLCliNit", "PerCod")))
+    principales <- .crm_id_texto(nit_mapa$CliNitPpal)
+    mapa <- unique(data.frame(NIT = nits, Principal = principales))
+    if (anyDuplicated(mapa$NIT[!is.na(mapa$NIT)])) stop("El mapa de NIT tiene cuentas principales contradictorias.")
+    crm$CliNitPpal <- dplyr::coalesce(mapa$Principal[match(crm$CliNitPpal, mapa$NIT)], crm$CliNitPpal)
+  }
+  conocidas <- dplyr::distinct(dplyr::bind_rows(h[claves], c[claves], e[claves])) %>%
+    dplyr::filter(!is.na(CliNitPpal), !is.na(LinNegCod))
+  sin_linea <- crm[is.na(crm$LinNegCod), , drop = FALSE]
+  if (nrow(sin_linea)) {
+    sin_linea$LinNegCod <- NULL
+    expandidas <- dplyr::inner_join(sin_linea, conocidas, by = "CliNitPpal", relationship = "many-to-many")
+    crm <- dplyr::bind_rows(crm, expandidas)
+  }
   if (nrow(leads) && all(c("CodContacto", "LinNegCod") %in% names(leads))) {
     crm$CodContacto <- as.character(crm$CodContacto)
     l <- leads
@@ -30,7 +46,8 @@
   actual <- ultimo(c, claves, "FecProceso", c("PerRazSoc", "Asesor", "Segmento"))
   names(actual)[-(1:2)] <- paste0(names(actual)[-(1:2)], "CRM")
   transacciones <- ultimo(h, claves, "FecFact", c("PerRazSoc", "Asesor", "Segmento", "CLLinNegNo"))
-  oficial <- ultimo(e, claves, "FecProceso", "SegmentoRacafe")
+  oficial <- ultimo(e, claves, "FecProceso", c("SegmentoRacafe", "FecProceso"))
+  names(oficial)[names(oficial) == "FecProceso"] <- "FechaEstadoOficial"
   contacto <- ultimo(crm, claves, "FechaHoraCrea", c("CodContacto", "Origen", "UsuarioCrea", "Etapa"))
   universo <- dplyr::distinct(dplyr::bind_rows(h[claves], c[claves], e[claves], crm[claves])) %>%
     dplyr::filter(!is.na(CliNitPpal), !is.na(LinNegCod))
@@ -55,5 +72,61 @@
   x$FuenteEstado <- ifelse(!is.na(x$EstadoCliente), "CRMNALSEGR", NA_character_)
   x$FuenteAsesor <- ifelse(!is.na(x$AsesorCRM), "CRMNALCLIENTE", ifelse(!is.na(x$Asesor), "MAESTRO", NA_character_))
   if (anyDuplicated(x$Identificador)) stop("El maestro contiene unidades comerciales duplicadas.")
+  x
+}
+# Indicadores por unidad y periodo sin repetir cantidades operativas ----
+.crm_metricas_unidades <- function(hechos, clientes, desde, hasta, cierre_presupuesto = hasta) {
+  claves <- c("CliNitPpal", "LinNegCod")
+  desde <- as.Date(desde); hasta <- as.Date(hasta); cierre_presupuesto <- as.Date(cierre_presupuesto)
+  if (length(desde) != 1L || length(hasta) != 1L || is.na(desde) || is.na(hasta) || desde > hasta) {
+    stop("El periodo de la unidad comercial no es válido.")
+  }
+  x <- hechos[hechos$EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO") &
+    !is.na(hechos$FecFact) & hechos$FecFact <= hasta, , drop = FALSE]
+  for (k in claves) x[[k]] <- .crm_id_texto(x[[k]])
+  x$LinNegCod[x$LinNegCod == "20000"] <- "21000"
+  mes <- as.Date(format(hasta, "%Y-%m-01"))
+  totales <- x %>% dplyr::group_by(dplyr::across(dplyr::all_of(claves))) %>%
+    dplyr::summarise(SacosMes = .com_suma(SacosFact[FecFact >= mes]),
+      MargenMes = .com_suma(Margen[FecFact >= mes]),
+      SacosPeriodo = .com_suma(SacosFact[FecFact >= desde]), MargenPeriodo = .com_suma(Margen[FecFact >= desde]),
+      PrimeraFacturacion = .gc_fecha_min(FecFact), UltimaFacturacion = .gc_fecha_max(FecFact), .groups = "drop")
+  metas <- lapply(seq.int(as.integer(format(desde, "%Y")), as.integer(format(hasta, "%Y"))), function(anho) {
+    inicio <- max(desde, as.Date(sprintf("%04d-01-01", anho)))
+    fin <- min(cierre_presupuesto, as.Date(sprintf("%04d-12-31", anho)))
+    meta <- .com_clientes(clientes, fin, anual = TRUE)
+    for (k in claves) meta[[k]] <- .crm_id_texto(meta[[k]])
+    meta$LinNegCod[meta$LinNegCod == "20000"] <- "21000"
+    meses <- if (inicio > fin) 0L else as.integer(format(fin, "%m")) - as.integer(format(inicio, "%m")) + 1L
+    meta %>% dplyr::group_by(dplyr::across(dplyr::all_of(claves))) %>%
+      dplyr::summarise(PresupuestoSacos = .com_suma(SSPpto) * meses / 12,
+        PresupuestoMargen = .com_suma(MNFCCPpto) * meses / 12, .groups = "drop")
+  })
+  universo <- dplyr::distinct(dplyr::bind_rows(totales[claves],
+    dplyr::bind_rows(metas)[claves]))
+  metas <- lapply(metas, function(m) dplyr::right_join(m, universo, by = claves, relationship = "one-to-one"))
+  meta <- dplyr::bind_rows(metas) %>% dplyr::group_by(dplyr::across(dplyr::all_of(claves))) %>%
+    dplyr::summarise(PresupuestoSacos = .com_suma(PresupuestoSacos),
+      PresupuestoMargen = .com_suma(PresupuestoMargen), .groups = "drop")
+  z <- dplyr::full_join(totales, meta, by = claves, relationship = "one-to-one")
+  z$CumplimientoSacos <- .gc_ratio(z$SacosPeriodo, z$PresupuestoSacos)
+  z$CumplimientoMargen <- .gc_ratio(z$MargenPeriodo, z$PresupuestoMargen)
+  z$MesReferencia <- rep(mes, nrow(z))
+  z$PeriodoDesde <- rep(desde, nrow(z)); z$PeriodoHasta <- rep(hasta, nrow(z))
+  z$CortePresupuesto <- rep(cierre_presupuesto, nrow(z))
+  z
+}
+
+# Totales comerciales: sumar valores y recalcular porcentajes sobre los totales ----
+.crm_agregar_indicadores <- function(unidades, grupos) {
+  cantidades <- intersect(c("SacosMes", "MargenMes", "SacosPeriodo", "MargenPeriodo",
+    "PresupuestoSacos", "PresupuestoMargen"), names(unidades))
+  x <- unidades %>% dplyr::group_by(dplyr::across(dplyr::all_of(grupos))) %>%
+    dplyr::summarise(Unidades = dplyr::n_distinct(Identificador),
+      dplyr::across(dplyr::all_of(cantidades), .com_suma),
+      PrimeraFacturacion = .gc_fecha_min(PrimeraFacturacion),
+      UltimaFacturacion = .gc_fecha_max(UltimaFacturacion), .groups = "drop")
+  x$CumplimientoSacos <- .gc_ratio(x$SacosPeriodo, x$PresupuestoSacos)
+  x$CumplimientoMargen <- .gc_ratio(x$MargenPeriodo, x$PresupuestoMargen)
   x
 }

@@ -20,6 +20,7 @@ header <- bs4DashNavbar(status = "white", border = FALSE, sidebarIcon = icon("ba
                                                      icon = "palette", title = "Escalas de color", variant = "secondary",
                                                      size = "xs"), `data-toggle` = "dropdown", `aria-haspopup` = "true"),
                                                    div(class = "dropdown-menu kb-scale-menu",
+                                                     uiOutput("leyenda_dimensiones"),
                                                      tags$strong("ETAPA DE LA ENTIDAD"),
                                                      lapply(ETAPAS_EMBUDO, function(etapa) div(
                                                        tags$span(class = "kb-scale-swatch", style = paste0("background:",

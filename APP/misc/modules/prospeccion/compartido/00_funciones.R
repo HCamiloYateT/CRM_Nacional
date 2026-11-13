@@ -27,13 +27,19 @@
 .pr_invalidar <- function(tablas = NULL) {
   fuente <- .pr_fuentes()
   if (is.null(fuente)) return(invisible(NULL))
-  quitar <- if (is.null(tablas)) union(ls(fuente$tablas), ls(fuente$revisiones)) else tablas
+  quitar <- if (is.null(tablas)) union(ls(fuente$tablas), ls(fuente$revisiones)) else {
+    llaves <- ls(fuente$tablas)
+    filtradas <- llaves[vapply(llaves, function(k) any(startsWith(k, paste0("entidad|", tablas, "|"))), logical(1))]
+    union(tablas, filtradas)
+  }
   for (tabla in quitar) {
     if (exists(tabla, fuente$tablas, inherits = FALSE)) rm(list = tabla, envir = fuente$tablas)
     if (exists(tabla, fuente$revisiones, inherits = FALSE)) {
       fuente$revisiones[[tabla]](shiny::isolate(fuente$revisiones[[tabla]]()) + 1L)
     }
   }
+  sesion <- shiny::getDefaultReactiveDomain()
+  if (is.null(tablas) && !is.null(sesion)) sesion$userData$colores_catalogo <- NULL
   if (is.null(tablas)) fuente$revision_total(shiny::isolate(fuente$revision_total()) + 1L)
   fuente$revision(shiny::isolate(fuente$revision()) + 1L)
 }
@@ -701,18 +707,15 @@ cargar_pipeline_embudo <- function(cargar = .pr_cargar) {
   responsables <- if (creador) texto("UsuarioCrea", "SIN REGISTRO") else texto("Asesor", "SIN ASESOR")
   rol <- if (creador) "CREADOR: " else "ASESOR: "
   destinos <- if (solo_consulta) character() else .kb_destinos(fila$Etapa, texto("EtapaPreDescarte", "CONTACTO"))
-  div(class = "kpb-card kpb-card-compact", draggable = if (solo_consulta) "false" else "true",
-    `data-cod-contacto` = fila$CodContacto, `data-kb-source` = fila$Etapa,
-    `data-kb-targets` = paste(destinos, collapse = " "),
-    `data-kb-search` = toupper(paste(unlist(fila[intersect(c("PerRazSoc", "PerCod", "Asesor", "Segmento",
-      "LinNegocio", "Origen", "Alianzas", "Razon1", "Razon2", "Razon3"), names(fila))]), collapse = " ")),
-    style = paste0("border-left:3px solid ", COLOR_ETAPA_EMBUDO[[fila$Etapa]], ";"),
-    tags$details(tags$summary(tags$strong(texto("PerRazSoc", "SIN RAZÓN SOCIAL")),
-      tags$span(class = "kpb-responsables", lapply(strsplit(responsables, " | ", fixed = TRUE)[[1]],
-        function(x) racafeForms::racafeStatusBadge(paste0(rol, x), "neutral", size = "xs"))),
-      tags$span(class = "kb-contexto", title = contexto, contexto)),
-      div(class = "kpb-card-body", if (fila$Etapa != "CLIENTE") racafeForms::racafeInfoItem("NIT", nit), campos)),
-    div(class = "kpb-card-menu", menu))
+  racafeModulos::TarjetaKanbanUI(texto("PerRazSoc", "SIN RAZÓN SOCIAL"),
+    responsables = lapply(strsplit(responsables, " | ", fixed = TRUE)[[1]], function(x)
+      racafeForms::racafeStatusBadge(paste0(rol, x), "neutral", size = "xs")), contexto = contexto,
+    cuerpo = tagList(if (fila$Etapa != "CLIENTE") racafeForms::racafeInfoItem("NIT", nit), campos), menu = menu,
+    color = unname(.crm_colores("etapa", fila$Etapa)), codigo = if (solo_consulta) NULL else fila$CodContacto,
+    origen = fila$Etapa, destinos = destinos,
+    busqueda = toupper(paste(unlist(fila[intersect(c("PerRazSoc", "PerCod", "Asesor", "Segmento",
+      "LinNegocio", "Origen", "Alianzas", "Razon1", "Razon2", "Razon3"), names(fila))]), collapse = " ")))
+
 }
 # Detecta Leads con primera factura y los convierte a Cliente, registrando la transicion
 detectar_conversion_leads <- function(usr = "SISTEMA", facturas = fact_cliente, codigos = NULL) {

@@ -26,7 +26,11 @@
       MCNom = .gc_columna(x, c("NombreComercialPedido", "MCNom", "CLMCNom", "NombreComercial")),
       LinProNom = .gc_columna(x, c("LinProNom", "CLLinProNo")),
       LinNeg = .gc_columna(x, c("LinNeg", "CLLinNegNo")),
-      Lote = as.character(.gc_columna(x, "CLLotCod")), stringsAsFactors = FALSE)
+      Lote = as.character(.gc_columna(x, "CLLotCod")),
+      IdRegistroCRM = as.character(.gc_columna(x, "IdRegistroCRM")),
+      EstadoFinanciero = as.character(.gc_columna(x, "EstadoFinanciero")),
+      FecFact = as.Date(.gc_columna(x, "FecFact")),
+      SacosFact = suppressWarnings(as.numeric(.gc_columna(x, "SacosFact"))), stringsAsFactors = FALSE)
     referencias$Referencia <- .clas_llave(referencias)
     referencias
   }
@@ -59,10 +63,33 @@
   x <- catalogo[.clas_vacio(catalogo$Categoria) | .clas_vacio(catalogo$Producto), , drop = FALSE]
   x$NumeroLotes <- 0L
   if (nrow(observadas)) {
-    lotes <- unique(observadas[!.clas_vacio(observadas$Lote), c("Referencia", "Lote"), drop = FALSE])
+    lotes <- unique(observadas[!.clas_vacio(observadas$Lote) & observadas$Lote != "0", c("Referencia",
+      "Lote"), drop = FALSE])
     conteo <- table(lotes$Referencia)
     x$NumeroLotes <- as.integer(conteo[match(x$Referencia, names(conteo))])
     x$NumeroLotes[is.na(x$NumeroLotes)] <- 0L
+  }
+  hay_facturacion <- any(vapply(operaciones, function(d) is.data.frame(d) &&
+    all(c("IdRegistroCRM", "EstadoFinanciero", "FecFact", "SacosFact") %in% names(d)), logical(1)))
+  x$SacosVendidos <- if (hay_facturacion) 0 else NA_real_
+  x$PrimeraFactura <- rep(as.Date(NA), nrow(x)); x$UltimaFactura <- rep(as.Date(NA), nrow(x))
+  if (nrow(observadas)) {
+    fact <- observadas[observadas$EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO") &
+      !is.na(observadas$FecFact), c("IdRegistroCRM", "Referencia", "FecFact", "SacosFact"), drop = FALSE]
+    fact <- dplyr::distinct(fact)
+    if (nrow(fact)) {
+      if (anyNA(fact$IdRegistroCRM) || anyDuplicated(fact$IdRegistroCRM)) {
+        stop("La facturación de referencias no tiene una clave única. Actualice el ETL antes de consolidar.")
+      }
+      metricas <- fact %>% dplyr::group_by(Referencia) %>% dplyr::summarise(
+        SacosVendidos = .com_suma(SacosFact), PrimeraFactura = .gc_fecha_min(FecFact),
+        UltimaFactura = .gc_fecha_max(FecFact), .groups = "drop")
+      i <- match(x$Referencia, metricas$Referencia)
+      presentes <- !is.na(i)
+      for (campo in c("SacosVendidos", "PrimeraFactura", "UltimaFactura")) {
+        x[[campo]][presentes] <- metricas[[campo]][i[presentes]]
+      }
+    }
   }
   x$Marca <- .gc_columna(x, "Marca", "Sin marca registrada")
   x$NombreComercial <- .gc_columna(x, "MCNom", "Sin nombre comercial")

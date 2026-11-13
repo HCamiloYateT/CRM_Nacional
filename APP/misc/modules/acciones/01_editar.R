@@ -34,7 +34,7 @@ Identificacion <- function(id, usuario, codigo_contacto) {
     .confirmar_guardado <- .accion_guardado(input, session, codigo_contacto, usuario)
     datos_contacto <- reactive({
       contador_actualizaciones(); req(codigo_contacto())
-      CargarDatos("CRMNALCONTACTO", condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(codigo_contacto())))
+      .accion_cargar_contacto("CRMNALCONTACTO", codigo_contacto())
     })
     .normalizar <- function(x) {
       x <- stringr::str_to_upper(stringr::str_squish(x %||% ""))
@@ -680,7 +680,7 @@ BuscadorDireccion <- function(id, pais_iso2 = "CO", valores_iniciales = reactive
 GeografiaUI <- function(id) {
   ns <- NS(id)
   .accion_formulario_ui(id, fluidRow(
-    column(7,
+    column(6,
            box(title = "Dirección Principal", width = 12, collapsible = FALSE,
                BuscadorDireccionUI(ns("Direccion")),
                racafeForms::racafeButton(id = ns("BotonGuardarUbicacion"), label = "Guardar", size = "xs",
@@ -729,7 +729,7 @@ GeografiaUI <- function(id) {
                racafeModulos::TablaReactableUI(ns("TablaSucursales"), titulo = "Listado de Sedes")
            )
     ),
-    column(5,
+    column(6,
            box(title = "Mapa", width = 12, collapsible = FALSE,
                leaflet::leafletOutput(ns("MapaGeneral"), height = "400px"),
                tags$div(
