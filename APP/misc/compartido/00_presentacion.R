@@ -1,3 +1,14 @@
+# Medición opcional sin registrar valores comerciales ----
+.crm_medir <- function(fase, expresion) {
+  inicio <- proc.time()[["elapsed"]]
+  on.exit({
+    receptor <- getOption("crm.perfil")
+    if (is.function(receptor)) tryCatch(
+      receptor(fase = fase, segundos = proc.time()[["elapsed"]] - inicio), error = function(e) invisible(NULL))
+  }, add = TRUE)
+  eval.parent(substitute(expresion))
+}
+
 # Recurso visual común para la app y las vistas independientes ----
 .crm_estilos_ui <- function() {
   if (exists(".estilos_crm", inherits = TRUE)) return(get(".estilos_crm", inherits = TRUE))
@@ -68,7 +79,7 @@
     ifelse(pyg == crm, "Coincide", "Segmento diferente")))
 }
 
-.crm_descarga_ui <- function(id, ns, label = "Descargar detalle") {
+.crm_descarga_ui <- function(id, ns, label = "Descargar") {
   shiny::tags$div(class = "crm-descargas",
     racafeForms::racafeButtonDownload(id, label = label, icon = "download", ns = ns,
       size = "xs", variant = "secondary"))
@@ -107,6 +118,7 @@
 .crm_tabla_vancouver <- function(datos, ...) {
   argumentos <- list(...)
   if (is.null(argumentos$labels)) argumentos$labels <- unlist(.crm_etiquetas(names(datos)), use.names = TRUE)
+  if (is.null(argumentos$min_width)) argumentos$min_width <- paste0(max(300L, 110L * ncol(datos)), "px")
   datos <- .crm_nits_tabla(datos, argumentos$labels)
   datos[] <- lapply(datos, function(x) {
     if (is.factor(x)) x <- as.character(x)
@@ -191,3 +203,9 @@
 }
 
 
+
+# Ayuda contextual de parámetros ----
+.crm_label_ayuda <- function(texto, ayuda) {
+  shiny::tagList(texto, shiny::tags$button(type = "button", class = "btn btn-link btn-sm p-0 ml-1",
+    title = ayuda, `aria-label` = paste(texto, ayuda), shiny::icon("circle-question")))
+}

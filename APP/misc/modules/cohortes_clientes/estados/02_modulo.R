@@ -327,12 +327,7 @@ CohortesEstadosUI <- function(id) {
   tagList(
     
     # Filtros globales del módulo ----
-    racafeForms::racafeForm(variant = "plain",
-      racafeForms::racafeFormRow(columns = 2,
-        shiny::uiOutput(ns("ui_fechas")),
-        .crm_select("fil_ppto", "Presupuesto",
-          choices = c("Con Ppto" = "con", "Sin Ppto" = "sin", "Sin dato" = "nd"),
-          selected = c("con", "sin", "nd"), multiple = TRUE, ns = ns))),
+    racafeForms::racafeForm(variant = "plain", shiny::uiOutput(ns("ui_fechas"))),
     shiny::uiOutput(ns("sin_datos")),
 
     # Bloque KPIs de periodo: inicio vs mes vigente ----
@@ -446,7 +441,7 @@ CohortesEstadosUI <- function(id) {
   )
 }
 
-CohortesEstados <- function(id, bd, data_t, fecha_limite = shiny::reactive(Sys.Date())) {
+CohortesEstados <- function(id, bd, data_t, fecha_limite = shiny::reactive(Sys.Date()), cierre_oficial = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     sel_matriz_estado <- reactiveVal(NULL)
@@ -495,8 +490,14 @@ CohortesEstados <- function(id, bd, data_t, fecha_limite = shiny::reactive(Sys.D
     # Datos reactivos ----
     
     # Selectores de meses disponibles; conservar selección al refrescar el panel ----
-    output$ui_fechas <- .crm_render_ui({
+    limite_meses <- shiny::reactive({
       limite <- as.Date(format(as.Date(fecha_limite()), "%Y-%m-01"))
+      oficial <- if (is.null(cierre_oficial)) .gc_fecha_max(bd()$FecProceso) else cierre_oficial()
+      shiny::validate(shiny::need(length(oficial) == 1L && !is.na(oficial), "No hay meses oficiales disponibles."))
+      min(limite, as.Date(format(as.Date(oficial), "%Y-%m-01")))
+    })
+    output$ui_fechas <- .crm_render_ui({
+      limite <- limite_meses()
       inicio_anho <- as.Date(format(limite, "%Y-01-01"))
       fechas <- seq(inicio_anho, limite, by = "month")
       if (!length(fechas)) return(NULL)
@@ -504,9 +505,12 @@ CohortesEstados <- function(id, bd, data_t, fecha_limite = shiny::reactive(Sys.D
       anterior <- shiny::isolate(list(input$fecha_ini, input$fecha_fin))
       inicial <- if (length(anterior[[1]]) == 1L && anterior[[1]] %in% opciones) anterior[[1]] else opciones[[1]]
       final <- if (length(anterior[[2]]) == 1L && anterior[[2]] %in% opciones) anterior[[2]] else tail(opciones, 1)
-      racafeForms::racafeFormRow(columns = 2,
+      racafeForms::racafeFormRow(columns = 3,
         .crm_input_mes("fecha_ini", "Mes inicial", value = as.Date(inicial), min = inicio_anho, max = limite, ns = ns),
-        .crm_input_mes("fecha_fin", "Mes final", value = as.Date(final), min = inicio_anho, max = limite, ns = ns))
+        .crm_input_mes("fecha_fin", "Mes final", value = as.Date(final), min = inicio_anho, max = limite, ns = ns),
+        .crm_select("fil_ppto", "Presupuesto", choices = c("Con Ppto" = "con", "Sin Ppto" = "sin", "Sin dato" = "nd"),
+          selected = if (is.null(anterior[[1]])) c("con", "sin", "nd") else
+            shiny::isolate(input$fil_ppto) %||% character(), multiple = TRUE, ns = ns))
     })
     output$sin_datos <- .crm_render_ui({
       if (!nrow(bd())) return(.crm_nota("No hay estados ni ventas disponibles para el año en curso."))
@@ -523,11 +527,11 @@ CohortesEstados <- function(id, bd, data_t, fecha_limite = shiny::reactive(Sys.D
     # Mes vigente / mes inicial del panel — gobernados por el filtro de usuario
     mes_vigente <- reactive({
       req(input$fecha_fin)
-      .coha_acotar_mes(input$fecha_fin, fecha_limite())
+      .coha_acotar_mes(input$fecha_fin, limite_meses())
     })
     mes_inicio <- reactive({
       req(input$fecha_ini)
-      .coha_acotar_mes(input$fecha_ini, fecha_limite())
+      .coha_acotar_mes(input$fecha_ini, limite_meses())
     })
     
     # Universo de UCs activas según filtros dimensionales de data_t

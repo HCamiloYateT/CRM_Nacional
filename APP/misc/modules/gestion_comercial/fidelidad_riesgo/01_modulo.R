@@ -31,14 +31,14 @@ FidelidadRiesgoUI <- function(id) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
     racafeForms::racafeFormRow(columns = 3,
-      racafeForms::racafeInputNumeric("umbral", "Umbral de revisión (días)", value = 90, min = 1,
+      racafeForms::racafeInputNumeric("umbral", .crm_label_ayuda("Umbral de revisión (días)", "Días sin compra a partir de los que conviene revisar al cliente. Un valor menor genera más alertas."), value = 90, min = 1,
         format = "number", ns = ns),
-      .crm_select("estado", "Estado de las señales observadas", choices = .FID_ESTADOS,
+      .crm_select("estado", .crm_label_ayuda("Estado de las señales observadas", "Elija las señales comerciales que quiere consultar. Sin opciones no se muestran clientes."), choices = .FID_ESTADOS,
         selected = .FID_ESTADOS, multiple = TRUE, ns = ns)),
     racafeForms::racafeFormRow(columns = 2,
-      racafeForms::racafeInputNumeric("horizonte", "Horizonte CLV (meses)", value = 12, min = 1, max = 36,
+      racafeForms::racafeInputNumeric("horizonte", .crm_label_ayuda("Horizonte CLV (meses)", "Meses futuros que se estiman, de 1 a 36. Un periodo largo aumenta la incertidumbre."), value = 12, min = 1, max = 36,
         decimals = 0, ns = ns),
-      racafeForms::racafeInputNumeric("descuento", "Descuento anual (%)", value = 12, min = 0, max = 100, ns = ns)),
+      racafeForms::racafeInputNumeric("descuento", .crm_label_ayuda("Descuento anual (%)", "De 0 a 100. Reduce el valor actual del margen futuro; un descuento mayor reduce el CLV."), value = 12, min = 0, max = 100, ns = ns)),
     racafeForms::racafeActionBar(left = racafeForms::racafeButton("modelar", "Calcular RFM, BG/NBD y CLV",
       icon = "chart-line", ns = ns)),
     .crm_disclosure("Cómo interpretar fidelidad, riesgo y valor del cliente",
@@ -52,7 +52,9 @@ FidelidadRiesgoUI <- function(id) {
         "Las primeras compras solo son las observadas en el historial disponible."))),
     .gc_tarjetas_ui(ns, .FID_CAJAS),
     .crm_tabs(
-      tabPanel("RFM", .crm_tabla_ui(ns("rfm"))),
+      tabPanel("RFM", .crm_plot_output(ns("rfm_segmentos")),
+        shiny::fluidRow(lapply(c("RecenciaDias", "Compras", "Margen"), function(campo)
+          shiny::column(4, .crm_plot_output(ns(paste0("densidad_", campo)))))), .crm_tabla_ui(ns("rfm"))),
       tabPanel("BTYD y CLV", shiny::uiOutput(ns("estado_modelo")),
         shiny::conditionalPanel(sprintf("output['%s']", ns("modelo_disponible")),
           .crm_plot_output(ns("modelo_grafico"), height = "330px"), .crm_tabla_ui(ns("btyd")))),
@@ -60,6 +62,7 @@ FidelidadRiesgoUI <- function(id) {
         shiny::conditionalPanel(sprintf("output['%s']", ns("modelo_disponible")),
           .crm_tabla_ui(ns("modelo_parametros")), .crm_tabla_ui(ns("validacion"))),
         .crm_nota("Validación retrospectiva de 90 días sobre clientes con historia previa."))),
+    .crm_plot_output(ns("estados_arbol")),
     .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("resumen")), .crm_tabla_ui(ns("clientes")),
     .crm_nota(c("La primera compra es la primera observada en la exportación: no equivale a la creación del cliente.",
       "Un cliente sin presupuesto no se clasifica automáticamente como recuperado.",
@@ -99,6 +102,27 @@ FidelidadRiesgo <- function(id, hechos, clientes, filtros) {
       m <- modelo(); shiny::validate(shiny::need(is.null(m$error), m$error)); m$validacion
     }))
     rfm <- shiny::reactive(.fid_rfm(hechos(), as.Date(corte())))
+    output$rfm_segmentos <- .crm_render_plotly({
+      x <- rfm() %>% dplyr::count(SegmentoRFM, name = "Unidades")
+      shiny::validate(shiny::need(nrow(x) > 0L, "No hay compras para calcular RFM."))
+      plotly::plot_ly(x, type = "treemap", labels = ~SegmentoRFM, parents = rep("", nrow(x)), values = ~Unidades,
+        marker = list(colors = rep(c("#7A2028", "#C8A77D", "#9B7160", "#495057"), length.out = nrow(x))),
+        hovertemplate = "<b>%{label}</b><br><b>UNIDADES COMERCIALES:</b> %{value:.0f}<extra></extra>")
+    })
+    for (campo in c("RecenciaDias", "Compras", "Margen")) local({
+      variable <- campo
+      output[[paste0("densidad_", variable)]] <- .crm_render_plotly({
+        v <- rfm()[[variable]]; v <- v[is.finite(v)]
+        shiny::validate(shiny::need(length(unique(v)) > 1L, "Se requieren al menos dos valores distintos."))
+        d <- stats::density(v)
+        titulo <- c(RecenciaDias = "Días sin compra", Compras = "Compras observadas", Margen = "Margen FCC · COP")[[variable]]
+        plotly::plot_ly(x = d$x, y = d$y, type = "scatter", mode = "lines", fill = "tozeroy",
+          line = list(color = "#7A2028"), fillcolor = "rgba(200,167,125,0.35)",
+          hovertemplate = paste0("<b>", titulo, "</b><br><b>VALOR:</b> %{x:,.2f}",
+            "<br><b>DENSIDAD:</b> %{y:.4f}<extra></extra>")) %>%
+          plotly::layout(title = titulo, xaxis = list(title = titulo), yaxis = list(title = "Densidad"))
+      })
+    })
     .gc_tarjetas_server(.FID_CAJAS, shiny::reactive({
       r <- rfm()
       m <- if (isTRUE(input$modelar > 0)) modelo() else NULL
@@ -147,6 +171,17 @@ FidelidadRiesgo <- function(id, hechos, clientes, filtros) {
         as.Date(corte()), input$umbral)
       x <- x[x$Estado %in% input$estado, , drop = FALSE]
       x
+    })
+    output$estados_arbol <- .crm_render_plotly({
+      x <- datos() %>% dplyr::group_by(Estado) %>%
+        dplyr::summarise(Unidades = dplyr::n(), Sacos = .com_suma(SacosAnho),
+          Margen = .com_suma(MargenAnho), .groups = "drop")
+      shiny::validate(shiny::need(nrow(x) > 0L, "No hay clientes para los estados seleccionados."))
+      plotly::plot_ly(x, type = "treemap", labels = ~Estado, parents = rep("", nrow(x)), values = ~Unidades,
+        customdata = ~cbind(Sacos, Margen),
+        marker = list(colors = rep(c("#7A2028", "#C8A77D", "#9B7160", "#495057"), length.out = nrow(x))),
+        hovertemplate = paste0("<b>%{label}</b><br><b>UNIDADES COMERCIALES:</b> %{value:.0f}",
+          "<br><b>SACOS DEL AÑO:</b> %{customdata[0]:,.2f}<br><b>MARGEN COP:</b> $%{customdata[1]:,.0f}<extra></extra>"))
     })
     resumen <- shiny::reactive(datos() %>% dplyr::group_by(Estado) %>%
       dplyr::summarise(ClientesLinea = dplyr::n(), SacosAnho = .com_suma(SacosAnho), .groups = "drop"))

@@ -620,7 +620,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
       dplyr::select(-MesNum)
     
       list(fecha_cierre_pyg = fecha_cierre_pyg, data_base = data_base, fact_base = fact_base, pyg_base = pyg_base,
-        nit_base = nit_base, clientes_snap_base = clientes_snap_base, n_cliente_principal = n_cliente_principal,
+        nit_base = nit_base, clientes_snap_base = clientes_snap_base, n_cliente_principal = n_cliente_principal, n_cliente_base = n_cliente_base,
         extraccion_pyg = extraccion_pyg)
     })
 
@@ -1045,7 +1045,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
           fuentes_base()$clientes_snap_base,
           by = c("CliNitPpal", "LinNegCod")
         ) %>%
-        dplyr::left_join(n_cliente_base, by = "CLCliNit") %>%
+        dplyr::left_join(fuentes_base()$n_cliente_base, by = "CLCliNit") %>%
         dplyr::transmute(
           FecMes,
           CLLotCod,
@@ -1350,7 +1350,7 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
           fuentes_base()$clientes_snap_base,
           by = c("CliNitPpal", "LinNegCod")
         ) %>%
-        dplyr::left_join(n_cliente_base, by = "CLCliNit") %>%
+        dplyr::left_join(fuentes_base()$n_cliente_base, by = "CLCliNit") %>%
         dplyr::transmute(
           CLLotCod,
           Cliente = RazonSocialCreacion,

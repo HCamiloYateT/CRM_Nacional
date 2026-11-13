@@ -545,41 +545,46 @@ PanelEtapa <- function(id, usuario, etapa, mostrar_titulo = TRUE, filtro_extra =
     modulo_editar <- Editar(
       "Editar",
       usuario = usuario,
-      codigo_contacto = reactive(
+      codigo_contacto = reactive({
+        req(identical(accion_seleccionada(), "Editar"))
         codigo_seleccionado()
-      )
+      })
     )
     
     modulo_relacion <- Relacionamiento(
       "Relacionamiento",
       usuario = usuario,
-      codigo_contacto = reactive(
+      codigo_contacto = reactive({
+        req(identical(accion_seleccionada(), "Relacionamiento"))
         codigo_seleccionado()
-      )
+      })
     )
     
     modulo_promover <- Promover(
       "Promover",
       usuario = usuario,
-      codigo_contacto = reactive(
+      codigo_contacto = reactive({
+        req(identical(accion_seleccionada(), "Promover"))
         codigo_seleccionado()
-      )
+      })
     )
     
     modulo_descartar <- Descartar(
       "Descartar",
       usuario = usuario,
-      codigo_contacto = reactive(
+      codigo_contacto = reactive({
+        req(identical(accion_seleccionada(), "Descartar"))
         codigo_seleccionado()
-      )
+      })
     )
     
     modulo_oportunidad <- CrearOportunidad(
       "CrearOportunidad",
       usuario = usuario,
-      codigo_contacto = reactive(
+      codigo_contacto = reactive({
+        req(identical(accion_seleccionada(), "CrearOportunidad"))
         codigo_seleccionado()
-      )
+      })
     )
     
     modulo_reactivar <- Reactivar(

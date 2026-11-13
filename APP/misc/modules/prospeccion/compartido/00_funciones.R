@@ -4,23 +4,37 @@
   if (is.null(sesion)) return(NULL)
   if (is.null(sesion$userData$prospeccion_fuentes)) {
     sesion$userData$prospeccion_fuentes <- list(revision = shiny::reactiveVal(0L),
-      tablas = new.env(parent = emptyenv()))
+      tablas = new.env(parent = emptyenv()), revisiones = new.env(parent = emptyenv()),
+      revision_total = shiny::reactiveVal(0L))
   }
   sesion$userData$prospeccion_fuentes
 }
-.pr_cargar <- function(tabla) {
+.pr_revision <- function(tabla) {
+  f <- .pr_fuentes()
+  if (is.null(f)) return(0L)
+  if (!exists(tabla, f$revisiones, inherits = FALSE)) f$revisiones[[tabla]] <- shiny::reactiveVal(0L)
+  f$revisiones[[tabla]]()
+}
+.pr_cargar <- function(tabla, cargar = CargarDatos) {
   fuente <- .pr_fuentes()
-  if (is.null(fuente)) return(CargarDatos(tabla))
-  fuente$revision()
-  if (!exists(tabla, envir = fuente$tablas, inherits = FALSE)) fuente$tablas[[tabla]] <- CargarDatos(tabla)
+  if (is.null(fuente)) return(cargar(tabla))
+  .pr_revision(tabla)
+  if (!exists(tabla, fuente$tablas, inherits = FALSE)) {
+    fuente$tablas[[tabla]] <- .crm_medir(paste0("SQL:", tabla), cargar(tabla))
+  }
   fuente$tablas[[tabla]]
 }
 .pr_invalidar <- function(tablas = NULL) {
   fuente <- .pr_fuentes()
   if (is.null(fuente)) return(invisible(NULL))
-  quitar <- ls(fuente$tablas, all.names = TRUE)
-  if (!is.null(tablas)) quitar <- intersect(quitar, tablas)
-  rm(list = quitar, envir = fuente$tablas)
+  quitar <- if (is.null(tablas)) union(ls(fuente$tablas), ls(fuente$revisiones)) else tablas
+  for (tabla in quitar) {
+    if (exists(tabla, fuente$tablas, inherits = FALSE)) rm(list = tabla, envir = fuente$tablas)
+    if (exists(tabla, fuente$revisiones, inherits = FALSE)) {
+      fuente$revisiones[[tabla]](shiny::isolate(fuente$revisiones[[tabla]]()) + 1L)
+    }
+  }
+  if (is.null(tablas)) fuente$revision_total(shiny::isolate(fuente$revision_total()) + 1L)
   fuente$revision(shiny::isolate(fuente$revision()) + 1L)
 }
 
@@ -1472,10 +1486,10 @@ grafico_embudo <- function(metricas) {
   etapas <- c("CONTACTO", "LEAD", "CLIENTE")
   valores <- c(metricas$total_contactos, metricas$total_leads, metricas$total_clientes)
   valores[!is.finite(valores)] <- 0
-  plotly::plot_ly(type = "funnel", y = etapas, x = valores,
+  plotly::plot_ly(type = "funnel", y = etapas, x = valores, height = 500,
     marker = list(color = unname(COLOR_ETAPA_EMBUDO[etapas])), textinfo = "value",
     hovertemplate = "<b>%{y}</b><br>Entidades: %{x:,.0f}<extra></extra>") %>%
-    plotly::layout(height = 450, margin = list(l = 100, r = 40, t = 20, b = 20),
+    plotly::layout(margin = list(l = 100, r = 40, t = 20, b = 20),
       yaxis = list(categoryorder = "array", categoryarray = etapas, autorange = "reversed"),
       showlegend = FALSE, hoverlabel = list(bgcolor = "#e9ecef", font = list(color = "#343a40"))) %>%
     plotly::config(displayModeBar = FALSE)

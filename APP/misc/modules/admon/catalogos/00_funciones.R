@@ -107,6 +107,20 @@
   for (clave in setdiff(names(.ADMON_CHOICES_INICIALES), names(catalogos))) {
     catalogos[[clave]] <- .ADMON_CHOICES_INICIALES[[clave]]
   }
+  if (!"detalle_raz_descarte" %in% names(catalogos)) {
+    catalogos$detalle_raz_descarte <- character()
+    relaciones <- .admon_choices_relaciones(catalogos)
+    if (exists(".DETALLE_RAZON_DESCARTE", inherits = TRUE)) {
+      for (razon in intersect(catalogos$raz_descarte, names(.DETALLE_RAZON_DESCARTE))) {
+        cfg <- .DETALLE_RAZON_DESCARTE[[razon]]
+        if (!identical(cfg$tipo, "lista") || !is.character(cfg$choices)) next
+        relaciones <- rbind(relaciones, data.frame(catalogo = "detalle_raz_descarte", padre = razon,
+          padre2 = "", opcion = toupper(cfg$choices), stringsAsFactors = FALSE))
+      }
+    }
+    catalogos$detalle_raz_descarte <- unique(relaciones$padre[relaciones$catalogo == "detalle_raz_descarte"])
+    attr(catalogos, "relaciones") <- relaciones
+  }
   catalogos
 }
 
@@ -132,7 +146,7 @@
 }
 
 .admon_choices_valores <- function(catalogos, catalogo, padre = "", padre2 = "") {
-  if (identical(catalogo, "detalle_origen") ||
+  if (catalogo %in% c("detalle_origen", "detalle_raz_descarte") ||
       catalogo %in% c("categoria", "producto")) {
     relaciones <- .admon_choices_relaciones(catalogos)
     if (!nzchar(padre)) return(character())
@@ -149,7 +163,7 @@
 # Edicion diferida ----
 .admon_choices_agregar_local <- function(datos, catalogo, valor, padre = "", padre2 = "", codigo = NULL) {
   valor <- .admon_choices_normalizar(valor)
-  if (!catalogo %in% c(names(datos), "detalle_origen")) {
+  if (!catalogo %in% c(names(datos), "detalle_origen", "detalle_raz_descarte")) {
     stop("El catálogo no existe.", call. = FALSE)
   }
   if (identical(catalogo, "tipo_nota")) {
@@ -162,11 +176,11 @@
     datos[[catalogo]] <- c(existentes, stats::setNames(codigo, valor))
     return(datos)
   }
-  anidado <- catalogo %in% c("detalle_origen", "categoria", "producto")
+  anidado <- catalogo %in% c("detalle_origen", "detalle_raz_descarte", "categoria", "producto")
   if (anidado) {
     padre <- .admon_choices_normalizar(padre)
     if (identical(catalogo, "producto")) padre2 <- .admon_choices_normalizar(padre2)
-    origen <- if (identical(catalogo, "detalle_origen")) "origen" else "linneg"
+    origen <- switch(catalogo, detalle_origen = "origen", detalle_raz_descarte = "raz_descarte", "linneg")
     if (!padre %in% datos[[origen]]) stop("Seleccione un nivel superior válido.", call. = FALSE)
     if (identical(catalogo, "producto") &&
         !padre2 %in% .admon_choices_valores(datos, "categoria", padre)) {
@@ -182,7 +196,10 @@
     relaciones <- rbind(relaciones, data.frame(catalogo = catalogo,
                                                padre = padre, padre2 = padre2, opcion = valor, stringsAsFactors = FALSE))
     attr(datos, "relaciones") <- relaciones
-    if (!identical(catalogo, "detalle_origen") && !valor %in% datos[[catalogo]]) {
+    if (identical(catalogo, "detalle_raz_descarte")) {
+      datos$detalle_raz_descarte <- union(datos$detalle_raz_descarte, padre)
+    }
+    if (!catalogo %in% c("detalle_origen", "detalle_raz_descarte") && !valor %in% datos[[catalogo]]) {
       datos[[catalogo]] <- c(datos[[catalogo]], valor)
     }
   } else {
@@ -197,7 +214,7 @@
   destino <- indice + if (identical(direccion, "subir")) -1L else 1L
   if (length(indice) != 1L || is.na(indice) || indice < 1L || destino < 1L ||
       destino > length(valores)) return(datos)
-  if (catalogo %in% c("detalle_origen", "categoria", "producto")) {
+  if (catalogo %in% c("detalle_origen", "detalle_raz_descarte", "categoria", "producto")) {
     relaciones <- .admon_choices_relaciones(datos)
     filas <- which(relaciones$catalogo == catalogo & relaciones$padre == padre &
                      (catalogo != "producto" | relaciones$padre2 == padre2))
@@ -220,6 +237,10 @@
   }
   valor <- valores[[indice]]
   relaciones <- .admon_choices_relaciones(datos)
+  if (identical(catalogo, "raz_descarte") &&
+      any(relaciones$catalogo == "detalle_raz_descarte" & relaciones$padre == valor)) {
+    stop("Elimine primero los detalles asociados a la razón de descarte.", call. = FALSE)
+  }
   if (identical(catalogo, "origen") &&
       any(relaciones$catalogo == "detalle_origen" & relaciones$padre == valor)) {
     stop("Elimine primero los detalles asociados al origen.", call. = FALSE)
@@ -233,7 +254,7 @@
           relaciones$padre2 == valor)) {
     stop("Elimine primero los productos asociados a esta categoría.", call. = FALSE)
   }
-  if (catalogo %in% c("detalle_origen", "categoria", "producto")) {
+  if (catalogo %in% c("detalle_origen", "detalle_raz_descarte", "categoria", "producto")) {
     filas <- which(relaciones$catalogo == catalogo & relaciones$padre == padre &
                      (catalogo != "producto" | relaciones$padre2 == padre2))
     relaciones <- relaciones[-filas[indice], , drop = FALSE]
