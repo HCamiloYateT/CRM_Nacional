@@ -52,9 +52,11 @@ FidelidadRiesgoUI <- function(id) {
         "Las primeras compras solo son las observadas en el historial disponible."))),
     .gc_tarjetas_ui(ns, .FID_CAJAS),
     .crm_tabs(
-      tabPanel("RFM", .crm_plot_output(ns("rfm_segmentos")),
-        shiny::fluidRow(lapply(c("RecenciaDias", "Compras", "Margen"), function(campo)
-          shiny::column(4, .crm_plot_output(ns(paste0("densidad_", campo)))))), .crm_tabla_ui(ns("rfm"))),
+      tabPanel("RFM", shiny::fluidRow(
+        shiny::column(5, lapply(c("RecenciaDias", "Compras", "Margen"), function(campo)
+          .crm_plot_output(ns(paste0("densidad_", campo)), height = "200px", compact = TRUE))),
+        shiny::column(7, .crm_plot_output(ns("rfm_segmentos"), height = "600px"))),
+        .crm_tabla_ui(ns("rfm"))),
       tabPanel("BTYD y CLV", shiny::uiOutput(ns("estado_modelo")),
         shiny::conditionalPanel(sprintf("output['%s']", ns("modelo_disponible")),
           .crm_plot_output(ns("modelo_grafico"), height = "330px"), .crm_tabla_ui(ns("btyd")))),
@@ -62,7 +64,7 @@ FidelidadRiesgoUI <- function(id) {
         shiny::conditionalPanel(sprintf("output['%s']", ns("modelo_disponible")),
           .crm_tabla_ui(ns("modelo_parametros")), .crm_tabla_ui(ns("validacion"))),
         .crm_nota("Validación retrospectiva de 90 días sobre clientes con historia previa."))),
-    .crm_plot_output(ns("estados_arbol")),
+    shiny::tags$hr(), .crm_plot_output(ns("estados_arbol")),
     .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("resumen")), .crm_tabla_ui(ns("clientes")),
     .crm_nota(c("La primera compra es la primera observada en la exportación: no equivale a la creación del cliente.",
       "Un cliente sin presupuesto no se clasifica automáticamente como recuperado.",
@@ -117,7 +119,8 @@ FidelidadRiesgo <- function(id, hechos, clientes, filtros) {
     arbol_comercial <- function(u, grupo, dimension) {
       x <- .crm_agregar_indicadores(u, grupo)
       shiny::validate(shiny::need(nrow(x) > 0L, "No hay unidades para los filtros seleccionados."))
-      plotly::plot_ly(x, type = "treemap", labels = x[[grupo]], parents = rep("", nrow(x)), values = ~Unidades,
+      plotly::plot_ly(x, type = "treemap", height = 600, labels = x[[grupo]], parents = rep("", nrow(x)),
+        values = ~Unidades,
         customdata = .crm_customdata(x, c("SacosMes", "MargenMes", "SacosPeriodo", "MargenPeriodo",
           "CumplimientoSacos", "CumplimientoMargen", "PrimeraFacturacion", "UltimaFacturacion")),
         marker = list(colors = unname(.crm_colores(dimension, x[[grupo]]))),
@@ -137,7 +140,7 @@ FidelidadRiesgo <- function(id, hechos, clientes, filtros) {
         x <- rfm()
         segmentos <- sort(unique(x$SegmentoRFM))
         titulo <- c(RecenciaDias = "Días sin compra", Compras = "Compras observadas", Margen = "Margen FCC · COP")[[variable]]
-        p <- plotly::plot_ly()
+        p <- plotly::plot_ly(height = 200)
         n <- 0L
         for (segmento in segmentos) {
           v <- x[[variable]][x$SegmentoRFM == segmento]
@@ -150,7 +153,9 @@ FidelidadRiesgo <- function(id, hechos, clientes, filtros) {
               ":</b> %{x:,.2f}<br><b>DENSIDAD:</b> %{y:.4f}<extra></extra>"))
         }
         shiny::validate(shiny::need(n > 0L, "Se necesitan dos valores distintos dentro de un mismo segmento."))
-        plotly::layout(p, title = titulo, xaxis = list(title = titulo), yaxis = list(title = "Densidad"))
+        plotly::layout(p, title = titulo, showlegend = identical(variable, "Margen"),
+          xaxis = list(title = titulo), yaxis = list(title = "Densidad"),
+          meta = list(crm_altura_compacta = TRUE))
       })
     })
     .gc_tarjetas_server(.FID_CAJAS, shiny::reactive({

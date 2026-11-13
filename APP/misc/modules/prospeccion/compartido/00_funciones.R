@@ -1490,7 +1490,7 @@ grafico_embudo <- function(metricas) {
   valores <- c(metricas$total_contactos, metricas$total_leads, metricas$total_clientes)
   valores[!is.finite(valores)] <- 0
   plotly::plot_ly(type = "funnel", y = etapas, x = valores, height = 500,
-    marker = list(color = unname(COLOR_ETAPA_EMBUDO[etapas])), textinfo = "value",
+    marker = list(color = unname(.crm_colores("etapa", etapas))), textinfo = "value",
     hovertemplate = "<b>%{y}</b><br>Entidades: %{x:,.0f}<extra></extra>") %>%
     plotly::layout(margin = list(l = 100, r = 40, t = 20, b = 20),
       yaxis = list(categoryorder = "array", categoryarray = etapas, autorange = "reversed"),
@@ -1536,7 +1536,7 @@ grafico_descartados <- function(dat) {
       Origen = coalesce(Origen, "SIN DATO"),
       DetOrigen = coalesce(DetOrigen, "SIN DATO"),
       Razon1 = coalesce(Razon1, "SIN DATO"),
-      ColorBase = unname(COLOR_ETAPA_EMBUDO[EtapaPreDescarte])
+      ColorBase = unname(.crm_colores("etapa", EtapaPreDescarte))
     )
   
   # Resume el nivel principal del treemap.

@@ -16,11 +16,15 @@
   x$Creacion <- as.Date(.gc_columna(x, c("FechaCreacionPedido", "PdcFecCre")))
   x$MargenProyectadoLinea <- .gc_num(.gc_columna(x, "MargenProyectadoLinea", NA_real_))
   x$EstadoPedido <- .gc_columna(x, c("EstadoPedido"))
+  x$Asignacion <- as.Date(.gc_columna(x, c("FechaAsignacionLote", "FecAsignLote")))
+  x$LoteDocumentado <- .crm_lote_documentado(x)
   # Una cantidad operativa por lote; sumar solamente los hechos de ejecución, nunca las proyecciones.
   lotes <- x %>% dplyr::filter(!is.na(CLLotCod), CLLotCod != 0, EstadoFinanciero != "PROYECTADO") %>%
     dplyr::group_by(Lote) %>%
     dplyr::summarise(Pedido = .gc_unico(Pedido), Linea = .gc_unico(Linea), NIT = .gc_unico(NIT),
       Cliente = .gc_unico(Cliente), Fecha = .gc_unico(Fecha),
+      Creacion = .gc_unico(Creacion), Asignacion = .gc_unico(Asignacion),
+      LoteDocumentado = any(LoteDocumentado),
       Asignados = .gc_unico(SacosLote70), Producidos = .gc_unico(SacosProducidos70),
       Despachados = .gc_unico(SacosDespachados70),
       FacturadosSYSCAFE = .gc_unico(FacturadosOperativos70),
@@ -58,12 +62,11 @@
     dat$Nivel <- nivel
     registros[[length(registros) + 1L]] <<- dat
   }
-  con_lote <- paste(pedidos$Pedido, pedidos$Linea) %in% paste(lotes$Pedido, lotes$Linea)
-  cobertura <- if ("FechaInicioTrazabilidad" %in% names(x)) unique(stats::na.omit(x$FechaInicioTrazabilidad)) else as.Date(character())
-  fecha_cobertura <- if (length(cobertura)) min(cobertura) else as.Date(NA)
-  elegible <- con_lote | (!is.na(fecha_cobertura) & !is.na(pedidos$Creacion) & pedidos$Creacion >= fecha_cobertura)
+  con_lote <- paste(pedidos$Pedido, pedidos$Linea) %in%
+    paste(lotes$Pedido[lotes$LoteDocumentado], lotes$Linea[lotes$LoteDocumentado])
+  elegible <- con_lote | is.na(pedidos$Creacion) | pedidos$Creacion >= as.Date("2020-01-01")
   sin_trazabilidad <- pedidos[pedidos$Activo & !elegible, , drop = FALSE]
-  sin_trazabilidad$Motivo <- "Pedido fuera de cobertura operativa verificable; no se presume pendiente"
+  sin_trazabilidad$Motivo <- "Pedido anterior a 2020 sin lote documentado; excluido de pendientes operativos"
   agregar(sin_trazabilidad, "Información incompleta", rep(NA_real_, nrow(sin_trazabilidad)), "Pedido")
   activos <- pedidos[pedidos$Activo & elegible, , drop = FALSE]
   etapas <- list("Sin asignar" = activos$SinAsignar > 0.1,
@@ -182,7 +185,14 @@ PendientesGestion <- function(id, maestro, usuario = function() "SIN IDENTIFICAR
       })
       .crm_vancouver_server(paste0(mid, "resumen"), shiny::reactive(.pen_resumen_tipo(filas())))
       sel <- .crm_tabla_servidor(mid, data = filas, id_col = "Registro", modo_seleccion = "fila",
-        columnas = c("Cliente", "Pedido", "Linea", "Lote", "Fecha", "Nivel", "Cantidad", "PorProducir", "PorDespachar", "PorFacturar", "Categoria", "Producto", "CLLinNegNo", "Asesor", "Motivo", "Etapa"),
+        columnas = c("Cliente", "Pedido", "Linea", "Lote", "Creacion", "Asignacion", "Fecha", "Cantidad",
+          "PorProducir", "PorDespachar", "PorFacturar", "Categoria", "Producto", "CLLinNegNo", "Asesor", "Motivo",
+          if (categoria != "Pendientes de margen") "Etapa"),
+        col_labels = c(Pedido = "Código de pedido", Linea = "Línea del pedido", Lote = "Código de lote",
+          Creacion = "Fecha de creación del pedido", Asignacion = "Fecha de asignación del lote",
+          Fecha = "Fecha estimada del pedido", Cantidad = "Sacos pendientes (70 kg)",
+          PorProducir = "Sacos pendientes de producir", PorDespachar = "Sacos pendientes de despachar",
+          PorFacturar = "Sacos pendientes de facturar"),
         modal_titulo_fn = function(sel) "Trazabilidad del pedido",
         modal_contenido_fn = function(sel) TrazabilidadPedidoUI(session$ns(paste0(mid, "traza"))))
       TrazabilidadPedido(paste0(mid, "traza"), maestro,

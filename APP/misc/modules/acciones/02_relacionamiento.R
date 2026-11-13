@@ -121,15 +121,8 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
     output$GES_Timeline <- renderUI({
       dat <- gestiones_data()
       if (nrow(dat) == 0) return(tags$p("Sin gestiones registradas aún.", style = "color:#94A3B8; font-size:12px;"))
-      tagList(lapply(seq_len(nrow(dat)), function(i) {
-        .rc_card(
-          borde_color = "#dc3545",
-          header = tagList(.badge_tipo_gestion(dat$TipoGestion[i]), " — ",
-                           tags$strong(dat$UsuarioCrea[i]), " — ",
-                           format(dat$FechaHoraCrea[i], "%d/%m/%Y %H:%M")),
-          cuerpo = dat$Comentario[i]
-        )
-      }))
+      racafeModulos::TimelineUI(data.frame(Fecha = dat$FechaHoraCrea,
+        Evento = dat$TipoGestion, Descripcion = dat$Comentario, Usuario = dat$UsuarioCrea))
     })
     
     validacion_gestion <- .accion_validacion(input, session, codigo_contacto,
@@ -167,7 +160,9 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
     output$REC_Lista <- renderUI({
       dat <- recordatorios_data()
       if (nrow(dat) == 0) return(tags$p("Sin recordatorios programados.", style = "color:#94A3B8; font-size:12px;"))
-      tagList(lapply(seq_len(nrow(dat)), function(i) {
+      racafeModulos::TimelineUI(data.frame(Fecha = dat$FechaRecordatorio, Evento = dat$Canal,
+        Usuario = dat$Asesor, Estado = ifelse(dat$Enviado == 1, "CUMPLIDO", "PENDIENTE")),
+        contenido = lapply(seq_len(nrow(dat)), function(i) {
         cumplido <- isTRUE(dat$Enviado[i] == 1)
         vencido  <- !cumplido && dat$FechaRecordatorio[i] < Sys.time()
         

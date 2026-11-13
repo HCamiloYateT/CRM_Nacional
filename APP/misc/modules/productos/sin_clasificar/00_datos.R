@@ -192,3 +192,31 @@
   })
   invisible(TRUE)
 }
+
+# Relacionar por códigos de línea, producto, marca y nombre comercial; nunca por texto ----
+.clas_pedidos_relacionados <- function(operaciones, referencia) {
+  if (is.data.frame(operaciones)) operaciones <- list(operaciones)
+  fuentes <- Filter(function(x) is.data.frame(x) && all(c("CLPdcCod", "CLPdcLin",
+    "EstadoFinanciero", "IdRegistroCRM") %in% names(x)), operaciones)
+  if (!length(fuentes)) stop("No está disponible el maestro de pedidos para esta referencia. Actualice el ETL.")
+  x <- dplyr::bind_rows(fuentes)
+  claves <- data.frame(LinNegCod = .gc_columna(x, c("LinNegCodPedido", "LinNegCod")),
+    LinProCod = .gc_columna(x, c("LinProCodPedido", "LinProCod")),
+    MCCod = .gc_columna(x, c("NombreComercialPedidoCod", "MCCod")),
+    MrcCod = .gc_columna(x, c("MarcaPedidoCod", "MrcCod")))
+  x <- x[.clas_llave(claves) %in% referencia, , drop = FALSE]
+  x <- dplyr::distinct(x)
+  if (!nrow(x)) return(data.frame())
+  if (anyDuplicated(x$IdRegistroCRM)) stop("El maestro contiene hechos duplicados de esta referencia.")
+  x$CantidadSolicitada <- .gc_columna(x, "CantidadPedidoOrigen", NA_real_)
+  x$FechaPedido <- as.Date(.gc_columna(x, "FechaCreacionPedido"))
+  x$MarcaCod <- .gc_columna(x, "MarcaPedidoCod")
+  x$NombreSolicitado <- .gc_columna(x, "NombreComercialPedido")
+  x %>% dplyr::group_by(CLPdcCod, CLPdcLin) %>% dplyr::summarise(
+    Cliente = .gc_unico(PerRazSoc), LineaNegocio = .gc_unico(CLLinNegNo),
+    CodigoProducto = .gc_unico(LinProCodPedido), CodigoMarca = .gc_unico(MarcaCod),
+    NombreComercial = .gc_unico(NombreSolicitado), CantidadSolicitada = .gc_unico(CantidadSolicitada),
+    FechaPedido = .gc_unico(FechaPedido), Estado = .gc_unico(EstadoPedido),
+    SacosFacturados70 = .com_suma(SacosFact[EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO")]),
+    .groups = "drop")
+}

@@ -99,21 +99,12 @@ sys.source("APP/misc/datos/06_integridad_operativa.R", envir = environment())
     "syscafe",
     query = "SELECT F1.FcnLot AS CLLotCod,
                     F2.FcnFec AS FecFact,
-                    SUM(
-                      CASE
-                        WHEN UM.UMeFac = 62.5 THEN F1.FcnSacLot * 62.5 / 70.0
-                        ELSE F1.FcnSacLot
-                      END
-                    ) AS SacosFact
+                    SUM(F1.FcnKilLot / 70.0) AS SacosFact
              FROM FCTFACN1 F1
              LEFT JOIN FCTFACNA F2
                ON F1.FcnNum = F2.FcnNum
+              AND F1.FcnPrf = F2.FcnPrf
               AND F1.CiaCod = F2.CiaCod
-             LEFT JOIN EXPPEDID PD
-               ON F1.PdcCod = PD.PdcCod
-              AND F1.CiaCod = PD.CiaCod
-             LEFT JOIN NUNIMEDI UM
-               ON PD.UMeCod = UM.UMeCod
              WHERE F1.CiaCod = 10
                AND F2.CiaCod = 10
                AND F2.FcnEtd = 'C'
@@ -1013,9 +1004,9 @@ esquema_pedido_linea <- names(racafeBD::ConsultaSistema("syscafe", "SELECT * FRO
 }
 campos_originales_sql <- paste(c(.campo_linea_sql("MrcCod", "MarcaPedidoCod"),
   .campo_linea_sql(c("MCCod", "NomComCod"), "NombreComercialPedidoCod"),
-  .campo_linea_sql(c("PdcPrecioKilo", "PdcPreKilo", "PdcPrePes"), "PrecioNegociadoOriginal"),
+  "COALESCE(NULLIF(pd.PdcPrePes, 0), NULLIF(pd.PdcPreKil, 0)) AS PrecioNegociadoOriginal",
+  "pd.PdcPrePes AS PrecioNegociadoCOPKg",
   .campo_linea_sql("UMeCod", "UnidadPrecioOriginal")), collapse = ", ")
-campo_precio_negociado <- head(intersect(c("PdcPrecioKilo", "PdcPreKilo", "PdcPrePes"), esquema_pedido_linea), 1L)
 
 # Pedidos activos de venta nacional
 # PEDIDOS ----
@@ -1063,12 +1054,13 @@ ped <- racafeBD::ConsultaSistema(
   )
 
 # Cuadro de lotes con carga incremental (activos + congelados del cache)
-ped$MonedaPrecioOriginal <- getOption("crm.moneda_precio_negociado", NA_character_)
-ped$UnidadPrecioConfirmada <- if (campo_precio_negociado %in% c("PdcPrecioKilo", "PdcPreKilo")) "KG" else
-  getOption("crm.unidad_precio_negociado", NA_character_)
-ped$PrecioNegociadoKg <- ifelse(ped$UnidadPrecioConfirmada == "KG" & ped$MonedaPrecioOriginal == "COP",
-  ped$PrecioNegociadoOriginal, NA_real_)
-ped$FuentePrecioNegociado <- if (length(campo_precio_negociado)) paste0("EXPPEDI1.", campo_precio_negociado) else NA_character_
+precio_cop_confirmado <- is.finite(ped$PrecioNegociadoCOPKg) & ped$PrecioNegociadoCOPKg > 0
+ped$MonedaPrecioOriginal <- ifelse(precio_cop_confirmado, "COP", NA_character_)
+ped$UnidadPrecioOriginal <- ifelse(precio_cop_confirmado, "KG", NA_character_)
+ped$UnidadPrecioConfirmada <- ped$UnidadPrecioOriginal
+ped$PrecioNegociadoKg <- ifelse(precio_cop_confirmado, ped$PrecioNegociadoCOPKg, NA_real_)
+ped$FuentePrecioNegociado <- ifelse(precio_cop_confirmado, "EXPPEDID.PdcPrePes · COP/kg",
+  "EXPPEDID.PdcPreKil · moneda y significado pendientes de confirmar")
 
 ruta_lotes_cache <- "APP/data/lotes_raw.rds"
 
@@ -2598,40 +2590,10 @@ ruta_evolucion <- Sys.getenv("CRM_EVOLUCION_HISTORICA", unset = "APP/data/evoluc
 if (file.exists(ruta_evolucion)) homologaciones$evolucion_historica <- .ev_leer_historico(ruta_evolucion)
 
 # TRAZABILIDAD FACTURAS ----
-.facturas_referencia <- function() {
-  sql_nal <- paste(
-    "SELECT F1.FcnLot AS CLLotCod, F2.FcnFec AS FecFact,",
-    "F1.FcnNum AS NumeroFactura, 'NACIONAL' AS TipoFactura",
-    "FROM FCTFACN1 F1 INNER JOIN FCTFACNA F2",
-    "ON F1.CiaCod = F2.CiaCod AND F1.FcnNum = F2.FcnNum",
-    "WHERE F1.CiaCod = 10 AND F2.FcnEtd = 'C'",
-    sprintf("AND F2.FcnFec >= '%s'",
-            format(fecha_inicio_analisis, "%Y-%m-%d"))
-  )
-  sql_ext <- paste(
-    "SELECT F1.FctLot AS CLLotCod, F2.FctFec AS FecFact,",
-    "F1.FctNum AS NumeroFactura, 'EXTERIOR' AS TipoFactura",
-    "FROM FCTFACC2 F1 INNER JOIN FCTFACCA F2",
-    "ON F1.CiaCod = F2.CiaCod AND F1.FctNum = F2.FctNum",
-    "WHERE F1.CiaCod = 10 AND F1.FctLotAnu <> 'S'",
-    sprintf("AND F2.FctFec >= '%s'",
-            format(fecha_inicio_analisis, "%Y-%m-%d"))
-  )
-  bind_rows(
-    racafeBD::ConsultaSistema("syscafe", sql_nal),
-    racafeBD::ConsultaSistema("syscafe", sql_ext)
-  ) %>%
-    mutate(
-      CLLotCod = as.numeric(CLLotCod),
-      FecMes = floor_date(as.Date(FecFact), "month"),
-      ReferenciaFactura = paste0(TipoFactura, ":", NumeroFactura)
-    ) %>%
-    filter(!is.na(CLLotCod), !is.na(FecMes)) %>%
-    distinct(CLLotCod, FecFact, FecMes, TipoFactura, NumeroFactura, ReferenciaFactura)
-}
+sys.source("APP/misc/datos/08_trazabilidad_documental.R", envir = environment())
+facturas_detalle <- .tz_facturas_extraer(fecha_desde = fecha_inicio_analisis)
 
-facturas_detalle <- .facturas_referencia()
-referencias_factura <- facturas_detalle %>% group_by(CLLotCod, FecMes) %>%
+referencias_factura <- facturas_detalle %>% filter(EsValida %in% TRUE) %>% group_by(CLLotCod, FecMes) %>%
   summarise(FacturasSYSCAFE = paste(sort(unique(ReferenciaFactura)), collapse = "; "),
     NumFacturasSYSCAFE = n_distinct(ReferenciaFactura), .groups = "drop")
 .verificar_clave_unica(referencias_factura, c("CLLotCod", "FecMes"),
@@ -2799,10 +2761,12 @@ diagnostico_producto <- .crm_diagnostico_productos(pedidos_clasificacion, produc
 faltan_maestros <- pedidos_clasificacion %>% filter(
   !is.na(MrcCod) & !MrcCod %in% n_marcas$MrcCod | !is.na(MCCod) & !MCCod %in% n_marcom$MCCod) %>%
   transmute(PdcCod, PdcLin, LinNegCod, LinProCod, MCCod, MrcCod, Diagnostico = "Marca o nombre sin correspondencia en maestro")
+.tz_snapshot_margen(crm_maestro)
 homologaciones$facturas_detalle <- facturas_detalle
 homologaciones$diagnostico_productos_pedido <- bind_rows(diagnostico_producto, faltan_maestros)
 homologaciones$esquemas_auditados <- list(EXPPEDI1 = esquema_pedido_linea, nombres_comerciales = fuente_nombres,
-  campo_precio = campo_precio_negociado, unidad_precio_confirmada = unique(ped$UnidadPrecioConfirmada))
+  campo_precio = c("EXPPEDID.PdcPrePes", "EXPPEDID.PdcPreKil"),
+  unidad_precio_confirmada = unique(ped$UnidadPrecioConfirmada))
 fuente_cobertura_lotes <- tryCatch(racafeBD::CargarDatos("CRMNALLOT"), error = function(e) data.frame())
 inicio_trazabilidad <- .crm_cobertura_lotes(fuente_cobertura_lotes)
 crm_maestro$FechaInicioTrazabilidad <- inicio_trazabilidad

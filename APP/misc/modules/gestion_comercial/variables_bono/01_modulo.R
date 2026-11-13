@@ -89,7 +89,7 @@
     dplyr::mutate(Margen = ifelse(is.na(ConEjecucion), 0, Margen),
       Negocio = dplyr::case_when(LinNegCod == 10000 ~ "COPRODUCTO", LinNegCod == 21000 ~ "MEDIDA", TRUE ~ "OTRO"))
 }
-VariablesBonoUI <- function(id, fecha = Sys.Date()) {
+.bon_legacy_ui <- function(id, fecha = Sys.Date()) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
     .crm_nota(c("Información en confirmación.", "Módulo en construcción.")),
@@ -107,7 +107,7 @@ VariablesBonoUI <- function(id, fecha = Sys.Date()) {
     .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("componentes"), titulo = "Componentes del incentivo"),
     .crm_tabla_ui(ns("mensual"), titulo = "Trazabilidad mensual de ejecución y presupuesto"))
 }
-VariablesBono <- function(id, hechos, clientes, filtros, historico, cierre) {
+.bon_legacy_server <- function(id, hechos, clientes, filtros, historico, cierre) {
   shiny::moduleServer(id, function(input, output, session) {
     corte <- shiny::reactive({ shiny::req(input$corte); .com_fin_mes(as.Date(input$corte)) })
     shiny::observe({
@@ -176,3 +176,9 @@ VariablesBono <- function(id, hechos, clientes, filtros, historico, cierre) {
     dplyr::mutate(Negocio = "NUEVOS", Segmento = "TODOS")
   dplyr::bind_rows(x, panel_nuevos)
 }
+
+# Vista activa mientras se confirma la política ----
+VariablesBonoUI <- function(id, fecha = Sys.Date()) {
+  .crm_nota(c("Información en confirmación.", "Módulo en construcción."))
+}
+VariablesBono <- function(id, hechos, clientes, filtros, historico, cierre) invisible(NULL)

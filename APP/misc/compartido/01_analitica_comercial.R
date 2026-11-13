@@ -59,23 +59,32 @@
     "No hay categorías y productos disponibles para el treemap."))
   x <- x[is.finite(x$Sacos) & x$Sacos > 0 & !is.na(x$Categoria) & !is.na(x$Producto), , drop = FALSE]
   shiny::validate(shiny::need(nrow(x) > 0L, "No hay sacos positivos con categoría y producto identificados."))
-  padres <- x %>% dplyr::group_by(Categoria) %>% dplyr::summarise(Sacos = sum(Sacos),
-    Margen = .com_suma(Margen), .groups = "drop")
-  padres$Id <- paste0("c", seq_len(nrow(padres)))
-  ids <- paste0("p", seq_len(nrow(x)))
-  valores <- c(sum(x$Sacos), padres$Sacos, x$Sacos)
-  colores <- c(.com_suma(x$Margen), padres$Margen, x$Margen)
-  precio <- if ("PrecioPromedioKg" %in% names(x)) x$PrecioPromedioKg else rep(NA_real_, nrow(x))
-  texto <- c("Total representado", padres$Categoria, paste0(x$Categoria, " → ", x$Producto,
-    "<br>Precio medio/kg: ", ifelse(is.finite(precio), format(round(precio, 2), big.mark = ","), "No disponible")))
-  plotly::plot_ly(type = "treemap", ids = c("total", padres$Id, ids), labels = c("Total", padres$Categoria, x$Producto),
-    parents = c("", rep("total", nrow(padres)), padres$Id[match(x$Categoria, padres$Categoria)]),
-    values = valores, branchvalues = "total", text = texto,
-    customdata = .crm_customdata(data.frame(Participacion = c(NA_real_, rep(NA_real_, nrow(padres)),
-      x$ParticipacionSacos), Margen = colores), c("Participacion", "Margen")),
-    marker = list(colors = colores, colorscale = list(c(0, "#E9DDC8"), c(1, "#7A2028")),
-      colorbar = list(title = "Margen · COP")),
-    hovertemplate = "%{text}<br>Sacos: %{value:,.2f}<br>Participación: %{customdata[0]:.1%}<br>Margen: %{customdata[1]:,.0f} COP<extra></extra>")
+  con_linea <- "CLLinNegNo" %in% names(x)
+  if (!con_linea) x$CLLinNegNo <- ""
+  categorias <- x %>% dplyr::group_by(CLLinNegNo, Categoria) %>%
+    dplyr::summarise(Sacos = sum(Sacos), Margen = .com_suma(Margen), .groups = "drop")
+  lineas <- x %>% dplyr::group_by(CLLinNegNo) %>%
+    dplyr::summarise(Sacos = sum(Sacos), Margen = .com_suma(Margen), .groups = "drop")
+  categoria_id <- paste("C", categorias$CLLinNegNo, categorias$Categoria, sep = "|")
+  producto_id <- paste("P", x$CLLinNegNo, x$Categoria, x$Producto, sep = "|")
+  nodos <- data.frame(Id = "TOTAL", Padre = "", Etiqueta = "TOTAL", Sacos = sum(x$Sacos),
+    Margen = .com_suma(x$Margen), Color = "#495057")
+  if (con_linea) nodos <- dplyr::bind_rows(nodos, data.frame(
+    Id = paste0("L|", lineas$CLLinNegNo), Padre = "TOTAL", Etiqueta = lineas$CLLinNegNo,
+    Sacos = lineas$Sacos, Margen = lineas$Margen, Color = unname(.crm_colores("linneg", lineas$CLLinNegNo))))
+  nodos <- dplyr::bind_rows(nodos, data.frame(Id = categoria_id,
+    Padre = if (con_linea) paste0("L|", categorias$CLLinNegNo) else "TOTAL", Etiqueta = categorias$Categoria,
+    Sacos = categorias$Sacos, Margen = categorias$Margen,
+    Color = unname(.crm_colores("categoria", categorias$Categoria, categorias$CLLinNegNo))),
+    data.frame(Id = producto_id, Padre = paste("C", x$CLLinNegNo, x$Categoria, sep = "|"),
+      Etiqueta = x$Producto, Sacos = x$Sacos, Margen = x$Margen,
+      Color = unname(.crm_colores("producto", x$Producto, x$CLLinNegNo, x$Categoria))))
+  nodos$Participacion <- nodos$Sacos / sum(x$Sacos)
+  plotly::plot_ly(nodos, type = "treemap", ids = ~Id, labels = ~Etiqueta, parents = ~Padre,
+    values = ~Sacos, branchvalues = "total", textinfo = "label", marker = list(colors = nodos$Color),
+    customdata = .crm_customdata(nodos, c("Participacion", "Margen")),
+    hovertemplate = paste0("<b>%{label}</b><br>Sacos: %{value:,.2f}<br>Participación: %{customdata[0]:.1%}",
+      "<br>Margen: $%{customdata[1]:,.0f}<extra></extra>"))
 }
 
 .crm_clave_precio <- function(x, campos) {

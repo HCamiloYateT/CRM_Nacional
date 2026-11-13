@@ -7,7 +7,7 @@
 ProductosEjecucionUI <- function(id, periodo_local = FALSE) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
-    racafeForms::racafeFormRow(columns = 3,
+    do.call(racafeForms::racafeFormRow, c(list(columns = 4), Filter(Negate(is.null), list(
       if (periodo_local) racafeForms::racafeInputDateRange("periodo", "Periodo de facturación",
         start = as.Date(format(Sys.Date(), "%Y-01-01")), end = Sys.Date(), ns = ns),
       .crm_select("nivel", "Agrupar por",
@@ -15,7 +15,7 @@ ProductosEjecucionUI <- function(id, periodo_local = FALSE) {
         ns = ns),
       .crm_select("medida", "Medida de los gráficos", choices = c("Sacos 70 kg" = "Sacos",
         "Margen FCC" = "Margen", "Margen por kilo" = "MargenKg", "Clientes" = "Clientes",
-          "Unidades comerciales" = "Unidades"), ns = ns)),
+          "Unidades comerciales" = "Unidades"), ns = ns))))),
     racafeForms::racafeFormRow(columns = 2,
       racafeForms::racafeInputNumeric("top", "Productos/categorías del ranking", value = 15, min = 3, max = 40,
         format = "number", decimals = 0, ns = ns),
