@@ -32,14 +32,15 @@ server <- function(input, output, session) {
     bs4Dash::bs4SidebarMenuItem(
       "Administrar", icon = icon("user-shield"),
       bs4Dash::bs4SidebarMenuSubItem(
-        "Catálogos", tabName = "AD_Catalogos",
-        icon = icon("list")
-      )
+        "Catálogos", tabName = "AD_Catalogos", icon = icon("list")),
+      bs4Dash::bs4SidebarMenuSubItem("Escalas y etapas", tabName = "AD_Escalas", icon = icon("palette")),
+      bs4Dash::bs4SidebarMenuSubItem("Módulos transversales", tabName = "AD_Transversales", icon = icon("cubes"))
     )
   })
 
   observeEvent(input$menu_principal, {
-    if (identical(input$menu_principal, "AD_Catalogos") && !isTRUE(es_admin())) {
+    if (isTRUE(input$menu_principal %in% c("AD_Catalogos", "AD_Escalas", "AD_Transversales")) &&
+        !isTRUE(es_admin())) {
       bs4Dash::updateTabItems(session, "menu_principal", selected = "GE_Resumen")
     }
   }, ignoreInit = FALSE)
@@ -147,16 +148,26 @@ server <- function(input, output, session) {
   pedido_consulta <- reactiveVal(NULL)
   session$userData$trazabilidad_disponible <- TRUE
   TrazabilidadPedido("TrazabilidadGlobal", maestro_comercial, pedido_consulta)
+  observe({
+    req(identical(input$menu_principal, "TR_Pedido"))
+    codigos <- sort(unique(.crm_id_texto(maestro_comercial()$CLPdcCod)))
+    codigos <- codigos[!is.na(codigos) & codigos != "0"]
+    elegido <- isolate(pedido_consulta())
+    .crm_update_select(session, "tr_pedido", choices = codigos,
+      selected = if (length(elegido) && elegido %in% codigos) elegido else character())
+  })
+  observeEvent(input$tr_pedido, {
+    codigo <- .crm_id_texto(input$tr_pedido)
+    req(length(codigo) == 1L, codigo %in% .crm_id_texto(maestro_comercial()$CLPdcCod))
+    pedido_consulta(codigo)
+  })
   observeEvent(input$crm_ver_pedido, {
     codigo <- .crm_id_texto(input$crm_ver_pedido$pedido)
     req(length(codigo) == 1L, !is.na(codigo), codigo != "0",
       codigo %in% .crm_id_texto(maestro_comercial()$CLPdcCod))
     pedido_consulta(codigo)
-    showModal(racafeForms::racafeModal(title = paste("Pedido", codigo), size = "ventana", easy_close = FALSE,
-      TrazabilidadPedidoUI("TrazabilidadGlobal"), footer = racafeForms::racafeModalFooter(
-        right = racafeForms::racafeButton("cerrar_pedido_global", "Cerrar", variant = "secondary"))))
+    bs4Dash::updateTabItems(session, "menu_principal", selected = "TR_Pedido")
   })
-  observeEvent(input$cerrar_pedido_global, { pedido_consulta(NULL); removeModal() })
 
   # Carga diferida ----
   modulos_cargados <- reactiveValues()
@@ -463,6 +474,18 @@ server <- function(input, output, session) {
   }, function() {
     req(isTRUE(es_admin()))
     AdministrarCatalogos("Administrar", usuario, grupo, es_admin)
+  })
+
+  CargarTabUnaVez("AD_Transversales", "ui_AD_Transversales", function() {
+    req(isTRUE(es_admin())); ModulosTransversalesUI("Transversales")
+  }, function() {
+    req(isTRUE(es_admin()))
+    ModulosTransversales("Transversales", usuario, es_admin, maestro_comercial, datos_unidades)
+  })
+  CargarTabUnaVez("AD_Escalas", "ui_AD_Escalas", function() {
+    req(isTRUE(es_admin())); EscalasComercialesUI("Escalas")
+  }, function() {
+    req(isTRUE(es_admin())); EscalasComerciales("Escalas", es_admin)
   })
 
   ### Consulta Individual ----

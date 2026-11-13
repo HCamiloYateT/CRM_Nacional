@@ -37,6 +37,13 @@
     fijo <- unname(paletas[[dimension]][valores[i]])
     if (length(fijo) && !is.na(fijo)) return(fijo)
     h <- hash(paste(dimension, padre[i], padre2[i], valores[i], sep = "|"))
+    if (dimension %in% c("categoria", "producto")) {
+      base <- if (padre[i] %in% c("A LA MEDIDA", "21000")) 48 else 12
+      categoria <- if (dimension == "categoria") valores[i] else padre2[i]
+      tono <- base + (hash(categoria) %% 29) - 14
+      luz <- if (dimension == "categoria") 45 + hash(categoria) %% 15 else 38 + h %% 35
+      return(grDevices::hcl(h = tono, c = 22 + hash(categoria) %% 15, l = luz))
+    }
     grDevices::hcl(h = 12 + h %% 35, c = 18 + h %% 23, l = 35 + (h %/% 37) %% 35)
   }, character(1))
   configurados <- .crm_colores_catalogo()

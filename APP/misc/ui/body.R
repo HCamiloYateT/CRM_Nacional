@@ -48,9 +48,15 @@ body <- bs4DashBody(
     bs4TabItem(tabName = "PD_MarketBasket", uiOutput("ui_PD_MarketBasket")),
     bs4TabItem(tabName = "PD_SinClasificar", uiOutput("ui_PD_SinClasificar")),
     
+    bs4TabItem(tabName = "TR_Pedido", racafeForms::racafeForm(variant = "plain",
+      racafeForms::racafeFormRow(columns = 4,
+        .crm_select("tr_pedido", "Código de pedido", choices = character())),
+      TrazabilidadPedidoUI("TrazabilidadGlobal"))),
     # Administración ----
     bs4TabItem(tabName = "AD_Catalogos", uiOutput("ui_AD_Administrar")),
 
+    bs4TabItem(tabName = "AD_Transversales", uiOutput("ui_AD_Transversales")),
+    bs4TabItem(tabName = "AD_Escalas", uiOutput("ui_AD_Escalas")),
     # Consulta Individual ----
     bs4TabItem(tabName = "IN_Consulta", uiOutput("ui_IN_Consulta"))
   )

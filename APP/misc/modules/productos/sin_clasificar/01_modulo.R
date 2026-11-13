@@ -48,6 +48,7 @@ ProductosSinClasificar <- function(id, usuario, al_actualizar,
       racafeForms::racafePanel(title = paste(x$Marca, x$NombreComercial, sep = " · "),
         .crm_select("categoria", "Categoría", choices = .clas_opciones(fuente(), x), ns = session$ns),
         shiny::uiOutput(session$ns("producto_ui")),
+        .crm_disclosure("Pedidos asociados a esta referencia", .crm_tabla_ui(session$ns("pedidos"))),
         racafeForms::racafeButton("guardar", "Guardar clasificación y actualizar tableros",
           icon = "floppy-disk", ns = session$ns))
     })
@@ -55,6 +56,12 @@ ProductosSinClasificar <- function(id, usuario, al_actualizar,
       .crm_select("producto", "Producto comercial", choices = .clas_opciones(fuente(), elegida(), input$categoria),
         ns = session$ns)
     })
+    .crm_vancouver_server("pedidos", shiny::reactive({
+      shiny::req(nrow(elegida()) == 1L)
+      .clas_pedidos_relacionados(if (is.null(operaciones)) list() else operaciones(), elegida()$Referencia)
+    }), col_labels = c(CLPdcCod = "Código de pedido", CLPdcLin = "Línea del pedido",
+      CantidadSolicitada = "Cantidad solicitada (unidad original)", FechaPedido = "Fecha de creación del pedido",
+      SacosFacturados70 = "Sacos facturados (70 kg)"))
     shiny::observeEvent(input$actualizar, {
       tryCatch({
         nuevo <- .crm_snapshot_productos(.clas_validar(cargar("CRMNALPRODS")))

@@ -11,7 +11,10 @@
     PROYECTADO = "Estimado comercial")[estado])
   x$EsEstimado <- estado == "PROYECTADO"
   x$FechaAnalitica <- as.Date(campo("FecFact", as.Date(NA)))
-  x$FechaAnalitica[x$EsEstimado %in% TRUE] <- as.Date(campo("PdcFecEst", as.Date(NA)))[x$EsEstimado %in% TRUE]
+  x$FechaAnalitica[x$EsEstimado %in% TRUE] <- as.Date(if ("FechaEstimadaPedido" %in% names(x)) {
+    x$FechaEstimadaPedido
+  } else
+    campo("PdcFecEst", as.Date(NA)))[x$EsEstimado %in% TRUE]
   x$SacosAnaliticos70 <- ifelse(x$EsEstimado, campo("SacosProyectados"), campo("SacosFact"))
   x$MargenAnalitico <- ifelse(estado == "CERRADO", campo("MargenContable"),
     ifelse(estado == "FACTURADO_ABIERTO", campo("MargenAbiertoEstimado"), campo("MargenProyectado")))
@@ -143,4 +146,17 @@
     MargenFinanciero = estricto(MetricaMargenContable),
     MargenProvisional = estricto(MetricaMargenAbiertoEstimado), MargenEstimado = estricto(MetricaMargenProyectado),
     EstadosFinancieros = paste(sort(unique(EstadoFinanciero)), collapse = " · "), .groups = "drop")
+}
+
+# Evidencia operativa para pendientes; no altera el universo histórico de ventas ----
+.crm_lote_documentado <- function(x) {
+  if (!"CLLotCod" %in% names(x)) return(rep(FALSE, nrow(x)))
+  lote <- .crm_id_texto(x$CLLotCod)
+  valido <- !is.na(lote) & lote != "0"
+  if ("FuenteLote" %in% names(x)) {
+    fuente <- toupper(trimws(as.character(x$FuenteLote)))
+    return(valido & fuente %in% c("EXPCUALO", "EXPCUALOT", "CRMNALLOT"))
+  }
+  # Compatibilidad con exportaciones anteriores que ya conservan la cantidad operativa del lote.
+  valido & !is.na(.gc_columna(x, "SacosLote70", NA_real_))
 }

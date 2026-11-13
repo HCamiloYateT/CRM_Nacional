@@ -13,7 +13,7 @@ AnalisisComercialUI <- function(id, tipo = "participacion", fecha = Sys.Date()) 
     .crm_plot_output(ns("grafico")), .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("dimensiones")),
     .crm_nota_metodologica(c("El periodo y el alcance comercial provienen del controlbar.",
       "Los sacos y el margen se suman desde el mismo universo; el porcentaje usa el total completo seleccionado.",
-      "El treemap representa sacos positivos por categoría y producto; el color muestra margen, que puede ser negativo.",
+      "El treemap representa sacos positivos; los colores identifican línea, categoría y producto.",
       "El margen por kilogramo divide el margen total entre sacos × 70. No es el precio de venta.",
       "La facturación sin cierre conserva su condición provisional. Un margen desconocido permanece vacío.")))
 }
@@ -29,7 +29,7 @@ AnalisisComercial <- function(id, hechos, clientes, filtros, tipo = "participaci
     tabla <- shiny::reactive({
       x <- fuente(); d <- dimension()
       if (d %in% c("Categoria", "Producto")) {
-        resumen <- .crm_resumen_dimension(x, c("Categoria", "Producto"))
+        resumen <- .crm_resumen_dimension(x, c("CLLinNegNo", "Categoria", "Producto"))
       } else {
         resumen <- .crm_resumen_dimension(x, d)
       }
@@ -47,8 +47,8 @@ AnalisisComercial <- function(id, hechos, clientes, filtros, tipo = "participaci
       col_specs = list(ParticipacionSacos = list(format = list(percent = TRUE, digits = 1)),
         ParticipacionMargen = list(format = list(percent = TRUE, digits = 1))))
     output$grafico <- .crm_render_plotly({
-      if (identical(input$representacion, "participacion")) {
-        .crm_treemap_productos(.crm_resumen_dimension(fuente(), c("Categoria", "Producto")))
+      if (identical(input$representacion, "participacion") && dimension() %in% c("Categoria", "Producto")) {
+        .crm_treemap_productos(.crm_resumen_dimension(fuente(), c("CLLinNegNo", "Categoria", "Producto")))
       } else {
         x <- tabla(); shiny::validate(shiny::need(nrow(x) > 0L, "No hay datos para este intervalo y selección."))
         medida <- .com_elegir(input$medida, c("Sacos", "Margen"), "Sacos")
@@ -59,15 +59,19 @@ AnalisisComercial <- function(id, hechos, clientes, filtros, tipo = "participaci
           "<br>Sacos: ", format(round(x$Sacos, 2), big.mark = ","),
           "<br>Margen: ", format(round(x$Margen), big.mark = ","), " COP",
           "<br>Participación en sacos: ", round(100 * x$ParticipacionSacos, 1), "%")
-        p <- plotly::plot_ly(x, x = ~Etiqueta, y = ~Valor, text = ~Detalle, type = "bar",
+        p <- plotly::plot_ly(x, y = ~Etiqueta, x = ~Valor, text = ~Detalle, type = "bar", orientation = "h",
           hovertemplate = "%{text}<extra></extra>")
         if (jerarquia) {
-          p <- plotly::plot_ly(x, x = ~Etiqueta, y = ~Valor, color = ~Producto, type = "bar", text = ~Detalle,
-            colors = grDevices::colorRampPalette(c("#E9DDC8", "#9B7160", "#7A2028"))(max(1L, dplyr::n_distinct(x$Producto))),
+          x$GrupoColor <- paste(x$CLLinNegNo, x$Categoria, x$Producto, sep = " · ")
+          colores <- stats::setNames(unname(.crm_colores("producto", x$Producto, x$CLLinNegNo, x$Categoria)),
+            x$GrupoColor)
+          p <- plotly::plot_ly(x, y = ~Etiqueta, x = ~Valor, color = ~GrupoColor, type = "bar", orientation = "h",
+            text = ~Detalle, colors = colores,
             hovertemplate = "%{text}<extra></extra>")
         } else p <- plotly::style(p, marker = list(color = "#7A2028"))
-        plotly::layout(p, barmode = "relative", yaxis = list(title = if (medida == "Sacos") "Sacos de 70 kg" else "Margen · COP"),
-          xaxis = list(title = ""))
+        plotly::layout(p, barmode = "relative",
+          xaxis = list(title = if (medida == "Sacos") "Sacos de 70 kg" else "Margen · COP"),
+          yaxis = list(title = ""))
       }
     })
     .gc_descarga(output, tabla, "Participacion")

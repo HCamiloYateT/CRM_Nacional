@@ -117,7 +117,7 @@ library("racafeForms")
 library("racafeModulos")
 # APIs mínimas requeridas por los adaptadores compartidos.
 .versiones_componentes <- c(racafeCore = "1.0.1", racafeGraph = "1.0.1", racafeForecast = "1.0.1",
-  racafeForms = "0.8.0", racafeShiny = "1.5.0", racafeModulos = "0.6.4")
+  racafeForms = "0.8.0", racafeShiny = "1.5.0", racafeModulos = "0.6.5")
 for (.paquete in names(.versiones_componentes)) {
   if (!requireNamespace(.paquete, quietly = TRUE) ||
       utils::packageVersion(.paquete) < .versiones_componentes[[.paquete]]) {
@@ -126,6 +126,14 @@ for (.paquete in names(.versiones_componentes)) {
   }
 }
 rm(.paquete)
+.api_modulos <- c("TarjetaKanbanUI", "TableroTareasTarjetas", "TimelineUI")
+.api_tareas <- names(formals(racafeModulos::TableroTareasTarjetas))
+if (!all(.api_modulos %in% getNamespaceExports("racafeModulos")) ||
+    !all(c("arrastrable", "acciones_fn") %in% .api_tareas)) {
+  stop(paste("racafeModulos instalado no tiene la API requerida. Reinstale desde GitHub,",
+    "reinicie R y vuelva a iniciar la app. No basta recargar el namespace."), call. = FALSE)
+}
+rm(.api_modulos, .api_tareas)
 racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", "tidyverse", "scales", "rlang",
                       "waiter", "glue", "httr2", "lubridate", "stringr", "purrr", "gt", "plotly", "writexl"))
 
@@ -141,7 +149,7 @@ racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", 
 }
 
 .ruta_app <- .crm_ruta_app()
-.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/3fc6b20f62a47f18a8b35ec37512af56223ffb1e"
+.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/6f118374543b072bf2f82492ff9a0f45057649c1"
 .estilos_crm <- shiny::singleton(shiny::includeCSS(paste0(.url_compartido, "/Styles/crm-nacional.css")))
 .recursos_compartidos <- shiny::tagList(
   shiny::tags$span(hidden = "hidden", `data-rf-interactions` = "true"),

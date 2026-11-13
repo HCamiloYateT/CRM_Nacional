@@ -89,10 +89,12 @@ OportunidadesGestionUI <- function(id) {
     .gc_tarjetas_ui(ns, c(total = "Total de oportunidades", activas = "Activas", cumplidas = "Cumplidas",
       vencidas = "Vencidas", proximas = "Próximas a 30 días", descartadas = "Descartadas",
       sacos = "Sacos potenciales · 70 kg", margen = "Margen potencial · COP")),
-    .crm_disclosure("Distribución y potencial comercial", .crm_plot_output(ns("distribucion")),
-      .crm_tabla_ui(ns("resumen")), open = TRUE),
-    .crm_disclosure("Evolución de las oportunidades", .crm_plot_output(ns("evolucion")),
-      .crm_tabla_ui(ns("evolucion_detalle"))),
+    .crm_disclosure("Distribución y potencial comercial", shiny::fluidRow(
+      shiny::column(6, .crm_plot_output(ns("distribucion"), height = "320px", compact = TRUE)),
+      shiny::column(6, .crm_tabla_ui(ns("resumen")))), open = TRUE),
+    .crm_disclosure("Evolución de las oportunidades", shiny::fluidRow(
+      shiny::column(6, .crm_plot_output(ns("evolucion"), height = "320px", compact = TRUE)),
+      shiny::column(6, .crm_tabla_ui(ns("evolucion_detalle"))))),
     .crm_disclosure("Cumplimiento frente a cada objetivo", .crm_plot_output(ns("cumplimiento")),
       .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("detalle")), open = TRUE),
     .crm_nota_metodologica(c("El potencial comercial no es ejecución financiera ni una venta asegurada.",
@@ -157,24 +159,29 @@ OportunidadesGestion <- function(id, usuario, es_admin, hechos, cargar = racafeB
         dplyr::summarise(Oportunidades = dplyr::n(), SacosObjetivo70 = .com_suma(Objetivo70),
           MargenObjetivo = .com_suma(MargenObjetivo), .groups = "drop")
     })
-    .crm_vancouver_server("resumen", data = resumen)
+    .crm_vancouver_server("resumen", data = resumen,
+      col_labels = c(SacosObjetivo70 = "Sacos objetivo (70 kg)", MargenObjetivo = "Margen objetivo (COP)"))
     tabla <- .crm_vancouver_server("detalle", data = datos, id_col = "Oportunidad", modo_seleccion = "fila",
       columnas = c("Oportunidad", "NIT", "Cliente", "Autor", "Categoria", "Producto", "Creacion", "Cumplimiento",
         "Estado", "Objetivo70", "MargenObjetivo", "SacosEjecutados", "MargenEjecutado", "CumplSacos", "CumplMargen"),
-      col_labels = c(Objetivo70 = "Objetivo sacos 70 kg", CumplSacos = "Cumpl. sacos", CumplMargen = "Cumpl. margen"))
+      col_labels = c(Estado = "Estado de la oportunidad", MargenObjetivo = "Margen objetivo (COP)",
+        Objetivo70 = "Sacos objetivo (70 kg)", CumplSacos = "Cumpl. sacos", CumplMargen = "Cumpl. margen"))
     output$distribucion <- .crm_render_plotly({
       x <- resumen(); dimension <- names(x)[[1]]
       x$Etiqueta <- as.character(x[[dimension]])
-      plotly::plot_ly(x, x = ~Etiqueta, y = ~SacosObjetivo70, type = "bar", marker = list(color = "#7A2028"),
+      plotly::plot_ly(x, height = 320, x = ~Etiqueta, y = ~SacosObjetivo70,
+        type = "bar", marker = list(color = "#7A2028"),
         text = ~paste("Oportunidades:", Oportunidades, "· margen potencial COP:", round(MargenObjetivo)),
-        hovertemplate = "%{x}<br>Sacos potenciales: %{y:,.2f}<br>%{text}<extra></extra>")
+        hovertemplate = "%{x}<br>Sacos potenciales: %{y:,.2f}<br>%{text}<extra></extra>") %>%
+        plotly::layout(meta = list(crm_altura_compacta = TRUE))
     })
     evolucion <- shiny::reactive(datos() %>% dplyr::filter(!is.na(Creacion)) %>%
       dplyr::mutate(Mes = .gc_mes(Creacion)) %>% dplyr::count(Mes, Estado, name = "Oportunidades"))
     .crm_vancouver_server("evolucion_detalle", evolucion)
-    output$evolucion <- .crm_render_plotly(plotly::plot_ly(evolucion(), x = ~Mes, y = ~Oportunidades,
+    output$evolucion <- .crm_render_plotly(plotly::plot_ly(evolucion(), height = 320, x = ~Mes, y = ~Oportunidades,
       color = ~Estado, type = "bar", colors = c("#7A2028", "#495057", "#C8A77D", "#9B7160"),
-      hovertemplate = "%{x|%Y-%m}<br>Oportunidades: %{y:.0f}<extra>%{fullData.name}</extra>"))
+      hovertemplate = "%{x|%Y-%m}<br>Oportunidades: %{y:.0f}<extra>%{fullData.name}</extra>") %>%
+      plotly::layout(meta = list(crm_altura_compacta = TRUE)))
     output$cumplimiento <- .crm_render_plotly(plotly::plot_ly(datos(), x = ~CumplSacos, y = ~CumplMargen,
       text = ~paste(Cliente, Producto, "· objetivo:", Cumplimiento), type = "scatter", mode = "markers",
       marker = list(color = "#7A2028"),

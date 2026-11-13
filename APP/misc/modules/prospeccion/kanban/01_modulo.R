@@ -26,11 +26,12 @@ KanbanEmbudoUI <- function(id) {
     acciones <- tagList(if (etapa == "CONTACTO") racafeForms::racafeButton("btn_nuevo_contacto", NULL,
       icon = "plus", title = "Añadir contacto", size = "xs", ns = ns), toggle)
     columna <- racafeModulos::ColumnaKanbanUI(etapa, cantidad = 0L,
-      color = COLOR_ETAPA_EMBUDO[[etapa]], acciones = acciones,
+      color = unname(.crm_colores("etapa", etapa)), acciones = acciones,
       badges = if (etapa %in% c("CONTACTO", "LEAD")) uiOutput(ns(paste0("alerta_ui_", etapa)), inline = TRUE),
       cuerpo = tagList(racafeForms::racafeInputText(paste0("buscar_", etapa), paste("Buscar en", etapa), ns = ns),
         tagAppendAttributes(uiOutput(ns(paste0("col_", etapa))), class = "kb-cards")))
-    columna <- tagAppendAttributes(columna, style = paste0("--kb-stage-color:", COLOR_ETAPA_EMBUDO[[etapa]], ";"))
+    columna <- tagAppendAttributes(columna,
+      style = paste0("--kb-stage-color:", unname(.crm_colores("etapa", etapa)), ";"))
     contador <- tagAppendAttributes(textOutput(ns(paste0("conteo_", etapa)), inline = TRUE),
       class = "kpb-col-count")
     columna <- htmltools::tagQuery(columna)$find(".kpb-col-count")$replaceWith(contador)$allTags()

@@ -18,6 +18,7 @@ sidebar <- bs4DashSidebar(
                        bs4SidebarMenuSubItem("Variables (Bono)", tabName = "GC_Variables", icon = icon("medal")),
                        bs4SidebarMenuSubItem("Oportunidades", tabName = "GC_Oportunidades", icon = icon("bullseye")),
                        bs4SidebarMenuSubItem("Pendientes de gestión", tabName = "GC_Pendientes", icon = icon("list-check")),
+                       bs4SidebarMenuSubItem("Trazabilidad de pedidos", tabName = "TR_Pedido", icon = icon("timeline")),
                        bs4SidebarMenuSubItem("Notas y tareas", tabName = "GC_Tareas", icon = icon("tasks")),
                        bs4SidebarMenuSubItem("Fidelidad y riesgo", tabName = "GC_Fidelidad", icon = icon("shield-halved")),
                        bs4SidebarMenuSubItem("Cartera", tabName = "GC_Cartera", icon = icon("file-invoice-dollar"))
