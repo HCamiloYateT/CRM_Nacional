@@ -1004,7 +1004,7 @@ esquema_pedido_linea <- names(racafeBD::ConsultaSistema("syscafe", "SELECT * FRO
 }
 campos_originales_sql <- paste(c(.campo_linea_sql("MrcCod", "MarcaPedidoCod"),
   .campo_linea_sql(c("MCCod", "NomComCod"), "NombreComercialPedidoCod"),
-  "COALESCE(NULLIF(pd.PdcPrePes, 0), NULLIF(pd.PdcPreKil, 0)) AS PrecioNegociadoOriginal",
+  "NULLIF(pd.PdcPrePes, 0) AS PrecioNegociadoOriginal",
   "pd.PdcPrePes AS PrecioNegociadoCOPKg",
   .campo_linea_sql("UMeCod", "UnidadPrecioOriginal")), collapse = ", ")
 
@@ -1060,7 +1060,7 @@ ped$UnidadPrecioOriginal <- ifelse(precio_cop_confirmado, "KG", NA_character_)
 ped$UnidadPrecioConfirmada <- ped$UnidadPrecioOriginal
 ped$PrecioNegociadoKg <- ifelse(precio_cop_confirmado, ped$PrecioNegociadoCOPKg, NA_real_)
 ped$FuentePrecioNegociado <- ifelse(precio_cop_confirmado, "EXPPEDID.PdcPrePes · COP/kg",
-  "EXPPEDID.PdcPreKil · moneda y significado pendientes de confirmar")
+  NA_character_)
 
 ruta_lotes_cache <- "APP/data/lotes_raw.rds"
 
@@ -2765,7 +2765,7 @@ faltan_maestros <- pedidos_clasificacion %>% filter(
 homologaciones$facturas_detalle <- facturas_detalle
 homologaciones$diagnostico_productos_pedido <- bind_rows(diagnostico_producto, faltan_maestros)
 homologaciones$esquemas_auditados <- list(EXPPEDI1 = esquema_pedido_linea, nombres_comerciales = fuente_nombres,
-  campo_precio = c("EXPPEDID.PdcPrePes", "EXPPEDID.PdcPreKil"),
+  campo_precio = "EXPPEDID.PdcPrePes",
   unidad_precio_confirmada = unique(ped$UnidadPrecioConfirmada))
 fuente_cobertura_lotes <- tryCatch(racafeBD::CargarDatos("CRMNALLOT"), error = function(e) data.frame())
 inicio_trazabilidad <- .crm_cobertura_lotes(fuente_cobertura_lotes)
