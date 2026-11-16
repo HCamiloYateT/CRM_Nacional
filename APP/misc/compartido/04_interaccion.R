@@ -153,7 +153,7 @@
   }
   figura$x$data <- lapply(figura$x$data, function(t) {
     if (!identical(t$type, "treemap")) {
-      if (!grepl("text", t$mode %||% "")) t$textfont <- NULL
+      t$textfont <- NULL
       if (!is.null(t$mode)) t$mode <- gsub("(^text\\+|\\+text$|text)", "", t$mode)
       if (t$type %in% c("bar", "waterfall")) t$textposition <- "none"
       if (t$type %in% c("pie", "funnel", "sunburst")) t$textinfo <- "none"

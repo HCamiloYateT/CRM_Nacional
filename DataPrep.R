@@ -1135,31 +1135,13 @@ pedidos_con_facturacion_historica <- lotes_raw %>%
   ) %>%
   dplyr::distinct(CLPdcCod, CLPdcLin)
 
+# La trazabilidad conserva todas las cabeceras y líneas; la exclusión es solo operativa ----
 pedidos_excluidos_historicos <- ped %>%
-  dplyr::filter(
-    !dplyr::coalesce(PdcFecCre >= fecha_inicio_analisis, FALSE) &
-      !dplyr::coalesce(PdcFecEst >= fecha_inicio_analisis, FALSE) &
-      !dplyr::coalesce(PdcEst == "A", FALSE)
-  ) %>%
-  dplyr::anti_join(pedidos_con_facturacion_historica,
-                   by = c("PdcCod" = "CLPdcCod", "PdcLin" = "CLPdcLin"))
-
-ped <- ped %>%
-  dplyr::filter(
-    dplyr::coalesce(PdcFecCre >= fecha_inicio_analisis, FALSE) |
-      dplyr::coalesce(PdcFecEst >= fecha_inicio_analisis, FALSE) |
-      dplyr::coalesce(PdcEst == "A", FALSE)
-  ) %>%
-  dplyr::bind_rows(
-    ped %>%
-      dplyr::semi_join(pedidos_con_facturacion_historica,
-                       by = c("PdcCod" = "CLPdcCod", "PdcLin" = "CLPdcLin"))
-  ) %>%
-  dplyr::distinct(PdcCod, PdcLin, .keep_all = TRUE)
-
-message("Lineas historicas excluidas sin actividad financiera desde ",
-        format(fecha_inicio_analisis, "%Y-%m-%d"), ": ",
-        nrow(pedidos_excluidos_historicos))
+  dplyr::filter(!is.na(PdcFecCre), PdcFecCre < as.Date("2020-01-01")) %>%
+  dplyr::anti_join(lotes_raw %>% dplyr::distinct(CLPdcCod, CLPdcLin),
+    by = c("PdcCod" = "CLPdcCod", "PdcLin" = "CLPdcLin"))
+message("Líneas anteriores a 2020 sin lote: ", nrow(pedidos_excluidos_historicos),
+  ". Se conservan en trazabilidad y se excluyen únicamente de pendientes y proyección operativa.")
 
 # Construccion del cuadro de datos principal
 
@@ -2237,6 +2219,7 @@ pedidos_integrados <- ped %>%
     FechaVencida = FechaEstimadaVencida &
       coalesce(SacosPendientes > 0, FALSE),
     Proyectar = PdcEst == "A" & !is.na(PdcFecEst) &
+      (NumLotes > 0L | is.na(PdcFecCre) | PdcFecCre >= as.Date("2020-01-01")) &
       coalesce(SacosPendientes > 0, FALSE)
   ) %>%
   left_join(margenes_entrenamiento,
@@ -2401,6 +2384,16 @@ if (nrow(data_crm) != nrow(data) + nrow(proyecciones_comerciales)) {
   stop("La base data_crm tiene un numero inesperado de registros")
 }
 
+# Líneas originales sin ejecución: conservar su ficha, sin fabricar lotes ni facturas ----
+pedidos_sin_ejecucion <- base_operativa %>%
+  anti_join(data_crm %>% distinct(CLPdcCod, CLPdcLin), by = c("CLPdcCod", "CLPdcLin")) %>%
+  transmute(CLPdcCod, CLPdcLin, CLCliNit, LinNegCod, LinProCod, PdcFecCre, PdcFecEst,
+    PdcFecCie, PdcEst, CLLotCod, FecMes = as.Date(NA), FecFact = as.Date(NA),
+    SacosFact = NA_real_, Margen = NA_real_, MargenContable = NA_real_, MargenAbiertoEstimado = NA_real_,
+    MargenProyectado = NA_real_, SacosProyectados = NA_real_, TipoRegistro = "PEDIDO_SIN_EJECUCION",
+    EstadoFinanciero = "PENDIENTE", FuenteFinanciera = "SIN_EJECUCION")
+data_crm <- bind_rows(data_crm, pedidos_sin_ejecucion)
+
 # INDICADORES DE PEDIDOS ----
 indicadores_pedidos <- pedidos_integrados %>%
   transmute(
@@ -2483,7 +2476,7 @@ validaciones_etl <- tibble(
   FechaProceso = Sys.time(),
   UltimoPeriodoPYG = ultimo_periodo_pyg,
   FechaInicioAnalisis = fecha_inicio_analisis,
-  PedidosHistoricosExcluidos = nrow(pedidos_excluidos_historicos),
+  LineasHistoricasFueraPendientes = nrow(pedidos_excluidos_historicos),
   PedidosLineas = nrow(ped),
   PedidosSinLote = nrow(pedido_sin_lote),
   LotesSinPedido = nrow(lotes_sin_pedido),
@@ -2661,6 +2654,32 @@ saldos_lineas <- pedidos_integrados %>%
 
 .verificar_clave_unica(saldos_lineas, c("CLPdcCod", "CLPdcLin"),
                        "saldos_lineas")
+
+# Dimensiones originales de cada línea, también para proyecciones sin facturación ----
+contexto_pedidos <- ped %>%
+  transmute(CLPdcCod = PdcCod, CLPdcLin = PdcLin, CLCliNit, LinNegCod, LinProCod,
+    MCCod = NombreComercialPedidoCod, MrcCod = MarcaPedidoCod,
+    CLLinNegNo = case_when(LinNegCod == 10000 ~ "CONVENCIONALES",
+      LinNegCod %in% c(20000, 21000) ~ "A LA MEDIDA", TRUE ~ NA_character_)) %>%
+  left_join(nit_ppal, by = c("CLCliNit" = "PerCod"), relationship = "many-to-one") %>%
+  mutate(CliNitPpal = coalesce(CliNitPpal, CLCliNit),
+    LinNegCod = if_else(LinNegCod == 20000, 21000, LinNegCod)) %>%
+  left_join(clientes_actual %>% select(CliNitPpal, LinNegCod, Asesor, Segmento, SSPpto, MNFCCPpto,
+    NumMesesRecuperar, Excluir), by = c("CliNitPpal", "LinNegCod"), relationship = "many-to-one") %>%
+  left_join(n_cliente %>% select(PerCod, PerRazSoc), by = c("CliNitPpal" = "PerCod"),
+    relationship = "many-to-one") %>%
+  left_join(n_cliente %>% select(PerCod, RazonSocialCliNit = PerRazSoc), by = c("CLCliNit" = "PerCod"),
+    relationship = "many-to-one")
+.verificar_clave_unica(contexto_pedidos, c("CLPdcCod", "CLPdcLin"), "contexto_pedidos")
+indice_contexto <- match(paste(data_crm$CLPdcCod, data_crm$CLPdcLin),
+  paste(contexto_pedidos$CLPdcCod, contexto_pedidos$CLPdcLin))
+for (campo in setdiff(names(contexto_pedidos), c("CLPdcCod", "CLPdcLin"))) {
+  candidato <- contexto_pedidos[[campo]][indice_contexto]
+  if (!campo %in% names(data_crm)) data_crm[[campo]] <- candidato else {
+    faltante <- is.na(data_crm[[campo]])
+    data_crm[[campo]][faltante] <- candidato[faltante]
+  }
+}
 
 crm_maestro <- data_crm %>%
   mutate(

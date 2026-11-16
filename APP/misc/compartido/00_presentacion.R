@@ -205,8 +205,9 @@
 
 .crm_vancouver_server <- function(id, data, columnas = NULL, col_specs = NULL, col_labels = NULL,
                                    id_col = NULL, modo_seleccion = "ninguno", sortable = TRUE,
-                                   searchable = TRUE, page_size = 15, titulo = NULL, subtitulo = NULL, ...) {
-  col_specs <- .crm_specs_pedidos(col_specs %||% list(), id)
+                                   searchable = TRUE, page_size = 15, titulo = NULL, subtitulo = NULL,
+                                   enlaces_pedido = TRUE, ...) {
+  if (isTRUE(enlaces_pedido)) col_specs <- .crm_specs_pedidos(col_specs %||% list(), id)
   racafeModulos::TablaVancouverServer(id, data, columnas, col_specs, col_labels, id_col, modo_seleccion,
     sortable, searchable, page_size, titulo, subtitulo, ..., preparar_fn = .crm_nits_tabla,
     etiquetas_fn = .crm_etiquetas, tabla_fn = .crm_tabla_vancouver, texto_fn = .crm_label_comercial,
