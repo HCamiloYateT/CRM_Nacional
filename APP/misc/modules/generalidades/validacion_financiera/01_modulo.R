@@ -31,6 +31,7 @@ ValidacionFinancieraUI <- function(id) {
   )
 
   shiny::tags$div(id = ns("vf_contenido"),
+    shiny::uiOutput(ns("aviso_alcance")),
     shiny::fluidRow(
       shiny::column(7, shiny::uiOutput(ns("tabla_extraccion_pyg")), shiny::uiOutput(ns("auditoria_base"))),
       shiny::column(5, shiny::fluidRow(lapply(.tarjetas, function(item) {
@@ -41,13 +42,19 @@ ValidacionFinancieraUI <- function(id) {
         "La tabla compara la fórmula de kilos introducida en 12d9cc8 con la conversión comercial corregida.",
         "Las claves repetidas se señalan sin borrar filas ni multiplicarlas en un cruce.",
         "Cada diferencia mensual debe explicarse con sus facturas y lotes; no se atribuye a un mes sin evidencia.")),
-      .crm_tabla_ui(ns("conversion_mensual")), .crm_tabla_ui(ns("conversion_documentos")))
+      .crm_nota(c("El código homologado 21000 no demuestra por sí solo pertenencia al PyG de Industria Nacional.",
+        "Las facturas ajenas al alcance y las que no se pueden atribuir se conservan en sus listas de revisión.",
+        "Un documento sin atribución sigue pendiente: no se declara inválido ni conciliado.")),
+      .crm_tabla_ui(ns("conversion_mensual")), .crm_tabla_ui(ns("conversion_diferencias")),
+      .crm_tabla_ui(ns("conversion_documentos")),
+      .crm_disclosure("Documentos fuera del alcance comparado", .crm_tabla_ui(ns("conversion_fuera"))),
+      .crm_disclosure("Documentos sin atribución verificable", .crm_tabla_ui(ns("conversion_revision"))))
   )
 }
 
 # Server ----
 ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal, clientes_snap, n_cliente,
-                                facturas_documentales = NULL) {
+                                facturas_documentales = NULL, lotes_operativos = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
@@ -521,6 +528,9 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         LineaPYG = .nombre_linea(LinNegCod)
       )
     
+    fact_base <- .tz_clasificar_alcance(fact_base,
+      pyg_base %>% dplyr::filter(ANHO == .VF_ANHO, FecMes <= fecha_cierre_pyg), .resolver(lotes_operativos))
+
     nit_base <- .resolver(nit_ppal) %>%
       dplyr::transmute(
         CLCliNit = suppressWarnings(as.numeric(PerCod)),
@@ -853,24 +863,9 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         "month"
       ) - lubridate::days(1L)
       
-      lotes_pyg_nacional <- fuentes_base()$pyg_base %>%
-        dplyr::filter(
-          ANHO == .VF_ANHO,
-          FecMes <= ultimo_mes_cerrado(),
-          LinNegCod %in% c(10000, 21000),
-          !is.na(CLLotCod)
-        ) %>%
-        dplyr::pull(CLLotCod) %>%
-        unique()
-      
-      fuentes_base()$fact_base %>%
-        dplyr::filter(
-          FecFact >= fechas[[1L]],
-          FecFact <= fechas[[2L]],
-          FecFact <= fin_cierre,
-          LinNegCodFactura %in% c(10000, 21000) |
-            CLLotCod %in% lotes_pyg_nacional
-        )
+      fuentes_base()$fact_base %>% dplyr::filter(
+        FecFact >= fechas[[1L]], FecFact <= fechas[[2L]], FecFact <= fin_cierre,
+        ClaseAlcance == "INCLUIDO") %>% dplyr::mutate(LinNegCodFactura = LinNegCodFinanciero)
     })
     
     lotes_data <- shiny::reactive({
@@ -954,17 +949,36 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
       shiny::validate(shiny::need(is.data.frame(x) && "MetodoCantidad" %in% names(x),
         "Actualice el ETL para revisar el origen de las diferencias de conversión."))
       fechas <- rango_fechas()
-      x[x$FecFact >= fechas[[1L]] & x$FecFact <= fechas[[2L]] &
+      x <- x[x$FecFact >= fechas[[1L]] & x$FecFact <= fechas[[2L]] &
         x$FecMes <= ultimo_mes_cerrado() & !is.na(x$FecFact), , drop = FALSE]
+      .tz_clasificar_alcance(x, pyg_periodo(), .resolver(lotes_operativos))
     })
-    .crm_vancouver_server("conversion_documentos", shiny::reactive(.tz_auditar_unidades(documentos_conversion())),
+    .crm_vancouver_server("conversion_documentos", shiny::reactive(.tz_auditar_unidades(documentos_conversion() %>%
+      dplyr::filter(ClaseAlcance == "INCLUIDO"))),
       col_labels = c(SacosDesdeKilos70 = "Kilos físicos / 70 (fórmula anterior)",
         SacosFact70 = "Cantidad comercial convertida (corregida)", DiferenciaContraKilos = "Cambio de cantidad",
         MetodoCantidad = "Conversión aplicada", CausaConversion = "Explicación", ClaveRepetida = "Revisar clave"))
     .crm_vancouver_server("conversion_mensual", shiny::reactive(.tz_cuadre_unidades(documentos_conversion(),
-      pyg_periodo(), mapa_lotes())), col_labels = c(FacturacionAntes = "Facturación con kilos / 70",
+      pyg_periodo(), .resolver(lotes_operativos))), col_labels = c(FacturacionAntes = "Facturación con kilos / 70",
         FacturacionCorregida = "Facturación corregida", SacosPYG = "Sacos del PyG",
         DiferenciaAntes = "PyG − kilos / 70", DiferenciaCorregida = "PyG − facturación corregida"))
+
+    .crm_vancouver_server("conversion_diferencias", shiny::reactive({
+      x <- .tz_cuadre_lotes(documentos_conversion(), pyg_periodo(), .resolver(lotes_operativos))
+      x[is.na(x$DiferenciaSacos) | abs(x$DiferenciaSacos) > .VF_TOLERANCIA_SACOS, , drop = FALSE]
+    }))
+    .crm_vancouver_server("conversion_fuera", shiny::reactive(.tz_auditar_unidades(
+      documentos_conversion() %>% dplyr::filter(ClaseAlcance == "FUERA DEL ALCANCE"))))
+    .crm_vancouver_server("conversion_revision", shiny::reactive(.tz_auditar_unidades(
+      documentos_conversion() %>% dplyr::filter(ClaseAlcance == "POR REVISAR"))))
+
+    output$aviso_alcance <- .crm_render_ui({
+      f <- fuentes_base()$fact_base; fechas <- rango_fechas()
+      f <- f[f$FecFact >= fechas[[1L]] & f$FecFact <= fechas[[2L]], , drop = FALSE]
+      n <- sum(f$ClaseAlcance == "POR REVISAR")
+      if (n > 0L) .crm_nota(paste(n, "registros de lote/mes requieren atribución comercial.",
+        "El porcentaje de cuadre solo cubre el universo atribuido; revise el detalle antes de cerrar la auditoría."))
+    })
 
     # Conciliación por mes ----
     conciliacion_mensual <- shiny::reactive({

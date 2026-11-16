@@ -333,7 +333,8 @@ server <- function(input, output, session) {
     nit_ppal = reactive(exportacion_rv()$homologaciones$nit_principal),
     clientes_snap = reactive(exportacion_rv()$homologaciones$clientes),
     n_cliente = reactive(exportacion_rv()$n_cliente),
-    facturas_documentales = reactive(exportacion_rv()$homologaciones$facturas_detalle)))
+    facturas_documentales = reactive(exportacion_rv()$homologaciones$facturas_detalle),
+    lotes_operativos = reactive(exportacion_rv()$homologaciones$lotes)))
   reglas_productos_rv <- reactiveVal(NA_real_)
   observeEvent(filtros(), { reglas_productos_rv(NA_real_) }, ignoreInit = TRUE)
   indicadores_resumen <- reactive({
