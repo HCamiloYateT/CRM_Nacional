@@ -1,9 +1,11 @@
 # Escalas del mismo catálogo persistido; las etapas mantienen sus reglas del embudo ----
 .esc_dimensiones <- c(etapa = "Etapas del ciclo de vida", estado = "Estados comerciales",
   linneg = "Líneas de negocio", segmento = "Segmentos comerciales", rfm = "Segmentos RFM",
-  origen = "Origen de las entidades", categoria = "Categorías de productos", producto = "Productos")
+  origen = "Origen de las entidades", prioridad = "Prioridad de tareas", categoria = "Categorías de productos",
+  auxiliar = "Convenciones y colores auxiliares")
 .esc_opciones <- function(catalogos) {
-  fijo <- list(etapa = ETAPAS_EMBUDO, estado = c("ACTIVO", "INACTIVO", "NUEVO"),
+  fijo <- list(etapa = ETAPAS_EMBUDO, prioridad = names(.COLORES_PRIORIDAD),
+    auxiliar = c("PRESUPUESTO", "EJECUCIÓN", "RITMO REQUERIDO", "SIN CLASIFICAR"), estado = c("ACTIVO", "INACTIVO", "NUEVO"),
     rfm = c("LEALES RECIENTES", "LEALES EN RIESGO", "COMPRA ÚNICA OBSERVADA", "INACTIVOS RELATIVOS",
       "EN DESARROLLO"))
   relaciones <- .admon_choices_relaciones(catalogos)
@@ -21,6 +23,10 @@
 EscalasComercialesUI <- function(id) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain", shiny::uiOutput(ns("escalas")),
+    .crm_disclosure("Paleta secundaria propuesta (no se aplica automáticamente)",
+      .crm_nota("Use un hexadecimal de esta propuesta para modificar una opción; revise y confirme antes de guardar."),
+      lapply(.CRM_PALETA_ANALITICA, function(color) shiny::tags$span(class = "crm-paleta-propuesta",
+        shiny::tags$span(style = paste0("background:", color, ";")), shiny::tags$code(color)))),
     racafeForms::racafeButtonSave("guardar", "Guardar colores", ns = ns))
 }
 EscalasComerciales <- function(id, es_admin) {
@@ -38,6 +44,9 @@ EscalasComerciales <- function(id, es_admin) {
       shiny::tagList(lapply(names(.esc_dimensiones), function(tipo) {
         filas <- which(x$catalogo == tipo)
         .crm_disclosure(.esc_dimensiones[[tipo]],
+          .crm_nota(if (tipo == "categoria") {
+            "Categorías configurables; sus productos heredan tonalidades deterministas del color padre."
+          } else paste("Escala central utilizada para", tolower(.esc_dimensiones[[tipo]]))),
           if (tipo == "etapa") .crm_nota(c(
             "Código, nombre y orden proceden de las etapas vigentes del embudo.",
             "Su disponibilidad depende de las reglas de transición; aquí se modifica únicamente la presentación.")),
@@ -48,12 +57,15 @@ EscalasComerciales <- function(id, es_admin) {
             llave <- paste(f$catalogo, f$padre, f$padre2, f$opcion, sep = "|")
             j <- match(llave, do.call(paste, c(configurado[1:4], sep = "|")))
             if (!is.na(j)) color <- configurado$color[j]
-            shiny::tags$div(style = "display:flex;gap:10px;align-items:center;margin-bottom:8px;",
-              shiny::tags$input(type = "color", value = color, `aria-label` = paste("Color de", f$opcion),
-                onchange = sprintf("Shiny.setInputValue('%s',{fila:%d,color:this.value,nonce:Date.now()})",
+            shiny::tags$div(class = "crm-escala-fila",
+              shiny::tags$input(type = "color", id = session$ns(paste0("color_", i)), value = color, `aria-label` = paste("Color de", f$opcion),
+                onchange = sprintf(paste0(
+                  "this.parentElement.querySelector('.crm-escala-hex').textContent=this.value;",
+                  "Shiny.setInputValue('%s',{fila:%d,color:this.value,nonce:Date.now()})"),
                   session$ns("color"), i)),
               shiny::tags$span(paste(Filter(nzchar, as.list(f[c("padre", "padre2", "opcion")])),
                 collapse = " → ")),
+              shiny::tags$code(class = "crm-escala-hex", color),
               if (tipo == "etapa") shiny::tags$small(paste("CÓDIGO:", f$opcion, "· ORDEN:",
                 match(f$opcion, ETAPAS_EMBUDO), "· DISPONIBLE ·", switch(f$opcion,
                   CONTACTO = "Entidad registrada sin compra histórica confirmada.",
@@ -72,6 +84,26 @@ EscalasComerciales <- function(id, es_admin) {
         shiny::showNotification("Color hexadecimal inválido.", type = "error"); return()
       }
       f <- x[i, ]; nuevo <- borrador(); colores <- .admon_choices_colores(nuevo)
+      pares <- x[x$catalogo == f$catalogo & seq_len(nrow(x)) != i, , drop = FALSE]
+      otros <- if (nrow(pares)) vapply(seq_len(nrow(pares)), function(j) {
+        t <- pares[j, ]
+        k <- which(colores$catalogo == t$catalogo & colores$padre == t$padre &
+          colores$padre2 == t$padre2 & colores$opcion == t$opcion)
+        if (length(k)) colores$color[k[1]] else unname(.crm_colores(t$catalogo, t$opcion, t$padre, t$padre2))
+      }, character(1)) else character()
+      if (!.crm_color_distinguible(color, otros)) {
+        k <- which(colores$catalogo == f$catalogo & colores$padre == f$padre &
+          colores$padre2 == f$padre2 & colores$opcion == f$opcion)
+        anterior <- if (length(k)) colores$color[k[1]] else
+          unname(.crm_colores(f$catalogo, f$opcion, f$padre, f$padre2))
+        shinyjs::runjs(sprintf(paste0("var el=document.getElementById(%s);if(el){el.value=%s;",
+          "el.parentElement.querySelector('.crm-escala-hex').textContent=el.value;}"),
+          jsonlite::toJSON(session$ns(paste0("color_", i)), auto_unbox = TRUE),
+          jsonlite::toJSON(anterior, auto_unbox = TRUE)))
+        shiny::showNotification("Seleccione un color más distinguible de los demás valores de esta dimensión.",
+          type = "warning")
+        return()
+      }
       iguales <- colores$catalogo == f$catalogo & colores$padre == f$padre &
         colores$padre2 == f$padre2 & colores$opcion == f$opcion
       attr(nuevo, "colores") <- rbind(colores[!iguales, ], cbind(f, color = toupper(color)))

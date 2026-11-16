@@ -76,7 +76,7 @@ TableroTareas <- function(id, usuario, datos, abrir, refrescar, es_admin = funct
         ns = session$ns, campos = c(id = "cons", titulo = "titulo", descripcion = "Descripcion",
           prioridad = "Prioridad", responsable = "Responsable", tipo = "Tipo", cumplido = "Cumplido",
           archivado = "Archivado", vencimiento = "FechaCumplimiento"), nota_fn = .crm_nota,
-            colores = .COLORES_PRIORIDAD, arrastrable = !is.null(actuar),
+            colores = .crm_colores("prioridad", .TSK_PRIORIDADES), arrastrable = !is.null(actuar),
         acciones_fn = function(fila) {
           acciones <- c(abrir = "Abrir detalle")
           creador <- identical(as.character(fila$Usuario[[1]]), as.character(usuario()))

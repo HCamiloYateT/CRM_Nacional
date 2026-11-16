@@ -279,12 +279,13 @@ AdministrarCatalogos <- function(id, usuario, grupo, es_admin) {
             valor <- valores[[i]]
             configurado <- colores$color[colores$catalogo == tipo & colores$padre == padre &
               colores$padre2 == padre2 & colores$opcion == valor]
-            color <- if (length(configurado)) configurado[[1]] else unname(.crm_colores(tipo, valor, padre, padre2))
+            color <- if (length(configurado) && tipo != "producto") configurado[[1]] else unname(.crm_colores(tipo, valor, padre, padre2))
             js <- paste0("Shiny.setInputValue(", jsonlite::toJSON(ns("ADM_Color"), auto_unbox = TRUE),
               ",{nivel:", nivel, ",opcion:", jsonlite::toJSON(valor, auto_unbox = TRUE),
               ",color:this.value},{priority:'event'});")
             gt::html(as.character(shiny::tags$input(type = "color", value = color,
-              title = paste("Color de", valor), `aria-label` = paste("Color de", valor),
+              disabled = if (tipo == "producto") "disabled" else NULL,
+              title = if (tipo == "producto") "Color derivado de su categoría" else paste("Color de", valor), `aria-label` = paste("Color de", valor),
               style = "width:32px;height:22px;padding:0;border:1px solid #adb5bd;", onchange = js)))
           })
         }) |>

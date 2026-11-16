@@ -117,7 +117,7 @@ library("racafeForms")
 library("racafeModulos")
 # APIs mínimas requeridas por los adaptadores compartidos.
 .versiones_componentes <- c(racafeCore = "1.0.1", racafeGraph = "1.0.1", racafeForecast = "1.0.1",
-  racafeForms = "0.8.0", racafeShiny = "1.5.0", racafeModulos = "0.6.5")
+  racafeForms = "0.8.0", racafeShiny = "1.5.0", racafeModulos = "0.6.6")
 for (.paquete in names(.versiones_componentes)) {
   if (!requireNamespace(.paquete, quietly = TRUE) ||
       utils::packageVersion(.paquete) < .versiones_componentes[[.paquete]]) {
@@ -128,12 +128,14 @@ for (.paquete in names(.versiones_componentes)) {
 rm(.paquete)
 .api_modulos <- c("TarjetaKanbanUI", "TableroTareasTarjetas", "TimelineUI")
 .api_tareas <- names(formals(racafeModulos::TableroTareasTarjetas))
+.api_timeline <- names(formals(racafeModulos::TimelineUI))
 if (!all(.api_modulos %in% getNamespaceExports("racafeModulos")) ||
-    !all(c("arrastrable", "acciones_fn") %in% .api_tareas)) {
+    !all(c("arrastrable", "acciones_fn") %in% .api_tareas) ||
+    !"agrupar" %in% .api_timeline) {
   stop(paste("racafeModulos instalado no tiene la API requerida. Reinstale desde GitHub,",
     "reinicie R y vuelva a iniciar la app. No basta recargar el namespace."), call. = FALSE)
 }
-rm(.api_modulos, .api_tareas)
+rm(.api_modulos, .api_tareas, .api_timeline)
 racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", "tidyverse", "scales", "rlang",
                       "waiter", "glue", "httr2", "lubridate", "stringr", "purrr", "gt", "plotly", "writexl"))
 
@@ -149,7 +151,7 @@ racafeCore::Loadpkg(c("shiny", "bs4Dash", "shinyBS", "shinyjs", "shinyWidgets", 
 }
 
 .ruta_app <- .crm_ruta_app()
-.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/6f118374543b072bf2f82492ff9a0f45057649c1"
+.url_compartido <- "https://raw.githubusercontent.com/HCamiloYateT/Compartido/6c29066361d10ae8330df96ede83586efdc864d6"
 .estilos_crm <- shiny::singleton(shiny::includeCSS(paste0(.url_compartido, "/Styles/crm-nacional.css")))
 .recursos_compartidos <- shiny::tagList(
   shiny::tags$span(hidden = "hidden", `data-rf-interactions` = "true"),

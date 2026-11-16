@@ -28,7 +28,7 @@ header <- bs4DashNavbar(status = "white", border = FALSE, sidebarIcon = icon("ba
                                                      tags$hr(), tags$strong("PRIORIDAD DE TAREAS"),
                                                      lapply(names(.COLORES_PRIORIDAD), function(prioridad) div(
                                                        tags$span(class = "kb-scale-swatch", style = paste0("background:",
-                                                         .COLORES_PRIORIDAD[[prioridad]])), prioridad))))
+                                                         unname(.crm_colores("prioridad", prioridad)))), prioridad))))
                                                  )
                                          ),
                         rightUi = tagList(

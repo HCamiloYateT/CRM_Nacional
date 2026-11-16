@@ -52,11 +52,11 @@ FidelidadRiesgoUI <- function(id) {
         "Las primeras compras solo son las observadas en el historial disponible."))),
     .gc_tarjetas_ui(ns, .FID_CAJAS),
     .crm_tabs(
-      tabPanel("RFM", shiny::fluidRow(
+      tabPanel("RFM", .crm_tabla_ui(ns("rfm"))),
+      tabPanel("Distribuciones y segmentos", shiny::fluidRow(
         shiny::column(5, lapply(c("RecenciaDias", "Compras", "Margen"), function(campo)
           .crm_plot_output(ns(paste0("densidad_", campo)), height = "200px", compact = TRUE))),
-        shiny::column(7, .crm_plot_output(ns("rfm_segmentos"), height = "600px"))),
-        .crm_tabla_ui(ns("rfm"))),
+        shiny::column(7, .crm_plot_output(ns("rfm_segmentos"), height = "600px")))),
       tabPanel("BTYD y CLV", shiny::uiOutput(ns("estado_modelo")),
         shiny::conditionalPanel(sprintf("output['%s']", ns("modelo_disponible")),
           .crm_plot_output(ns("modelo_grafico"), height = "330px"), .crm_tabla_ui(ns("btyd")))),
@@ -119,43 +119,32 @@ FidelidadRiesgo <- function(id, hechos, clientes, filtros) {
     arbol_comercial <- function(u, grupo, dimension) {
       x <- .crm_agregar_indicadores(u, grupo)
       shiny::validate(shiny::need(nrow(x) > 0L, "No hay unidades para los filtros seleccionados."))
+      detalle <- data.frame(SacosMes = .crm_fmt_hover(x$SacosMes),
+        MargenMes = .crm_fmt_hover(x$MargenMes, dinero = TRUE), SacosPeriodo = .crm_fmt_hover(x$SacosPeriodo),
+        MargenPeriodo = .crm_fmt_hover(x$MargenPeriodo, dinero = TRUE),
+        CumplimientoSacos = .crm_fmt_hover(x$CumplimientoSacos, porcentaje = TRUE),
+        CumplimientoMargen = .crm_fmt_hover(x$CumplimientoMargen, porcentaje = TRUE),
+        PrimeraFacturacion = .crm_fmt_hover(x$PrimeraFacturacion),
+        UltimaFacturacion = .crm_fmt_hover(x$UltimaFacturacion))
       plotly::plot_ly(x, type = "treemap", height = 600, labels = x[[grupo]], parents = rep("", nrow(x)),
         values = ~Unidades,
-        customdata = .crm_customdata(x, c("SacosMes", "MargenMes", "SacosPeriodo", "MargenPeriodo",
+        customdata = .crm_customdata(detalle, c("SacosMes", "MargenMes", "SacosPeriodo", "MargenPeriodo",
           "CumplimientoSacos", "CumplimientoMargen", "PrimeraFacturacion", "UltimaFacturacion")),
         marker = list(colors = unname(.crm_colores(dimension, x[[grupo]]))),
         hovertemplate = paste0("<b>%{label}</b><br><b>UNIDADES COMERCIALES:</b> %{value:.0f}",
-          "<br><b>SACOS DEL MES DE REFERENCIA:</b> %{customdata[0]:,.2f}",
-          "<br><b>MARGEN DEL MES COP:</b> $%{customdata[1]:,.0f}",
-          "<br><b>SACOS DEL PERIODO:</b> %{customdata[2]:,.2f}",
-          "<br><b>MARGEN DEL PERIODO COP:</b> $%{customdata[3]:,.0f}",
-          "<br><b>CUMPLIMIENTO SACOS:</b> %{customdata[4]:.1%}",
-          "<br><b>CUMPLIMIENTO MARGEN:</b> %{customdata[5]:.1%}",
+          "<br><b>SACOS DEL MES DE REFERENCIA:</b> %{customdata[0]}",
+          "<br><b>MARGEN DEL MES COP:</b> %{customdata[1]}",
+          "<br><b>SACOS DEL PERIODO:</b> %{customdata[2]}",
+          "<br><b>MARGEN DEL PERIODO COP:</b> %{customdata[3]}",
+          "<br><b>CUMPLIMIENTO SACOS:</b> %{customdata[4]}",
+          "<br><b>CUMPLIMIENTO MARGEN:</b> %{customdata[5]}",
           "<br><b>PRIMERA FACTURA:</b> %{customdata[6]}<br><b>ÚLTIMA FACTURA:</b> %{customdata[7]}<extra></extra>"))
     }
     output$rfm_segmentos <- .crm_render_plotly(arbol_comercial(unidades_rfm(), "SegmentoRFM", "rfm"))
     for (campo in c("RecenciaDias", "Compras", "Margen")) local({
       variable <- campo
       output[[paste0("densidad_", variable)]] <- .crm_render_plotly({
-        x <- rfm()
-        segmentos <- sort(unique(x$SegmentoRFM))
-        titulo <- c(RecenciaDias = "Días sin compra", Compras = "Compras observadas", Margen = "Margen FCC · COP")[[variable]]
-        p <- plotly::plot_ly(height = 200)
-        n <- 0L
-        for (segmento in segmentos) {
-          v <- x[[variable]][x$SegmentoRFM == segmento]
-          v <- v[is.finite(v)]
-          if (length(unique(v)) < 2L) next
-          d <- stats::density(v); n <- n + 1L
-          p <- plotly::add_trace(p, x = d$x, y = d$y, type = "scatter", mode = "lines", name = segmento,
-            line = list(color = unname(.crm_colores("rfm", segmento))),
-            hovertemplate = paste0("<b>", htmltools::htmlEscape(segmento), "</b><br><b>", titulo,
-              ":</b> %{x:,.2f}<br><b>DENSIDAD:</b> %{y:.4f}<extra></extra>"))
-        }
-        shiny::validate(shiny::need(n > 0L, "Se necesitan dos valores distintos dentro de un mismo segmento."))
-        plotly::layout(p, title = titulo, showlegend = identical(variable, "Margen"),
-          xaxis = list(title = titulo), yaxis = list(title = "Densidad"),
-          meta = list(crm_altura_compacta = TRUE))
+        .fid_grafico_distribucion(rfm(), variable)
       })
     })
     .gc_tarjetas_server(.FID_CAJAS, shiny::reactive({

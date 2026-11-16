@@ -122,7 +122,7 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
       dat <- gestiones_data()
       if (nrow(dat) == 0) return(tags$p("Sin gestiones registradas aún.", style = "color:#94A3B8; font-size:12px;"))
       racafeModulos::TimelineUI(data.frame(Fecha = dat$FechaHoraCrea,
-        Evento = dat$TipoGestion, Descripcion = dat$Comentario, Usuario = dat$UsuarioCrea))
+        Evento = dat$TipoGestion, Descripcion = dat$Comentario, Usuario = dat$UsuarioCrea), agrupar = TRUE)
     })
     
     validacion_gestion <- .accion_validacion(input, session, codigo_contacto,
@@ -162,7 +162,7 @@ Relacionamiento <- function(id, usuario, codigo_contacto) {
       if (nrow(dat) == 0) return(tags$p("Sin recordatorios programados.", style = "color:#94A3B8; font-size:12px;"))
       racafeModulos::TimelineUI(data.frame(Fecha = dat$FechaRecordatorio, Evento = dat$Canal,
         Usuario = dat$Asesor, Estado = ifelse(dat$Enviado == 1, "CUMPLIDO", "PENDIENTE")),
-        contenido = lapply(seq_len(nrow(dat)), function(i) {
+        agrupar = TRUE, contenido = lapply(seq_len(nrow(dat)), function(i) {
         cumplido <- isTRUE(dat$Enviado[i] == 1)
         vencido  <- !cumplido && dat$FechaRecordatorio[i] < Sys.time()
         

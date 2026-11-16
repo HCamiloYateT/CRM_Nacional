@@ -176,63 +176,130 @@
 }
 
 # Cosechas: universo fijo y puntos agregados únicamente a edades realmente observadas ----
-.car_cosechas <- function(cartera, facturas, corte) {
-  error <- function(texto) list(curvas = data.frame(), documentos = data.frame(), observaciones = data.frame(),
-    limitacion = texto)
-  requeridas <- c("PerCod", "Factura", "FcnFec", "FcnVal", "FecVto")
-  if (!all(requeridas %in% names(facturas))) return(error("No hay emisión, valor original y vencimiento por factura."))
+# Base documental reutilizable sin atribuir pagos ni completar saldos ausentes ----
+.car_base_cosechas <- function(cartera, facturas, corte) {
+  if (!all(c("PerCod", "Factura", "FcnFec", "FcnVal", "FecVto") %in% names(facturas))) {
+    stop("No hay emisión, valor original y vencimiento por factura.")
+  }
   f <- unique(facturas)
   f$NIT <- .car_id(f$PerCod); f$Factura <- .car_id(f$Factura)
   f$Documento <- .car_llave(f, c("NIT", "Factura"))
   f$Emision <- .car_fecha(f$FcnFec); f$Vencimiento <- .car_fecha(f$FecVto)
   f$Original <- .gc_num(f$FcnVal)
   f <- f[!is.na(f$Documento) & !is.na(f$Emision) & f$Emision <= corte, , drop = FALSE]
-  if (!nrow(f)) return(error("No hay facturas emitidas dentro del alcance y hasta el corte seleccionado."))
-  # TESHCARE no identifica prefijo: no unir números ambiguos ni elegir una versión de cabecera.
-  if (anyDuplicated(f$Documento)) return(error("Hay números de factura ambiguos por NIT o prefijo; no se construyen cosechas."))
-  incompletas <- !is.finite(f$Original) | f$Original <= 0 | is.na(f$Vencimiento)
-  if (any(incompletas)) return(error("Hay facturas sin valor original positivo o vencimiento; el denominador de sus cohortes no es verificable."))
-  f$Cohorte <- .gc_mes(f$Emision)
-  base <- unique(cartera)
-  base$Corte <- .car_fecha(base$TCEFch)
-  base$Documento <- .car_llave(base, c("PerCod", "Factura"))
-  base$SaldoObservado <- .gc_num(base$SaldoCOP)
+  if (anyDuplicated(f$Documento)) stop("Hay números de factura ambiguos por NIT/prefijo; no se prorratean.")
+  if (any(!is.finite(f$Original) | f$Original <= 0)) stop("Hay facturas sin valor original positivo verificable.")
+  b <- unique(cartera)
+  b$Corte <- .car_fecha(b$TCEFch)
+  b$Documento <- .car_llave(b, c("PerCod", "Factura"))
+  b$SaldoObservado <- .gc_num(b$SaldoCOP)
   grano <- intersect(c("Corte", "PerCod", "Factura", "TCETipCar", "LinNegCod", "LinProCod",
-    "TCEPdcRef", "TCEPdcLin"), names(base))
-  if (anyDuplicated(base[grano])) stop("Hay líneas de cartera contradictorias para el mismo corte y documento.")
-  observaciones <- base %>% dplyr::filter(!is.na(Corte), Corte <= corte, !is.na(Documento)) %>%
+    "TCEPdcRef", "TCEPdcLin"), names(b))
+  if (anyDuplicated(b[grano])) stop("Hay líneas de cartera contradictorias para el mismo corte y documento.")
+  observaciones <- b %>% dplyr::filter(!is.na(Corte), Corte <= corte, !is.na(Documento)) %>%
     dplyr::group_by(Corte, Documento) %>%
     dplyr::summarise(SaldoObservado = .com_suma(SaldoObservado), .groups = "drop")
-  if (!nrow(observaciones)) return(error("No existen saldos históricos observados para reconstruir las cosechas."))
-  d <- dplyr::inner_join(observaciones, f[c("Documento", "Cohorte", "Emision", "Vencimiento", "Original")],
-    by = "Documento", relationship = "many-to-one")
-  d$Dias <- as.integer(d$Corte - d$Emision)
-  d <- d[d$Dias >= 0 & is.finite(d$SaldoObservado), , drop = FALSE]
-  d$SaldoVencido <- ifelse(d$Corte > d$Vencimiento, pmax(d$SaldoObservado, 0), 0)
-  universo <- f %>% dplyr::group_by(Cohorte) %>%
-    dplyr::summarise(ValorOriginal = sum(Original), FacturasCohorte = dplyr::n(), .groups = "drop")
-  curvas <- d %>% dplyr::group_by(Cohorte, Dias) %>%
-    dplyr::summarise(SaldoVencido = sum(SaldoVencido), FacturasObservadas = dplyr::n_distinct(Documento),
-      .groups = "drop") %>% dplyr::left_join(universo, by = "Cohorte") %>%
-    dplyr::filter(FacturasObservadas == FacturasCohorte) %>%
-    dplyr::mutate(PctMora = SaldoVencido / ValorOriginal)
-  list(curvas = curvas, documentos = f, observaciones = d,
-    limitacion = paste(attr(facturas, "limite_alcance"), "Fotografías periódicas: solo se grafican edades con todas las facturas de la cohorte observadas.",
-      "La ausencia de una factura no equivale a saldo cero. No se interpolan saldos ni se infieren pagos.",
-      if (!nrow(curvas)) "No hay edades comunes completas; consulte el detalle documental." else ""))
+  b$LinNegCod <- as.character(.gc_columna(b, "LinNegCod"))
+  b$LinNegCod[b$LinNegCod == "20000"] <- "21000"
+  lineas <- b %>% dplyr::group_by(Documento) %>%
+    dplyr::summarise(LineaObservada = .gc_unico(LinNegCod), .groups = "drop")
+  f <- dplyr::left_join(f, lineas, by = "Documento", relationship = "one-to-one")
+  f$LinNegCod <- dplyr::coalesce(as.character(.gc_columna(f, "LinNegCod")), as.character(f$LineaObservada))
+  f$LinNegCod[f$LinNegCod == "20000"] <- "21000"
+  f$Linea <- dplyr::recode(f$LinNegCod, `10000` = "COPRODUCTOS", `20000` = "A LA MEDIDA",
+    `21000` = "A LA MEDIDA", .default = "LÍNEA NO UNÍVOCA")
+  f$Principal <- .gc_columna(f, c("Principal", "CliNitPpal", "NIT"))
+  f$UnidadComercial <- paste(f$Principal, f$Linea, sep = " · ")
+  list(documentos = f, observaciones = observaciones)
 }
-.car_grafico_cosechas <- function(x) {
+.car_cosechas <- function(cartera = NULL, facturas = NULL, corte, origen = "Emision", dimension = "Total",
+                          desde = NULL, base = NULL, hasta_origen = corte) {
+  if (is.null(base)) base <- .car_base_cosechas(cartera, facturas, corte)
+  f <- base$documentos
+  if (!origen %in% c("Emision", "Vencimiento")) stop("Origen de cosecha no válido.")
+  f$Cohorte <- as.Date(format(f[[origen]], "%Y-%m-01"))
+  f <- f[!is.na(f$Cohorte) & f[[origen]] <= hasta_origen, , drop = FALSE]
+  if (!is.null(desde)) f <- f[f[[origen]] >= as.Date(desde), , drop = FALSE]
+  if (dimension != "Total" && !dimension %in% names(f)) stop("La dimensión de cartera no está disponible.")
+  f$Grupo <- if (dimension == "Total") "TOTAL" else as.character(f[[dimension]])
+  f$Grupo[is.na(f$Grupo) | !nzchar(f$Grupo)] <- "SIN DATO"
+  o <- base$observaciones
+  o <- o[!is.na(o$Corte) & o$Corte <= corte, , drop = FALSE]
+  cortes <- o %>% dplyr::mutate(MesCorte = as.Date(format(Corte, "%Y-%m-01"))) %>%
+    dplyr::group_by(MesCorte) %>% dplyr::summarise(Corte = max(Corte), .groups = "drop")
+  documentos <- c("Documento", "Cohorte", "Grupo", "Emision", "Vencimiento", "Original", "NIT", "Factura",
+    "Principal", "UnidadComercial", "Linea", "PerRazSoc", "Asesor", "Segmento")
+  documentos <- intersect(documentos, names(f))
+  detalle <- dplyr::inner_join(f[documentos], cortes, by = dplyr::join_by(Cohorte <= MesCorte),
+    relationship = "many-to-many") %>%
+    dplyr::left_join(o, by = c("Documento", "Corte"), relationship = "many-to-one")
+  detalle$Edad <- (as.integer(format(detalle$MesCorte, "%Y")) -
+    as.integer(format(detalle$Cohorte, "%Y"))) * 12L +
+    as.integer(format(detalle$MesCorte, "%m")) - as.integer(format(detalle$Cohorte, "%m")) + 1L
+  detalle$Vencida <- detalle$Corte > detalle$Vencimiento
+  curvas <- detalle %>% dplyr::group_by(Cohorte, Grupo, Edad, Corte) %>%
+    dplyr::summarise(ValorOriginal = sum(Original), FacturasCohorte = dplyr::n(),
+      FacturasObservadas = sum(is.finite(SaldoObservado)), SaldoPendiente = .com_suma(SaldoObservado),
+      .groups = "drop") %>% dplyr::mutate(PctSaldo = SaldoPendiente / ValorOriginal)
+  inicial <- f %>% dplyr::group_by(Cohorte, Grupo) %>%
+    dplyr::summarise(ValorOriginal = sum(Original), FacturasCohorte = dplyr::n(), .groups = "drop") %>%
+    dplyr::mutate(Edad = 0L, Corte = as.Date(NA), FacturasObservadas = NA_integer_,
+      SaldoPendiente = ValorOriginal, PctSaldo = 1)
+  inicial$Referencia <- TRUE; curvas$Referencia <- FALSE
+  curvas <- dplyr::bind_rows(inicial, curvas) %>% dplyr::arrange(Cohorte, Grupo, Edad)
+  if (nrow(curvas)) curvas$Celda <- paste(curvas$Cohorte, curvas$Grupo, curvas$Edad, sep = "|")
+  list(curvas = curvas, documentos = f, observaciones = detalle,
+    limitacion = c("Edad 0: referencia del valor original (100%), no un saldo observado.",
+      "Edad 1: último corte disponible del mes de origen; edad 2: mes siguiente, y así sucesivamente.",
+      "Una factura ausente deja el porcentaje desconocido. No se interpolan saldos ni se infieren pagos.",
+      "Las variaciones pueden incluir pagos, notas crédito o ajustes; esta fuente no permite separarlos.",
+      "Asesor y segmento corresponden al catálogo actual, no a una asignación histórica reconstruida."))
+}
+.car_detalle_cosecha <- function(x, celda) {
+  fila <- x$curvas[x$curvas$Celda %in% celda, , drop = FALSE]
+  if (nrow(fila) != 1L) return(data.frame())
+  if (fila$Edad == 0L) {
+    d <- x$documentos[x$documentos$Cohorte == fila$Cohorte & x$documentos$Grupo == fila$Grupo, , drop = FALSE]
+    d$SaldoObservado <- NA_real_
+    d$Nota <- "Referencia original; no es un saldo histórico observado."
+    return(d)
+  }
+  d <- x$observaciones
+  d[d$Cohorte == fila$Cohorte & d$Grupo == fila$Grupo & d$Edad == fila$Edad & d$Corte == fila$Corte, , drop = FALSE]
+}
+.car_grafico_cosechas <- function(x, source = "car_cosechas") {
   d <- x$curvas
-  shiny::validate(shiny::need(nrow(d) > 0L, x$limitacion))
-  d$NombreCohorte <- format(d$Cohorte, "%Y-%m")
-  d$Lectura <- paste0("Cohorte: ", d$NombreCohorte, "<br>Valor original: ", format(d$ValorOriginal, big.mark = ","),
-    " COP<br>Saldo vencido: ", format(d$SaldoVencido, big.mark = ","), " COP")
-  plotly::plot_ly(d, x = ~Dias, y = ~PctMora, color = ~NombreCohorte, text = ~Lectura,
-    type = "scatter", mode = "lines+markers", connectgaps = FALSE,
-    colors = grDevices::colorRampPalette(c("#C8A77D", "#7A2028", "#495057"))(length(unique(d$Cohorte))),
-    hovertemplate = "%{text}<br>Días desde emisión: %{x:.0f}<br>Saldo original en mora: %{y:.1%}<extra></extra>") %>%
-    plotly::layout(xaxis = list(title = "Días desde emisión de las facturas"),
-      yaxis = list(title = "% del valor original vencido y pendiente", tickformat = ".0%"))
+  shiny::validate(shiny::need(nrow(d) > 0L, "No hay cosechas para el periodo y alcance seleccionados."))
+  d$Serie <- paste(format(d$Cohorte, "%Y-%m"), d$Grupo, sep = " · ")
+  p <- plotly::plot_ly(source = source)
+  for (serie in unique(d$Serie)) {
+    f <- d[d$Serie == serie, , drop = FALSE]
+    # Insertar edades sin observación como huecos, nunca unirlas como si hubiera saldos conocidos.
+    f <- dplyr::left_join(data.frame(Edad = seq.int(0L, max(f$Edad))), f, by = "Edad")
+    p <- plotly::add_trace(p, x = f$Edad, y = f$PctSaldo, name = serie, type = "scatter", mode = "lines+markers",
+      connectgaps = FALSE, line = list(color = unname(.crm_colores("cosecha", serie))),
+      customdata = lapply(seq_len(nrow(f)), function(i) list(f$Celda[i], f$ValorOriginal[i], f$SaldoPendiente[i])),
+      hovertemplate = paste0("<b>", serie, "</b><br>Edad: %{x:.0f}<br>Saldo pendiente: %{y:.1%}",
+        "<br>Original: $%{customdata[1]:,.0f}<br>Saldo: $%{customdata[2]:,.0f}<extra></extra>"))
+  }
+  rango <- range(c(0, 1, d$PctSaldo), na.rm = TRUE)
+  plotly::event_register(plotly::layout(p, xaxis = list(title = "Edad de la cosecha (meses calendario)"),
+    yaxis = list(title = "% del valor original pendiente", tickformat = ".0%", range = rango)), "plotly_click")
+}
+.car_matriz_cosechas <- function(x, source = "car_matriz") {
+  d <- x$curvas
+  shiny::validate(shiny::need(nrow(d) > 0L, "No hay cosechas para la selección."))
+  filas <- unique(paste(format(d$Cohorte, "%Y-%m"), d$Grupo, sep = " · "))
+  edades <- seq.int(0L, max(d$Edad))
+  z <- matrix(NA_real_, nrow = length(filas), ncol = length(edades))
+  claves <- matrix(NA_character_, nrow = length(filas), ncol = length(edades))
+  i <- match(paste(format(d$Cohorte, "%Y-%m"), d$Grupo, sep = " · "), filas)
+  z[cbind(i, d$Edad + 1L)] <- d$PctSaldo; claves[cbind(i, d$Edad + 1L)] <- d$Celda
+  p <- plotly::plot_ly(x = edades, y = filas, z = z, customdata = lapply(seq_len(nrow(claves)), function(i) as.list(claves[i, ])), type = "heatmap",
+    source = source, colorscale = list(c(0, "#F6F0E7"), c(1, "#6C5146")),
+    hovertemplate = "%{y}<br>Edad: %{x:.0f}<br>Saldo pendiente: %{z:.1%}<extra></extra>", hoverongaps = FALSE)
+  plotly::event_register(plotly::layout(p, yaxis = list(autorange = "reversed"),
+    xaxis = list(title = "Edad 0 = referencia original; 1 = corte del mes de origen")), "plotly_click")
 }
 
 .car_facturas_autorizadas <- function(facturas, cartera, clientes, nit_mapa) {

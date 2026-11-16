@@ -117,3 +117,21 @@
   resumen$ParticipacionMargen <- if (is.finite(total_margen) && total_margen != 0) resumen$Margen / total_margen else NA_real_
   dplyr::left_join(resumen, precios, by = dimensiones, na_matches = "na") %>% dplyr::arrange(dplyr::desc(Sacos))
 }
+
+# Hover con valores ausentes explícitos y fechas legibles ----
+.crm_fmt_hover <- function(x, dinero = FALSE, porcentaje = FALSE, abreviado = FALSE) {
+  if (inherits(x, c("Date", "POSIXt"))) return(ifelse(is.na(x), "No disponible", format(x, "%d/%m/%Y")))
+  divisor <- rep(1, length(x)); sufijo <- rep("", length(x))
+  if (abreviado && !porcentaje) {
+    divisor <- if (dinero) ifelse(abs(x) >= 1e6, 1e6, ifelse(abs(x) >= 1e3, 1e3, 1)) else {
+      ifelse(abs(x) >= 1e3, 1e3, 1)
+    }
+    sufijo <- if (dinero) ifelse(divisor == 1e6, " MM", ifelse(divisor == 1e3, " M", "")) else {
+      ifelse(divisor == 1e3, " K", "")
+    }
+  }
+  ifelse(!is.finite(x), "No disponible", paste0(if (dinero) "$" else "",
+    format(round(x / divisor * if (porcentaje) 100 else 1,
+      if (dinero && !abreviado) 0 else 2), big.mark = ",", scientific = FALSE, trim = TRUE),
+    if (porcentaje) "%" else sufijo))
+}
