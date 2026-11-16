@@ -116,6 +116,7 @@
       if (length(k)) numero(lotes[[k[1]]]) else rep(NA_real_, n)
     }
     codigo <- campo(c("CLLinNegCo", "LinNegCodOrigen"))
+    codigo[codigo %in% 0] <- NA_real_
     # La homologación solo perdió el origen de 20000/21000; 10000 sigue siendo inequívoco.
     if ("LinNegCod" %in% names(lotes)) {
       codigo[is.na(codigo) & numero(lotes$LinNegCod) %in% 10000] <- 10000
@@ -137,6 +138,8 @@
     mapa$LineasPYG > 1L ~ "POR REVISAR",
     mapa$LinNegCodFinanciero %in% c(10000, 21000) ~ "INCLUIDO",
     mapa$CodigoLineaOriginal == 20000 ~ "POR REVISAR",
+    mapa$CodigoLineaOriginal == 10000 &
+      (is.na(mapa$ProductoOriginal) | mapa$ProductoOriginal == 0) ~ "POR REVISAR",
     !is.na(mapa$CodigoLineaOriginal) ~ "FUERA DEL ALCANCE",
     TRUE ~ "POR REVISAR")
   mapa$MotivoAlcance <- dplyr::case_when(
@@ -144,6 +147,9 @@
     mapa$LineaPYGAlcance %in% c(10000, 21000) ~ "Lote documentado en el PyG de Industria Nacional",
     mapa$LineaSistemaAlcance %in% c(10000, 21000) ~ "Lote del universo operativo original de Industria Nacional",
     mapa$CodigoLineaOriginal == 20000 ~ "Código original 20000 sin evidencia de pertenencia al PyG comparado",
+    mapa$CodigoLineaOriginal == 10000 &
+      (is.na(mapa$ProductoOriginal) | mapa$ProductoOriginal == 0) ~
+      "Falta el tipo de producto original para verificar el alcance comercial",
     !is.na(mapa$CodigoLineaOriginal) ~ "Línea o tipo de producto fuera del universo comparado",
     TRUE ~ "No hay una referencia original de lote que permita atribuir la factura")
   documentos <- documentos %>% dplyr::select(-dplyr::any_of(setdiff(names(mapa), "CLLotCod")))
