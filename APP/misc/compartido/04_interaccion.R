@@ -10,8 +10,24 @@
     plotly::ggplotly(grafico, height = 500, tooltip = "all")
   })
 }
+# Limpiar tanto atributos diferidos como trazas construidas antes de cualquier reconstrucción ----
+.crm_quitar_textfont <- function(figura) {
+  limpiar <- function(t) {
+    if (!identical(t$type, "treemap")) {
+      t$textfont <- NULL
+      if (!is.null(t$mode) && !identical(t$mode, "text")) {
+        t$mode <- gsub("(^text\\+|\\+text$|text)", "", t$mode)
+      }
+    }
+    t
+  }
+  if (is.list(figura$x$attrs)) figura$x$attrs <- lapply(figura$x$attrs, limpiar)
+  if (is.list(figura$x$data)) figura$x$data <- lapply(figura$x$data, limpiar)
+  figura
+}
 # Formato compartido conservando intactas las expresiones de hover ----
 .crm_estandarizar_plotly <- function(figura) {
+  figura <- .crm_quitar_textfont(figura)
   etiqueta <- function(x) {
     if (is.character(x)) return(gsub("convencionales", "Coproductos", x, ignore.case = TRUE))
     if (is.list(x)) return(lapply(x, etiqueta))
@@ -65,7 +81,8 @@
     })
     fechas <- as.Date(unlist(fechas), origin = "1970-01-01")
     fechas <- fechas[!is.na(fechas)]
-    if (length(fechas) && as.numeric(max(fechas) - min(fechas)) > 45) {
+    if (length(fechas) && as.numeric(max(fechas) - min(fechas)) > 45 &&
+        !identical(figura$x$layout[[eje]]$tickmode, "array")) {
       marcas <- seq(as.Date(format(min(fechas), "%Y-%m-01")), as.Date(format(max(fechas), "%Y-%m-01")), by = "month")
       marcas <- marcas[seq.int(1L, length(marcas), by = max(1L, ceiling(length(marcas) / 12L)))]
       figura$x$layout[[eje]]$tickmode <- "array"
@@ -195,10 +212,7 @@
     withCallingHandlers(.crm_medir(paste0("renderPlotly:", nombre), {
       figura <- calcular()
       estado(NULL)
-      if (is.list(figura$x$attrs)) figura$x$attrs <- lapply(figura$x$attrs, function(a) {
-        if (!grepl("text", a$mode %||% "")) a$textfont <- NULL
-        a
-      })
+      figura <- .crm_quitar_textfont(figura)
       figura
     }), error = function(e) {
       mensaje <- if (inherits(e, "validation") && nzchar(conditionMessage(e))) conditionMessage(e) else {

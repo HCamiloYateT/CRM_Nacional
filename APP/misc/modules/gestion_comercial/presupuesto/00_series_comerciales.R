@@ -34,11 +34,12 @@
   dias_mes <- as.numeric(fin_mes - meses + 1L)
   fraccion <- pmin(1, pmax(0, as.numeric(fin_mes - corte) / dias_mes))
   pesos <- plan * fraccion
-  futuro <- fraccion > 0
+  futuro <- meses >= as.Date(format(corte, "%Y-%m-01"))
   ritmo <- rep(NA_real_, 12L)
   minimo_aplicado <- FALSE
   if (any(futuro) && is.finite(observado)) {
     pesos_validos <- if (sum(pesos) > 0) pesos else fraccion
+    if (sum(pesos_validos) == 0) pesos_validos <- as.numeric(futuro)
     reparto <- (sum(plan) - observado) * pesos_validos / sum(pesos_validos)
     ritmo[futuro] <- pmax(reparto[futuro], pesos[futuro])
     minimo_aplicado <- any(reparto[futuro] < pesos[futuro])
@@ -48,9 +49,6 @@
   salida <- data.frame(Mes = fin_mes, Presupuesto = if (acumulada) cumsum(plan) else plan,
     Ejecucion = if (acumulada) cumsum(ejecucion) else ejecucion, Ritmo = requerido,
     Composicion = componentes, BaseCorte = observado)
-  if (acumulada) salida$Composicion <- vapply(seq_len(12L), function(i) {
-    paste(componentes[seq_len(i)], collapse = "<br>")
-  }, character(1))
   attr(salida, "saldo_requerido") <- sum(plan) - observado
   attr(salida, "minimo_aplicado") <- minimo_aplicado
   attr(salida, "corte") <- corte
@@ -65,18 +63,16 @@
   for (serie in c("Presupuesto", "Ejecución", "Ritmo requerido")) {
     campo <- c(Presupuesto = "Presupuesto", Ejecución = "Ejecucion", `Ritmo requerido` = "Ritmo")[[serie]]
     d <- x
-    if (serie == "Ritmo requerido" && isTRUE(attr(x, "acumulada"))) {
-      d <- d[d$Mes > attr(x, "corte") & is.finite(d$Ritmo), , drop = FALSE]
-      if (nrow(d)) d <- rbind(transform(d[1, ], Mes = attr(x, "corte"), Ritmo = x$BaseCorte[1]), d)
-    }
+    if (serie == "Ritmo requerido") d <- d[is.finite(d$Ritmo), , drop = FALSE]
     g <- plotly::add_trace(g, x = d$Mes, y = d[[campo]], name = serie, type = "scatter", mode = "lines+markers",
-      connectgaps = FALSE, line = list(color = color(serie),
+      connectgaps = FALSE, marker = list(color = color(serie), size = 6), line = list(color = color(serie),
         dash = c(Presupuesto = "dash", Ejecución = "solid", `Ritmo requerido` = "dot")[[serie]]),
-      customdata = lapply(d$Composicion, function(v) list(v)),
-      hovertemplate = paste0("<b>", serie, "</b><br>", formato,
-        if (serie == "Ejecución") "<br>%{customdata[0]}" else "", "<extra></extra>"))
+      hovertemplate = paste0(serie, ": ", formato, "<extra></extra>"))
   }
-  plotly::layout(g, hovermode = "x unified", yaxis = list(title = if (dinero) "Margen · COP" else "Sacos de 70 kg"),
+  plotly::layout(g, hovermode = "x unified", xaxis = list(hoverformat = "%B %Y", tickmode = "array",
+    tickvals = x$Mes, ticktext = c("ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"),
+    tickangle = -45),
+    yaxis = list(title = if (dinero) "Margen · COP" else "Sacos de 70 kg"),
     meta = list(crm_leyenda = TRUE))
 }
 
