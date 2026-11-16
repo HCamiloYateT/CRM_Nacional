@@ -24,26 +24,36 @@
   solicitados <- sumar_unidad(lineas, "SacosPedido70Linea")
   facturados <- if ("FacturadosConsolidados70" %in% names(d)) por_lote("FacturadosConsolidados70") else
     if ("FacturadosOperativos70" %in% names(d)) por_lote("FacturadosOperativos70") else
-    .com_suma(d$SacosFact[reales])
+    if (any(reales)) .com_suma(d$SacosFact[reales]) else NA_real_
   capas <- if ("MetricaMargenEscenario" %in% names(d)) d else .crm_capa_ejecucion(d)
   indicadores <- list(solicitados = solicitados, asignados = por_lote("SacosLote70"),
     producidos = por_lote("SacosProducidos70"), despachados = por_lote("SacosDespachados70"),
-    facturados = facturados, cerrados = .com_suma(d$SacosFact[d$EstadoFinanciero == "CERRADO"]),
-    margen = .com_suma(d$Margen[d$EstadoFinanciero == "CERRADO"]),
+    facturados = facturados,
+    cerrados = if (any(d$EstadoFinanciero == "CERRADO"))
+      .com_suma(d$SacosFact[d$EstadoFinanciero == "CERRADO"]) else NA_real_,
+    margen = if (any(d$EstadoFinanciero == "CERRADO"))
+      .com_suma(d$Margen[d$EstadoFinanciero == "CERRADO"]) else NA_real_,
     margen_estimado = .com_suma(capas$MetricaMargenProyectado),
     margen_comercial = .com_suma(capas$MetricaMargenEscenario), pendiente = pmax(solicitados - facturados, 0))
   if (!detalle) return(list(datos = d, indicadores = indicadores))
-  eventos <- dplyr::bind_rows(lapply(c(Creación = "FechaCreacionPedido", Asignación = "FechaAsignacionLote",
+  eventos <- dplyr::bind_rows(lapply(c(Creación = "FechaCreacionPedido", Estimación = "FechaEstimadaPedido",
+      Asignación = "FechaAsignacionLote",
       Producción = "FechaProduccion", Despacho = "FechaDespachoReal", Facturación = "FecFact"), function(campo) {
     if (!campo %in% names(d)) return(NULL)
-    evento <- if (campo == "FecFact") ifelse(d$EstadoFinanciero == "CERRADO",
-      "Reconocimiento financiero", "Factura registrada") else rep(campo, nrow(d))
+    evento <- if (campo == "FecFact") rep("Factura registrada", nrow(d)) else rep(campo, nrow(d))
     data.frame(Fecha = as.Date(d[[campo]]), Evento = evento, Pedido = .crm_id_texto(d$CLPdcCod),
       Linea = .crm_id_texto(d$CLPdcLin), Lote = .crm_id_texto(d$CLLotCod))
   }))
   eventos$Evento <- dplyr::recode(eventos$Evento, FechaCreacionPedido = "Creación del pedido",
+    FechaEstimadaPedido = "Cumplimiento estimado",
     FechaAsignacionLote = "Asignación del lote", FechaProduccion = "Producción", FechaDespachoReal = "Despacho",
     FecFact = "Factura / reconocimiento financiero")
+  if ("FecMes" %in% names(d)) {
+    cerrados <- d[d$EstadoFinanciero == "CERRADO" & !is.na(d$FecMes), , drop = FALSE]
+    eventos <- dplyr::bind_rows(eventos, data.frame(Fecha = as.Date(cerrados$FecMes),
+      Evento = rep("Periodo financiero (mes)", nrow(cerrados)), Pedido = .crm_id_texto(cerrados$CLPdcCod),
+      Linea = .crm_id_texto(cerrados$CLPdcLin), Lote = .crm_id_texto(cerrados$CLLotCod)))
+  }
   eventos <- unique(eventos[!is.na(eventos$Fecha), , drop = FALSE])
   conciliacion <- data.frame(Etapa = c("Pedido → asignación", "Asignación → producción", "Producción → despacho",
     "Despacho → facturación", "Facturación → cierre"), DiferenciaSacos = c(
@@ -70,6 +80,47 @@
   }
   list(datos = d, indicadores = indicadores, eventos = eventos, conciliacion = conciliacion, facturas = referencias)
 }
+# Encabezado compacto compartiendo panel, badges y atributos con la unidad comercial ----
+.tz_encabezado <- function(x, pedido,
+                           indicadores = .tz_preparar(x, pedido, detalle = FALSE)$indicadores) {
+  texto <- function(campos) {
+    v <- .gc_columna(x, campos, NA_character_)
+    if (is.numeric(v)) v <- .crm_id_texto(v)
+    v <- unique(as.character(v[!is.na(v) & nzchar(as.character(v))]))
+    if (length(v)) paste(v, collapse = " · ") else "No disponible"
+  }
+  fecha <- function(campo) {
+    v <- as.Date(.gc_columna(x, campo, as.Date(NA)))
+    v <- sort(unique(v[!is.na(v) & v > as.Date("1900-01-01")]))
+    if (length(v)) paste(format(v, "%d/%m/%Y"), collapse = " · ") else "No disponible"
+  }
+  precio <- suppressWarnings(as.numeric(.gc_columna(x, "PrecioNegociadoKg", NA_real_)))
+  precio <- sort(unique(precio[is.finite(precio) & precio > 0]))
+  etapas <- c(facturados = "FACTURADO", despachados = "DESPACHADO", producidos = "PRODUCIDO",
+    asignados = "ASIGNADO")
+  evidencia <- names(etapas)[vapply(names(etapas), function(k) isTRUE(indicadores[[k]] > 0), logical(1))]
+  operativo <- if (length(evidencia)) unname(etapas[evidencia[1]]) else {
+    if (!any(!is.na(x$CLLotCod) & x$CLLotCod != 0)) "SIN LOTES REGISTRADOS" else "No disponible"
+  }
+  if (identical(operativo, "FACTURADO") && isTRUE(indicadores$facturados < indicadores$solicitados)) {
+    operativo <- "FACTURACIÓN PARCIAL"
+  }
+  racafeForms::racafePanel(variant = "muted", title = paste("Pedido", .crm_id_texto(pedido)),
+    shiny::tags$strong(texto("PerRazSoc")),
+    shiny::tags$div(class = "crm-identidad-badges",
+      racafeForms::racafeStatusBadge(paste("NIT", texto("CLCliNit")), size = "xs"),
+      lapply(unique(stats::na.omit(x$CLLinNegNo)), function(v) .crm_badge_categoria(v, "linneg")),
+      racafeForms::racafeStatusBadge(paste("Estado del pedido:", texto("EstadoPedido")), size = "xs"),
+      racafeForms::racafeStatusBadge(paste("Estado operativo:", operativo), size = "xs"),
+      racafeForms::racafeStatusBadge(paste("Estado financiero:",
+        gsub("_", " ", texto("EstadoFinanciero"))), size = "xs")),
+    racafeForms::racafeInfoGrid(
+      racafeForms::racafeInfoItem("Fecha de creación", fecha("FechaCreacionPedido")),
+      racafeForms::racafeInfoItem("Fecha estimada", fecha(c("FechaEstimadaPedido", "PdcFecEst"))),
+      racafeForms::racafeInfoItem("Precio negociado", if (!length(precio)) "No disponible" else
+        paste(paste0("$", formatC(precio, format = "f", digits = 2, big.mark = ","), " / kg"), collapse = " · "))))
+}
+
 TrazabilidadPedidoUI <- function(id) {
   ns <- shiny::NS(id)
   shiny::tagList(shiny::uiOutput(ns("encabezado")), bs4Dash::tabsetPanel(id = ns("pedido_tab"),
@@ -97,26 +148,7 @@ TrazabilidadPedido <- function(id, maestro, pedido) {
     output$encabezado <- .crm_render_ui({
       x <- datos()$datos
       shiny::validate(shiny::need(nrow(x) > 0L, "No hay un pedido identificado dentro del alcance autorizado."))
-      shiny::tagList(shiny::tags$div(class = "crm-identidad-badges",
-        racafeForms::racafeStatusBadge("1 VENTA / PEDIDO", "neutral", size = "xs"),
-        racafeForms::racafeStatusBadge(paste(dplyr::n_distinct(x$CLPdcLin[!is.na(x$CLPdcLin)]), "LÍNEAS"),
-          "neutral", size = "xs"),
-        racafeForms::racafeStatusBadge(paste(dplyr::n_distinct(x$CLLotCod[!is.na(x$CLLotCod) & x$CLLotCod != 0]),
-          "LOTES"), "neutral", size = "xs")),
-      racafeForms::racafeInfoGrid(racafeForms::racafeInfoItem("Pedido", .crm_id_texto(pedido())),
-        racafeForms::racafeInfoItem("Cliente", paste(unique(x$PerRazSoc), collapse = " | ")),
-        racafeForms::racafeInfoItem("Línea de negocio", paste(unique(x$CLLinNegNo), collapse = " | ")),
-        racafeForms::racafeInfoItem("Creación", paste(unique(as.Date(x$FechaCreacionPedido)), collapse = " | ")),
-        racafeForms::racafeInfoItem("Fecha estimada", paste(unique(as.Date(.gc_columna(x,
-          c("FechaEstimadaPedido", "PdcFecEst")))), collapse = " | ")),
-        racafeForms::racafeInfoItem("Precio negociado · COP/kg", {
-          precio <- .gc_columna(x, "PrecioNegociadoKg", NA_real_)
-          if (all(is.na(precio))) "No disponible" else paste0("$", paste(unique(stats::na.omit(precio)),
-            collapse = " | "))
-        }),
-        racafeForms::racafeInfoItem("Estado", paste(unique(x$EstadoFinanciero), collapse = " | ")),
-        racafeForms::racafeInfoItem("Estado operativo", paste(unique(.gc_columna(x, "EstadoPedido")),
-          collapse = " | "))))
+      .tz_encabezado(x, pedido(), datos()$indicadores)
     })
     .gc_tarjetas_server(.TZ_CAJAS, shiny::reactive(datos()$indicadores),
       c(stats::setNames(rep(list("numero"), 7L), c("solicitados", "asignados", "producidos", "despachados",
@@ -145,8 +177,10 @@ TrazabilidadPedido <- function(id, maestro, pedido) {
     .crm_vancouver_server("lineas", lineas, col_labels = c(CLPdcCod = "Código de pedido",
       CLPdcLin = "Línea del pedido", MarcaPedidoCod = "Código de marca", MarcaPedido = "Marca solicitada",
       NombreComercialPedido = "Nombre comercial solicitado", FechaEstimadaPedido = "Fecha estimada",
-      CantidadPedidoOrigen = "Cantidad solicitada (unidad original)", SacosPedido70Linea = "Sacos solicitados (70 kg)"))
-    .crm_vancouver_server("lotes", lotes)
+      CantidadPedidoOrigen = "Cantidad solicitada (unidad original)",
+      SacosPedido70Linea = "Sacos solicitados (70 kg)"), enlaces_pedido = FALSE)
+    .crm_vancouver_server("lotes", lotes, enlaces_pedido = FALSE,
+      subtitulo = shiny::reactive(if (!nrow(lotes())) "Sin registros de lotes disponibles." else NULL))
     .crm_vancouver_server("margen", shiny::reactive({
       shiny::req(input$pedido_tab == "Margen")
       x <- .crm_capa_ejecucion(contenido()$datos)
@@ -155,11 +189,12 @@ TrazabilidadPedido <- function(id, maestro, pedido) {
         MargenFinanciero = .com_suma(MetricaMargenContable),
         MargenProvisional = .com_suma(MetricaMargenAbiertoEstimado),
         MargenEstimado = .com_suma(MetricaMargenProyectado), .groups = "drop")
-    }))
+    }), enlaces_pedido = FALSE)
     .crm_vancouver_server("facturas",
       shiny::reactive({
         shiny::req(input$pedido_tab == "Facturación")
         x <- contenido()$facturas
+        shiny::validate(shiny::need(nrow(x) > 0L, "Sin información de facturación disponible."))
         shiny::validate(shiny::need(all(c("PrefijoFactura", "SacosFact70", "EsValida") %in% names(x)),
           "Actualice el ETL para consultar las facturas individuales con sus cantidades y claves documentales."))
         x
@@ -168,9 +203,10 @@ TrazabilidadPedido <- function(id, maestro, pedido) {
         NumeroFactura = "Número de factura", PrefijoFactura = "Prefijo",
         CantidadOriginal = "Cantidad facturada original",
         SacosFact70 = "Sacos facturados (70 kg)", EsValida = "Factura válida", ClaveRepetida = "Clave por revisar",
-        MargenDocumento = "Margen documental (COP)"))
+        MargenDocumento = "Margen documental (COP)"), enlaces_pedido = FALSE)
     .crm_vancouver_server("conciliacion",
-      shiny::reactive({ shiny::req(input$pedido_tab == "Conciliación"); contenido()$conciliacion }))
+      shiny::reactive({ shiny::req(input$pedido_tab == "Conciliación"); contenido()$conciliacion }),
+      enlaces_pedido = FALSE)
     output$cronologia <- .crm_render_ui({
       shiny::req(input$pedido_tab == "Cronología")
       d <- contenido()$eventos

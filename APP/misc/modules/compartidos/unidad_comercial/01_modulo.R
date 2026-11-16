@@ -23,10 +23,12 @@
       sin_asesor <- is.na(asesor) || !nzchar(asesor) || asesor %in% c("SIN ASESOR", "SIN DATO")
       contacto <- identical(as.character(campo(x, "EtapaVigente")), "CONTACTO") && sin_asesor
       persona <- if (contacto) campo(x, "UsuarioCrea") else if (sin_asesor) "No disponible" else asesor
-      campos <- c(SacosMes = paste("Sacos ·", mes), MargenMes = paste("Margen ·", mes),
-        SacosPeriodo = paste("Sacos ·", periodo), MargenPeriodo = paste("Margen ·", periodo),
-        PresupuestoSacos = "Presupuesto acumulado · sacos", PresupuestoMargen = "Presupuesto acumulado · margen",
-        CumplimientoSacos = "Cumplimiento · sacos", CumplimientoMargen = "Cumplimiento · margen")
+      campos <- c(SacosMes = paste("Sacos ·", mes), SacosPeriodo = paste("Sacos ·", periodo),
+        PresupuestoSacos = paste("Presupuesto sacos ·", periodo),
+        CumplimientoSacos = paste("Ejecución sacos ·", periodo),
+        MargenMes = paste("Margen ·", mes), MargenPeriodo = paste("Margen ·", periodo),
+        PresupuestoMargen = paste("Presupuesto margen ·", periodo),
+        CumplimientoMargen = paste("Ejecución margen ·", periodo))
       valor <- function(n) {
         v <- campo(x, n)
         if (is.na(v)) return("No disponible")
@@ -47,7 +49,8 @@
         })),
         shiny::tags$div(class = "crm-unidad-fechas",
           shiny::tags$span(paste("Primera factura:", fecha(campo(x, "PrimeraFacturacion")))),
-          shiny::tags$span(paste("Última factura:", fecha(campo(x, "UltimaFacturacion")))),
+          shiny::tags$span(paste("Última factura:", fecha(campo(x, "UltimaFacturacion"))))),
+        shiny::tags$div(class = "crm-unidad-referencia",
           shiny::tags$small(paste("Estado oficial:", fecha(campo(x, "FechaEstadoOficial")),
             "· Presupuesto hasta", fecha(campo(x, "CortePresupuesto"))))))
     }))

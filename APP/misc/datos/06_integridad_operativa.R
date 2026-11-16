@@ -12,7 +12,7 @@
   x$EsEstimado <- estado == "PROYECTADO"
   x$FechaAnalitica <- as.Date(campo("FecFact", as.Date(NA)))
   x$FechaAnalitica[x$EsEstimado %in% TRUE] <- as.Date(if ("FechaEstimadaPedido" %in% names(x)) {
-    x$FechaEstimadaPedido
+    dplyr::coalesce(as.Date(x$FechaEstimadaPedido), as.Date(campo("PdcFecEst", as.Date(NA))))
   } else
     campo("PdcFecEst", as.Date(NA)))[x$EsEstimado %in% TRUE]
   x$SacosAnaliticos70 <- ifelse(x$EsEstimado, campo("SacosProyectados"), campo("SacosFact"))

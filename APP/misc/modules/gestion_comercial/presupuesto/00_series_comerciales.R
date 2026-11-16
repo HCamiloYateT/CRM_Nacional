@@ -29,7 +29,7 @@
       })
     }, character(1)), collapse = "<br>")
   }, character(1))
-  observado <- sumar(valor[x$FechaAnalitica <= corte])
+  observado <- sumar(valor[x$FechaAnalitica <= corte & x$EstadoFinanciero != "PROYECTADO"])
   fin_mes <- c(meses[-1L], as.Date(sprintf("%d-01-01", anho + 1L))) - 1L
   dias_mes <- as.numeric(fin_mes - meses + 1L)
   fraccion <- pmin(1, pmax(0, as.numeric(fin_mes - corte) / dias_mes))
@@ -78,4 +78,74 @@
   }
   plotly::layout(g, hovermode = "x unified", yaxis = list(title = if (dinero) "Margen · COP" else "Sacos de 70 kg"),
     meta = list(crm_leyenda = TRUE))
+}
+
+# Conciliación por hecho financiero: agregar antes del cruce evita productos cartesianos ----
+.ppto_conciliar_registros <- function(pyg, exportacion, modulo, filtros = NULL) {
+  claves <- c("FecMes", "LinNegCod", "CLCliNit", "CLPdcCod", "CLLotCod")
+  campos <- c(Sacos = "SacosFact", Margen = "Margen")
+  sumar <- function(v) if (anyNA(v)) NA_real_ else sum(v)
+  normalizar <- function(d) {
+    d$FecMes <- as.Date(d$FecMes)
+    d$LinNegCod <- ifelse(as.numeric(d$LinNegCod) == 20000, 21000, as.numeric(d$LinNegCod))
+    for (k in setdiff(claves, c("FecMes", "LinNegCod"))) {
+      if (!k %in% names(d)) d[[k]] <- NA_character_
+      d[[k]] <- .crm_id_texto(d[[k]])
+    }
+    d
+  }
+  resumir <- function(d, sufijo) {
+    z <- normalizar(d) %>% dplyr::group_by(dplyr::across(dplyr::all_of(claves))) %>%
+      dplyr::summarise(Sacos = sumar(SacosFact), Margen = sumar(Margen), Registros = dplyr::n(), .groups = "drop")
+    names(z)[names(z) %in% c("Sacos", "Margen", "Registros")] <-
+      paste0(c("Sacos", "Margen", "Registros"), sufijo)
+    z
+  }
+  base <- normalizar(exportacion)
+  resultado <- dplyr::full_join(resumir(pyg, "PYG"), resumir(modulo, "Modulo"), by = claves,
+    relationship = "one-to-one")
+  causas <- base
+  causas$CausaFiltro <- rep("", nrow(base))
+  dimensiones <- c(linneg = "CLLinNegNo", asesor = "Asesor", segmento = "Segmento",
+    categoria = "Categoria", producto = "Producto")
+  for (nombre in names(dimensiones)) {
+    campo <- dimensiones[[nombre]]; seleccion <- filtros[[nombre]]
+    if (is.null(seleccion) || !campo %in% names(base)) next
+    fuera <- which(!is.na(base[[campo]]) & !as.character(base[[campo]]) %in% seleccion)
+    causas$CausaFiltro[fuera] <- paste(causas$CausaFiltro[fuera],
+      paste0("Filtro ", campo, ": ", base[[campo]][fuera]), sep = " · ")
+  }
+  for (campo in intersect(c("Excluir", "ProdExcluir"), names(base))) {
+    fuera <- which(base[[campo]] %in% "SI")
+    causas$CausaFiltro[fuera] <- paste(causas$CausaFiltro[fuera], paste0(campo, " = SI"), sep = " · ")
+  }
+  if (length(filtros$fecha) == 2L) {
+    intervalo <- as.Date(format(as.Date(filtros$fecha), "%Y-%m-01"))
+    fuera <- which(base$FecMes < intervalo[1] | base$FecMes > intervalo[2])
+    causas$CausaFiltro[fuera] <- paste(causas$CausaFiltro[fuera], "Fuera del periodo", sep = " · ")
+  }
+  causas$CausaFiltro <- sub("^ · ", "", causas$CausaFiltro)
+  causas <- causas %>% dplyr::group_by(dplyr::across(dplyr::all_of(claves))) %>%
+    dplyr::summarise(CausaFiltro = paste(unique(CausaFiltro[nzchar(CausaFiltro)]), collapse = " · "),
+      EnExportacion = TRUE, .groups = "drop")
+  resultado <- dplyr::left_join(resultado, causas, by = claves, relationship = "one-to-one")
+  resultado$Presencia <- ifelse(is.na(resultado$RegistrosPYG), "SOLO MÓDULO",
+    ifelse(is.na(resultado$RegistrosModulo), "SOLO PYG", "AMBAS FUENTES"))
+  for (m in names(campos)) {
+    a <- resultado[[paste0(m, "PYG")]]; b <- resultado[[paste0(m, "Modulo")]]
+    a[is.na(resultado$RegistrosPYG)] <- 0
+    b[is.na(resultado$RegistrosModulo)] <- 0
+    resultado[[paste0("Diferencia", m)]] <- b - a
+  }
+  resultado$Causa <- dplyr::case_when(
+    resultado$Presencia == "SOLO PYG" & !is.na(resultado$CausaFiltro) & nzchar(resultado$CausaFiltro) ~
+      resultado$CausaFiltro,
+    resultado$Presencia == "SOLO PYG" & is.na(resultado$EnExportacion) ~
+      "Ausente en exportación comercial; revisar homologación y claves de origen",
+    resultado$Presencia == "SOLO PYG" ~ "Excluido en preparación del módulo; revisar dimensiones disponibles",
+    resultado$Presencia == "SOLO MÓDULO" ~ "Sin coincidencia PyG en mes, línea, NIT, pedido y lote",
+    is.na(resultado$DiferenciaSacos) | is.na(resultado$DiferenciaMargen) ~ "Importe desconocido en alguna fuente",
+    resultado$DiferenciaSacos != 0 | resultado$DiferenciaMargen != 0 ~ "Importes distintos para la misma clave",
+    TRUE ~ "Conciliado")
+  resultado %>% dplyr::select(-CausaFiltro, -EnExportacion) %>% dplyr::arrange(FecMes, LinNegCod, CLPdcCod, CLLotCod)
 }

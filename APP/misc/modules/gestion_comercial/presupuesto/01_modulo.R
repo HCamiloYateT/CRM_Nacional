@@ -131,6 +131,12 @@ PresupuestoUI <- function(id) {
              )
       )
     ),
+    .crm_disclosure("Conciliación de ejecución cerrada frente al PyG",
+      .crm_nota(c("Se compara mes, línea, NIT de facturación, pedido y lote; las filas se agregan antes del cruce.",
+        "La proyección y la facturación abierta no se comparan contra cierres financieros.",
+        "Una ausencia aporta cero solo a la resta entre fuentes; un importe desconocido permanece sin valor.",
+        "Consulte la causa y las claves de cada diferencia; no se ocultan diferencias por redondeo.")),
+      .crm_tabla_ui(ns("conciliacion_registros"))),
     # Graficos de serie temporal sacos y margen
     fluidRow(
       column(6,
@@ -707,6 +713,9 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       fuente %>%
         transmute(FecMes = as.Date(FecMes),
                   LinNegCod = ifelse(as.numeric(LINNEG) == 20000, 21000, as.numeric(LINNEG)),
+                  CLCliNit = .gc_columna(fuente, "CLIENTE", NA_real_),
+                  CLPdcCod = .gc_columna(fuente, "PED_SISTEMA", NA_real_),
+                  CLLotCod = .gc_columna(fuente, "LOTE", NA_real_),
                   Sacos70 = if (exists(".convertir_numero_margen", mode = "function")) {
                     .convertir_numero_margen(SACOS70)
                   } else suppressWarnings(as.numeric(SACOS70)),
@@ -907,7 +916,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
                PerRazSoc = coalesce(na_if(as.character(PerRazSoc), "SIN DATO"), as.character(RazonCRM)),
                across(c(Depto, Mpio, PerRazSoc, Segmento, Asesor),
                       ~ coalesce(na_if(as.character(.x), ""), "SIN DATO"))) %>%
-        select(-DeptoCRM, -MpioCRM, -RazonCRM)
+        select(-DeptoCRM, -MpioCRM, -RazonCRM) %>%
+        filter(!Excluir %in% "SI", !ProdExcluir %in% "SI")
       f <- filtros_r()
       if (!is.null(f)) {
         datos <- .aplicar_seleccion(datos, "CLLinNegNo", f$linneg)
@@ -1398,45 +1408,24 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       cat("\n================================================\n")
     }, ignoreInit = FALSE)
     
-    # Auditoría ejecución financiera ----
-    observeEvent(list(datos_centrales_r(), filtros_r()), {
-      fuente <- pyg_referencia_r()
-      cierre <- cierre_pyg_r()
-      if (is.null(fuente) || is.na(cierre)) return(invisible(NULL))
-      f <- filtros_r()
-      base <- datos_centrales_r() %>%
-        filter(lubridate::year(FecMes) == periodo_r(), FecMes <= cierre) %>%
-        group_by(FecMes, LinNegCod) %>%
-        summarise(SacosModulo = sum(SacosFact, na.rm = TRUE),
-                  MargenModulo = sum(Margen, na.rm = TRUE), .groups = "drop")
-      referencia <- fuente %>%
-        filter(lubridate::year(FecMes) == periodo_r(), FecMes <= cierre)
-      if (!is.null(f) && length(f$linneg) > 0L) {
-        codigos <- ifelse("CONVENCIONALES" %in% f$linneg, 10000, numeric(0))
-        if (any(f$linneg %in% c("A LA MEDIDA", "DIFERENCIADOS"))) codigos <- c(codigos, 21000)
-        referencia <- referencia %>% filter(LinNegCod %in% codigos)
-      }
-      referencia <- referencia %>%
-        group_by(FecMes, LinNegCod) %>%
-        summarise(SacosPYG = sum(Sacos70, na.rm = TRUE),
-                  MargenPYG = sum(MargenFCC, na.rm = TRUE), .groups = "drop")
-      control <- full_join(referencia, base, by = c("FecMes", "LinNegCod")) %>%
-        mutate(across(c(SacosPYG, MargenPYG, SacosModulo, MargenModulo), ~ coalesce(.x, 0)),
-               DifSacos = SacosModulo - SacosPYG,
-               DifMargen = MargenModulo - MargenPYG) %>%
-        arrange(LinNegCod, FecMes)
-      cat("\n========== CONCILIACIÓN MENSUAL DE EJECUCIÓN Y PyG ==========\n")
-      print(control, n = Inf, width = Inf)
-      cat("\nTotales por línea:\n")
-      print(control %>% group_by(LinNegCod) %>%
-              summarise(across(c(SacosPYG, MargenPYG, SacosModulo, MargenModulo,
-                                 DifSacos, DifMargen), sum), .groups = "drop"), n = Inf)
-      if (any(abs(control$DifSacos) > 0.1 | abs(control$DifMargen) > 1)) {
-        cat("IMPORTANTE: Hay diferencias por filtros de población o dimensiones.\n")
-      }
-      cat("============================================================\n")
-    }, ignoreInit = FALSE)
-    
+    # Conciliación explicable del mismo universo cerrado por claves originales ----
+    conciliacion_registros_r <- reactive({
+      fuente <- pyg_referencia_r(); cierre <- cierre_pyg_r()
+      req(!is.null(fuente), !is.na(cierre))
+      periodo <- function(d) d %>% filter(lubridate::year(FecMes) == periodo_r(), FecMes <= cierre)
+      origen <- fuente %>% periodo() %>% rename(SacosFact = Sacos70, Margen = MargenFCC)
+      exportacion <- .resolver_datos(dat) %>% periodo()
+      if ("EstadoFinanciero" %in% names(exportacion)) exportacion <-
+        exportacion %>% filter(EstadoFinanciero == "CERRADO")
+      modulo <- datos_centrales_r() %>% periodo()
+      if ("EstadoFinanciero" %in% names(modulo)) modulo <- modulo %>% filter(EstadoFinanciero == "CERRADO")
+      .ppto_conciliar_registros(origen, exportacion, modulo, filtros_r())
+    })
+    .crm_vancouver_server("conciliacion_registros", conciliacion_registros_r,
+      col_labels = c(CLPdcCod = "Pedido", CLLotCod = "Lote", CLCliNit = "NIT de facturación",
+        DiferenciaSacos = "Diferencia de sacos (módulo − PyG)",
+        DiferenciaMargen = "Diferencia de margen (módulo − PyG)", Causa = "Explicación por registro"))
+
     # Auditoría de meses disponibles ----
     observeEvent(list(datos_centrales_r(), filtros_r()), {
       datos_originales <- .resolver_datos(dat) %>%
@@ -1953,15 +1942,12 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       
       plot_ly(
         df, x = ~.cx, y = ~.cy,
-        text       = ~gsub("\n", "<br>", stringr::str_wrap(dim, width = 18)),
         customdata = ~tooltip,
-        type = "scatter", mode = "markers+text",
+        type = "scatter", mode = "markers",
         marker = list(
           color = ~color_punto, size = 14, opacity = 0.90,
           line  = list(color = "white", width = 1.5)
         ),
-        textfont      = list(size = 8, color = "#374151"),
-        textposition  = "top center",
         hovertemplate = "%{customdata}<extra></extra>"
       ) %>%
         add_segments(
