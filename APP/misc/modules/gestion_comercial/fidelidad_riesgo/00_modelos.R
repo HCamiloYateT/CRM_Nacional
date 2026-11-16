@@ -85,3 +85,41 @@
       RMSE = sqrt(mean((z$ComprasEsperadas - z$Observadas)^2)), Estado = "Validación retrospectiva de 90 días")
   }, error = function(e) data.frame(Estado = paste("Validación no disponible:", conditionMessage(e))))
 }
+
+# Densidad condicional y diagnóstico de asimetría sin alterar las métricas RFM ----
+.fid_grafico_distribucion <- function(x, variable) {
+  v <- x[[variable]]
+  v <- v[is.finite(v)]
+  shiny::validate(shiny::need(length(v) > 1L, "No hay observaciones suficientes para estudiar la distribución."))
+  positivos <- abs(v[v != 0])
+  transformar <- length(positivos) > 1L && max(positivos) > 20 * stats::median(positivos)
+  escalar <- function(v) if (transformar) sign(v) * log10(1 + abs(v)) else v
+  inversa <- function(z) if (transformar) sign(z) * (10^abs(z) - 1) else z
+  titulo <- c(RecenciaDias = "Días sin compra", Compras = "Compras observadas", Margen = "Margen FCC · COP")[[variable]]
+  p <- plotly::plot_ly(height = 200)
+  n <- 0L
+  for (segmento in sort(unique(x$SegmentoRFM))) {
+    valor <- x[[variable]][x$SegmentoRFM == segmento]
+    valor <- valor[is.finite(valor) & valor != 0]
+    if (length(unique(valor)) < 2L) next
+    d <- stats::density(escalar(valor), n = 256)
+    if (all(v >= 0)) d <- list(x = d$x[d$x >= 0], y = d$y[d$x >= 0])
+    n <- n + 1L
+    p <- plotly::add_trace(p, x = d$x, y = d$y, name = segmento, type = "scatter", mode = "lines",
+      line = list(color = unname(.crm_colores("rfm", segmento))),
+      customdata = lapply(.crm_fmt_hover(inversa(d$x), dinero = variable == "Margen"), function(v) list(v)),
+      hovertemplate = paste0("<b>", htmltools::htmlEscape(segmento), "</b><br>", titulo,
+        ": %{customdata[0]}<br>Densidad (sin ceros): %{y:.4f}<extra></extra>"))
+  }
+  shiny::validate(shiny::need(n > 0L, paste("No hay dispersión suficiente dentro de los segmentos.",
+    "Ceros:", sum(v == 0), "de", length(v))))
+  marcas <- pretty(range(escalar(v)), 5L)
+  nota <- paste0(if (transformar) "Escala log10(1+|valor|), con signo. " else "Escala original. ",
+    "Ceros: ", sum(v == 0), "/", length(v), " (", round(mean(v == 0) * 100, 1), "%).")
+  plotly::layout(p, title = list(text = paste0(titulo, "<br><sup>", nota, "</sup>"), font = list(size = 12)),
+    showlegend = identical(variable, "Margen"),
+    margin = list(l = 55, r = 10, t = 44, b = if (variable == "Margen") 75 else 42),
+    xaxis = list(title = "",
+      tickmode = "array", tickvals = marcas, ticktext = .crm_fmt_hover(inversa(marcas), dinero = variable == "Margen", abreviado = TRUE)),
+    yaxis = list(title = "Densidad sin ceros"), meta = list(crm_altura_compacta = TRUE, crm_eje_transformado = TRUE))
+}

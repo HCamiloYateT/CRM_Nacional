@@ -963,19 +963,10 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       p %>% arrange(Mes)
     })
     .graficar_capas <- function(medida) {
-      x <- capas_mes(); p <- presupuesto_mes()
-      shiny::validate(shiny::need(nrow(x) > 0L, "No hay datos para construir las capas mensuales."))
-      x <- x %>% arrange(Mes) %>% group_by(EstadoEjecucion) %>%
-        mutate(Valor = if (isTRUE(input$vista_acumulada)) cumsum(.data[[medida]]) else .data[[medida]]) %>% ungroup()
-      p$Valor <- if (medida == "Sacos") p$PptoSacos else p$PptoMargen
-      if (isTRUE(input$vista_acumulada)) p$Valor <- cumsum(p$Valor)
-      g <- plotly::plot_ly(x, x = ~Mes, y = ~Valor, color = ~EstadoEjecucion, type = "scatter", mode = "lines+markers",
-        colors = c("Cerrado financiero" = "#7A2028", "Facturado sin cierre" = "#495057", "Estimado comercial" = "#C8A77D"),
-        hovertemplate = "%{x|%Y-%m}<br>%{y:,.2f}<extra>%{fullData.name}</extra>")
-      g %>% plotly::add_trace(data = p, x = ~Mes, y = ~Valor, name = "Presupuesto", inherit = FALSE,
-        type = "scatter", mode = "lines+markers", line = list(color = "#343A40", dash = "dash"),
-        hovertemplate = "%{x|%Y-%m}<br>Presupuesto: %{y:,.2f}<extra></extra>") %>%
-        plotly::layout(yaxis = list(title = if (medida == "Sacos") "Sacos de 70 kg" else "Margen · COP"))
+      fuente <- if (is.null(maestro)) dat() else maestro()
+      fuente <- .gc_filtrar_dimensiones(fuente, filtros_r())
+      .ppto_grafico_comercial(.ppto_series_comerciales(fuente, presupuesto_mes(),
+        as.Date(filtros_r()$fecha[[2]]), medida, isTRUE(input$vista_acumulada)), medida)
     }
     output$capas_sacos <- .crm_render_plotly(.graficar_capas("Sacos"))
     output$capas_margen <- .crm_render_plotly(.graficar_capas("Margen"))
@@ -1106,12 +1097,10 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     
     # Notas de proyección ----
     nota_serie_r <- function(real, ppto) {
-      dg <- datos_grafico_r()
-      cal <- calendario_r()
-      total <- sum(dg[[ppto]], na.rm = TRUE)
-      ejecutado <- sum(dg[[real]][dg$Mes_Num <= cal$mes_actual], na.rm = TRUE)
-      meta <- .meta_mensual_requerida(total, ejecutado, cal$meses_rest)
-      .nota_meta(meta$negativo, meta$ajustado)
+      fuente <- .gc_filtrar_dimensiones(if (is.null(maestro)) dat() else maestro(), filtros_r())
+      x <- .ppto_series_comerciales(fuente, presupuesto_mes(), as.Date(filtros_r()$fecha[[2]]),
+        if (grepl("Margen", real)) "Margen" else "Sacos")
+      .nota_meta(attr(x, "saldo_requerido") < 0, attr(x, "minimo_aplicado"))
     }
     output$nota_serie_sacos <- .crm_render_ui({
       .nota_presupuesto_ui(nota_serie_r("Sacos_Real", "Sacos_Ppto"))
@@ -1758,11 +1747,14 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           c(paste0("Año anterior: ", periodo_r() - 1L), paste0("Mensual: ", periodo_r()),
             paste0("Acumulado: ", periodo_r())), title = "Convenciones",
           swatches = c("#F0FDF4", "#F8FAFC", "#EFF6FF"))),
-        .crm_nota_metodologica(c("Las series separan cierre financiero, factura sin cierre y saldo comercial estimado.",
+        .crm_disclosure("Metodología de ejecución y ritmo requerido", .crm_nota(c(
+          "Ejecución integra cierre, factura abierta y estimación residual del ETL en una sola serie.",
           "Un pedido parcial puede aparecer en las tres capas por cantidades diferentes; no se repite la cantidad facturada.",
           "El horizonte incluye las fechas futuras del pedido. Una estimación vencida conserva su fecha original.",
           "El margen de factura abierta y el comercial son provisionales. Si no se pueden calcular, permanecen vacíos.",
-          "Los KPI de cierre usan exclusivamente meses cerrados; los meses pendientes incluyen el mes vigente.")))
+          "Ritmo: saldo anual por cumplir distribuido según los pesos presupuestales de los meses restantes.",
+          "En el mes del corte solo se ponderan los días que faltan; el presupuesto restante es el mínimo.",
+          "La trayectoria acumulada parte de la ejecución al corte. No modifica la ejecución ni la tabla."))))
     })
 
     ## Titulo dinamico sub-card proyeccion ----
@@ -1906,7 +1898,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     
     ## Footer metodologia ----
     output$footer_metodologia <- .crm_render_ui({
-      racafeForms::racafeNoticeList(
+      .crm_disclosure("Metodología de las tablas", racafeForms::racafeNoticeList(
         c("Cumplimiento: ejecutado / presupuesto.",
           "Brecha: ejecutado − presupuesto acumulado al mes.",
           "Proyección de cierre: ejecutado acumulado + ritmo ponderado de los 3 últimos meses × meses restantes.",
@@ -1914,7 +1906,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           "Meta mensual: max(presupuesto anual / 12, (presupuesto anual − ejecutado) / meses restantes, 0).",
           "TOTAL suma las dimensiones; los indicadores se calculan sobre esa fila, sin promediar porcentajes.",
           "Indicadores por dimensión: meses cerrados. Presupuesto: Industria Nacional."), title = "Metodología de las tablas",
-          font_size = 11, text_color = "#495057", accent_color = "#DA291C")
+          font_size = 11, text_color = "#495057", accent_color = "#DA291C"))
     })
 
     ## Grafico cuadrantes: proyeccion de cierre vs cumplimiento acumulado ----

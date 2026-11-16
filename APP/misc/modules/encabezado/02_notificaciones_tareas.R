@@ -173,6 +173,8 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
     # Reactivos ----
     revision_rv <- shiny::reactiveVal(0L)
     seleccionado_rv <- shiny::reactiveVal(NULL)
+    editor_rv <- shiny::reactiveVal(NULL)
+    revision_editor <- 0L
     guardando_rv <- shiny::reactiveVal(FALSE)
     registro_pendiente_rv <- shiny::reactiveVal(NULL)
     
@@ -415,9 +417,13 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
       if (accion == "cumplir") shiny::req(identical(as.character(fila$Tipo[[1]]), "list"))
       seleccionado_rv(fila)
       if (accion == "editar") {
+        revision_editor <<- revision_editor + 1L
+        token <- paste0("edicion_", revision_editor)
+        editor_rv(list(id = as.character(fila$cons[[1]]), titulo = paste0(token, "_titulo"),
+          descripcion = paste0(token, "_descripcion")))
         shiny::showModal(racafeForms::racafeModal(title = "Editar nota o tarea", size = "subventana1",
-          racafeForms::racafeInputText("editar_titulo", "Título", value = as.character(fila$titulo[[1]]), ns = ns),
-          racafeForms::racafeInputTextArea("editar_descripcion", "Descripción", rows = 4,
+          racafeForms::racafeInputText(paste0(token, "_titulo"), "Título", value = as.character(fila$titulo[[1]]), ns = ns),
+          racafeForms::racafeInputTextArea(paste0(token, "_descripcion"), "Descripción", rows = 4,
             value = as.character(fila$Descripcion[[1]] %||% ""), ns = ns),
           racafeForms::racafeButton("solicitar_edicion", "Guardar", icon = "floppy-disk", ns = ns),
           footer = racafeForms::racafeModalFooter(right = shiny::modalButton("Cerrar"))))
@@ -435,19 +441,25 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
     shiny::observeEvent(input$solicitar_edicion, {
       fila <- seleccionado_rv()
       shiny::req(fila)
-      if (is.null(input$editar_titulo) || !nzchar(trimws(input$editar_titulo)) || nchar(input$editar_titulo) > 250L) {
-        shiny::showNotification("Ingrese un título de máximo 250 caracteres.", type = "warning")
+      editor <- editor_rv()
+      shiny::req(editor, identical(editor$id, as.character(fila$cons[[1]])))
+      titulo <- input[[editor$titulo]]
+      descripcion <- input[[editor$descripcion]]
+      if (length(titulo) != 1L || is.na(titulo) || !nzchar(trimws(titulo)) || nchar(titulo) > 250L ||
+          length(descripcion) != 1L || is.na(descripcion)) {
+        shiny::showNotification("Revise el título (máximo 250 caracteres) y la descripción.", type = "warning")
         return()
       }
-      registro_pendiente_rv(list(accion = "editar", cambios = list(titulo = trimws(input$editar_titulo),
-        Descripcion = input$editar_descripcion %||% "")))
+      registro_pendiente_rv(list(accion = "editar", id = editor$id,
+        cambios = list(titulo = trimws(titulo), Descripcion = descripcion)))
       racafeForms::racafeConfirm(session, "confirm_accion_tablero", title = "Guardar cambios",
-        text = input$editar_titulo, ns = ns, confirm_label = "Guardar")
+        text = titulo, ns = ns, confirm_label = "Guardar")
     })
     shiny::observeEvent(input$confirm_accion_tablero, {
       pendiente <- registro_pendiente_rv()
       registro_pendiente_rv(NULL)
       if (!isTRUE(input$confirm_accion_tablero) || !is.list(pendiente)) return()
+      if (!is.null(pendiente$id) && !identical(pendiente$id, as.character(seleccionado_rv()$cons[[1]]))) return()
       guardar(pendiente$accion, prioridad = pendiente$prioridad, cambios = pendiente$cambios)
     })
 

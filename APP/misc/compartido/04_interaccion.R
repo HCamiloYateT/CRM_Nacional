@@ -17,6 +17,7 @@
     if (is.list(x)) return(lapply(x, etiqueta))
     x
   }
+  margen_inicial_b <- figura$x$layout$margin$b %||% 0
   altura <- suppressWarnings(as.numeric(figura$x$layout$height))
   compacto <- isTRUE(figura$x$layout$meta$crm_altura_compacta)
   minimo <- if (compacto) 160 else 500
@@ -31,6 +32,7 @@
     if (is.list(titulo)) titulo <- titulo$text
     if (!length(titulo) || any(grepl("cumpl|%|porcentaje|probabili|participaci|variaci", titulo, ignore.case = TRUE)) ||
         !any(grepl("margen|precio|COP|\\$", titulo, ignore.case = TRUE))) next
+    if (isTRUE(figura$x$layout$meta$crm_eje_transformado)) next
     coordenada <- substr(eje, 1L, 1L)
     referencia <- sub("axis", "", eje, fixed = TRUE)
     trazas <- Filter(function(t) identical(t[[paste0(coordenada, "axis")]] %||% coordenada, referencia),
@@ -122,10 +124,21 @@
   nombres <- vapply(figura$x$data, function(t) if (is.null(t$name)) "" else as.character(t$name)[1], character(1))
   renglones <- max(1L, ceiling(sum(pmin(nchar(nombres) + 5L, 90L)) / 100L))
   figura$x$layout$legend <- utils::modifyList(figura$x$layout$legend %||% list(),
-    list(orientation = "h", x = 0, xanchor = "left", y = -0.23, yanchor = "top"))
+    list(orientation = "h", x = 0, xanchor = "left", y = -0.30, yanchor = "top",
+      font = list(size = 11, family = "Arial"), itemsizing = "constant", itemwidth = 30, tracegroupgap = 8))
   figura$x$layout$margin$b <- max(figura$x$layout$margin$b %||% 0, if (compacto) {
     if (identical(figura$x$layout$showlegend, FALSE)) 30 else 45 + 15 * renglones
   } else 110 + 22 * renglones)
+  tipos <- vapply(figura$x$data, function(t) t$type %||% "", character(1))
+  if (identical(figura$x$layout$showlegend, FALSE) || all(tipos == "heatmap") || !any(nzchar(nombres))) {
+    figura$x$layout$margin$b <- max(if (compacto) 35 else 55, margen_inicial_b)
+  }
+  if (length(tipos) && all(tipos %in% c("treemap", "sunburst"))) {
+    figura$x$layout$margin <- list(l = 4, r = 4, b = 4, t = 28)
+    figura$x$layout$autosize <- TRUE
+    figura$x$layout$width <- NULL
+    figura$x$layout$showlegend <- FALSE
+  }
   figura$x$layout$hoverlabel <- list(bgcolor = "#F1F3F5", font = list(color = "#343A40", size = 12))
   lineas <- vapply(figura$x$data, function(t) grepl("lines", t$mode %||% ""), logical(1))
   if (any(lineas)) figura$x$layout$hovermode <- "x unified"

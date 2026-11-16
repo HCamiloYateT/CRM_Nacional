@@ -12,10 +12,14 @@
     DiasPago = "Días hasta el pago", DiasAtraso = "Atraso al pagar (días)", DiasMoraActual = "Mora actual (días)",
     EstadoPago = "Estado de pago", DiasPagoPonderados = "Rotación (días)", DiasAnteriores = "Días año anterior",
     CambioDias = "Cambio (días)", Comparacion = "Comparación anual", ValorPagadoInferido = "Valor pagado COP",
-    Anho = "Año de factura", Periodo = "Inicio del periodo", Acumulado = "Acumulado COP", PdcCod = "Pedido")
+    Anho = "Año de factura", Periodo = "Inicio del periodo", Acumulado = "Acumulado COP", PdcCod = "Pedido", Factura = "Número de factura", Original = "Valor original (COP)", SaldoObservado = "Saldo al corte (COP)",
+    ValorOriginal = "Valor original de la cosecha (COP)", SaldoPendiente = "Saldo pendiente (COP)",
+    FacturasCohorte = "Facturas de la cosecha", FacturasObservadas = "Facturas con saldo observado",
+    Emision = "Fecha de factura", Vencimiento = "Fecha de vencimiento", Edad = "Edad (meses calendario)",
+    Vencida = "Vencida al corte")
   for (n in names(etiquetas)) specs[[n]]$name <- etiquetas[[n]]
-  for (n in c("Facturas", "Clientes", "Anho")) specs[[n]]$format <- list(digits = 0, separators = FALSE)
-  for (n in c("SaldoCOP", "Valor", "Saldo", "Acumulado", "ValorPagadoInferido")) {
+  for (n in c("Facturas", "Clientes", "Anho", "Edad", "FacturasCohorte", "FacturasObservadas")) specs[[n]]$format <- list(digits = 0, separators = FALSE)
+  for (n in c("SaldoCOP", "Valor", "Saldo", "Acumulado", "ValorPagadoInferido", "Original", "SaldoObservado", "ValorOriginal", "SaldoPendiente")) {
     specs[[n]]$format <- list(prefix = "$", digits = 0)
   }
   specs
@@ -33,8 +37,19 @@ CarteraComercialUI <- function(id) {
     .gc_tarjetas_ui(ns, c(saldo = "Saldo total · COP", vigente = "Saldo vigente · COP", vencido = "Saldo vencido · COP",
       porcentaje = "Exposición positiva vencida", mora = "Mayor mora · días", documentos = "Facturas con saldo")),
     bs4Dash::tabsetPanel(id = ns("cartera_tab"),
-    tabPanel("Cosechas de crédito", .crm_plot_output(ns("cosechas")),
-      shiny::uiOutput(ns("limite_cosechas")), .crm_tabla_ui(ns("cosechas_detalle"))),
+    tabPanel("Cosechas de crédito", racafeForms::racafeForm(variant = "plain",
+      racafeForms::racafeFormRow(columns = 4,
+        .crm_select("origen_cosecha", "Definir cosecha por", choices = c("Fecha de factura" = "Emision",
+          "Fecha de vencimiento" = "Vencimiento"), ns = ns),
+        racafeForms::racafeInputDateRange("periodo_cosecha", "Periodo de origen",
+          start = as.Date(format(Sys.Date(), "%Y-01-01")), end = Sys.Date(), ns = ns),
+        .crm_select("dimension_cosecha", "Comparar por", choices = c("Total" = "Total", "Línea" = "Linea",
+          "Segmento" = "Segmento", "Asesor" = "Asesor", "Unidad comercial" = "UnidadComercial"), ns = ns))),
+      .crm_plot_output(ns("matriz_cosechas")), .crm_plot_output(ns("cosechas")),
+      shiny::uiOutput(ns("limite_cosechas")),
+      .crm_disclosure("Valores y cobertura de las celdas", .crm_tabla_ui(ns("cosechas_celdas"))),
+      .crm_nota("Seleccione una celda o punto para consultar las facturas que explican ese valor."),
+      .crm_tabla_ui(ns("cosechas_detalle"))),
     tabPanel("Antigüedad y exposición", .crm_plot_output(ns("antiguedad")),
       .crm_tabla_ui(ns("rangos")), .crm_plot_output(ns("concentracion")), .crm_tabla_ui(ns("clientes"))),
     tabPanel("Comportamiento por línea de negocio", .crm_plot_output(ns("lineas")),
@@ -70,7 +85,38 @@ CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admi
       shiny::validate(shiny::need(is.data.frame(f), "La fuente no contiene facturas históricas."))
       .car_facturas_autorizadas(f, fuente()$cartera, catalogo(), nit_mapa)
     })
-    cosechas <- shiny::reactive(.car_cosechas(saldos(), facturas(), hasta()))
+    base_cosechas <- shiny::reactive({
+      b <- .car_base_cosechas(saldos(), facturas(), hasta())
+      c <- catalogo()
+      meta <- c %>% dplyr::mutate(Principal = .car_id(CliNitPpal), LinNegCod = as.character(LinNegCod)) %>%
+        dplyr::group_by(Principal, LinNegCod) %>% dplyr::summarise(Asesor = .gc_unico(Asesor),
+          Segmento = .gc_unico(Segmento), .groups = "drop")
+      b$documentos$Asesor <- NULL; b$documentos$Segmento <- NULL
+      b$documentos <- dplyr::left_join(b$documentos, meta, by = c("Principal", "LinNegCod"),
+        relationship = "many-to-one")
+      b
+    })
+    shiny::observeEvent(hasta(), {
+      shiny::updateDateRangeInput(session, "periodo_cosecha", start = as.Date(format(hasta(), "%Y-01-01")),
+        end = hasta(), max = hasta())
+    })
+    cosechas <- shiny::reactive({
+      shiny::req(input$cartera_tab == "Cosechas de crédito", length(input$periodo_cosecha) == 2L)
+      .car_cosechas(corte = hasta(), hasta_origen = as.Date(input$periodo_cosecha[2]),
+        origen = input$origen_cosecha %||% "Emision", dimension = input$dimension_cosecha %||% "Total",
+        desde = as.Date(input$periodo_cosecha[1]), base = base_cosechas())
+    })
+    celda_cosecha <- shiny::reactiveVal(NULL)
+    shiny::observeEvent(cosechas(), celda_cosecha(NULL), ignoreInit = TRUE)
+    for (origen_evento in session$ns(c("car_cosechas", "car_matriz"))) local({
+      origen <- origen_evento
+      shiny::observeEvent(plotly::event_data("plotly_click", source = origen), {
+        evento <- plotly::event_data("plotly_click", source = origen)
+        clave <- unlist(evento$customdata, use.names = FALSE)[1]
+        shiny::req(clave %in% cosechas()$curvas$Celda)
+        celda_cosecha(clave)
+      })
+    })
     output$fuente <- .crm_render_ui(.crm_nota(paste("Corte observado:", corte(), "· Fuente:", fuente()$origen)))
     .gc_tarjetas_server(c(saldo = "Saldo total · COP", vigente = "Saldo vigente · COP", vencido = "Saldo vencido · COP",
       porcentaje = "Exposición positiva vencida", mora = "Mayor mora · días", documentos = "Facturas con saldo"),
@@ -83,9 +129,23 @@ CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admi
           mora = if (any(conocido)) max(pmax(positivos$DiasVencido[conocido], 0)) else NA_real_,
           documentos = .car_distintos(positivos$Documento))
       }), list(saldo = "dinero", vigente = "dinero", vencido = "dinero", porcentaje = "porcentaje"))
-    output$cosechas <- .crm_render_plotly(.car_grafico_cosechas(cosechas()))
+    output$cosechas <- .crm_render_plotly(.car_grafico_cosechas(cosechas(), session$ns("car_cosechas")))
+    output$matriz_cosechas <- .crm_render_plotly(.car_matriz_cosechas(cosechas(), session$ns("car_matriz")))
     output$limite_cosechas <- .crm_render_ui(.crm_nota(c(cosechas()$limitacion, attr(facturas(), "limite_alcance"))))
-    .crm_vancouver_server("cosechas_detalle", shiny::reactive(cosechas()$observaciones))
+    tabla_celdas <- .crm_vancouver_server("cosechas_celdas", shiny::reactive(cosechas()$curvas),
+      id_col = "Celda", modo_seleccion = "fila", col_specs = .car_specs(),
+      columnas = c("Cohorte", "Grupo", "Edad", "Corte", "ValorOriginal", "SaldoPendiente", "PctSaldo",
+        "FacturasCohorte", "FacturasObservadas"))
+    shiny::observeEvent(tabla_celdas$seleccion(), {
+      seleccion <- tabla_celdas$seleccion()
+      shiny::req(seleccion$fila$Celda %in% cosechas()$curvas$Celda)
+      celda_cosecha(seleccion$fila$Celda)
+    })
+    .crm_vancouver_server("cosechas_detalle", shiny::reactive({
+      shiny::req(celda_cosecha()); .car_detalle_cosecha(cosechas(), celda_cosecha())
+    }), col_specs = .car_specs(), columnas = c("Factura", "Cohorte", "Grupo", "Edad", "Corte", "Emision",
+      "Vencimiento", "PerRazSoc", "NIT", "UnidadComercial", "Linea", "Asesor", "Segmento", "Original",
+      "SaldoObservado", "Vencida", "Nota"))
     rangos <- shiny::reactive(.car_resumen(datos(), "Rango"))
     .crm_vancouver_server("rangos", rangos, col_specs = .car_specs())
     output$antiguedad <- .crm_render_plotly(plotly::plot_ly(rangos(), x = ~Rango, y = ~SaldoCOP,

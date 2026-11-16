@@ -10,12 +10,35 @@
   if (!is.null(sesion)) sesion$userData$colores_catalogo <- list(revision = revision, datos = datos)
   datos
 }
+.CRM_PALETA_ANALITICA <- c("#DA291C", "#842029", "#A56F5B", "#B98458", "#C39A61", "#D8BE98",
+  "#788368", "#91A18B", "#476C75", "#607C88", "#737F88", "#414A52")
+.crm_tono_producto <- function(color, clave) {
+  h <- 0
+  for (v in utf8ToInt(clave)) h <- (h * 131 + v) %% 2147483647
+  base <- as.numeric(grDevices::col2rgb(color)) / 255
+  mezcla <- 0.15 + ((h %/% 2) %% 1000) / 2500
+  destino <- if (h %% 2L) rep(1, 3) else rep(0, 3)
+  grDevices::rgb(matrix(base * (1 - mezcla) + destino * mezcla, nrow = 1))
+}
 .crm_colores <- function(dimension, valores, padre = "", padre2 = "") {
   valores <- toupper(trimws(as.character(valores)))
   valores[is.na(valores) | !nzchar(valores)] <- "SIN DATO"
   padre <- rep_len(toupper(as.character(padre)), length(valores))
   padre2 <- rep_len(toupper(as.character(padre2)), length(valores))
-  paletas <- list(linneg = c(COPRODUCTOS = "#7A2028", CONVENCIONALES = "#7A2028", `10000` = "#7A2028",
+  padre[padre == "COPRODUCTOS"] <- "CONVENCIONALES"
+  padre2[padre2 == "COPRODUCTOS"] <- "CONVENCIONALES"
+  padre[padre == "DIFERENCIADOS"] <- "A LA MEDIDA"
+  if (identical(dimension, "producto")) {
+    padres <- .crm_colores("categoria", padre2, padre)
+    derivados <- vapply(seq_along(valores), function(i) {
+      if (valores[i] %in% c("SIN DATO", "SIN DATOS", "SIN PRODUCTO", "SIN CLASIFICAR", "SIN HOMOLOGAR")) return("#ADB5BD")
+      .crm_tono_producto(padres[i], paste(padre[i], padre2[i], valores[i], sep = "|"))
+    }, character(1))
+    return(stats::setNames(derivados, valores))
+  }
+  paletas <- list(prioridad = .COLORES_PRIORIDAD,
+    auxiliar = c(PRESUPUESTO = "#495057", EJECUCIÓN = "#7A2028", `RITMO REQUERIDO` = "#A56F5B",
+      `SIN CLASIFICAR` = "#ADB5BD"), linneg = c(COPRODUCTOS = "#7A2028", CONVENCIONALES = "#7A2028", `10000` = "#7A2028",
       `A LA MEDIDA` = "#9B7160", DIFERENCIADOS = "#9B7160", `21000` = "#9B7160"),
     etapa = c(CONTACTO = "#C8C8C8", LEAD = "#0073A8", PROSPECTO = "#C9A66B", CLIENTE = "#B3001B",
       DESCARTADO = "#1A1A1A"), estado = c(ACTIVO = "#6C5146", INACTIVO = "#ADB5BD", NUEVO = "#C8A77D"),
@@ -64,4 +87,12 @@
 # Variables adicionales por punto sin perder matrices durante plotly_build ----
 .crm_customdata <- function(datos, columnas) {
   lapply(seq_len(nrow(datos)), function(i) unname(as.list(datos[i, columnas, drop = FALSE])))
+}
+
+# Evitar asignaciones nuevas prácticamente indistinguibles dentro de una dimensión ----
+.crm_color_distinguible <- function(color, otros) {
+  if (!length(otros)) return(TRUE)
+  rgb <- grDevices::col2rgb(otros)
+  objetivo <- as.numeric(grDevices::col2rgb(color))
+  all(sqrt(colSums((rgb - objetivo)^2)) >= 25)
 }

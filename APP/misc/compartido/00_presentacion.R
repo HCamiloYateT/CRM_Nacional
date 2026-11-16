@@ -13,7 +13,7 @@
 .crm_estilos_ui <- function() {
   if (exists(".estilos_crm", inherits = TRUE)) return(get(".estilos_crm", inherits = TRUE))
   shiny::singleton(shiny::includeCSS(paste0("https://raw.githubusercontent.com/HCamiloYateT/Compartido/",
-    "6f118374543b072bf2f82492ff9a0f45057649c1/Styles/crm-nacional.css")))
+    "6c29066361d10ae8330df96ede83586efdc864d6/Styles/crm-nacional.css")))
 }
 
 # Notas compactas fuera de cajas y tablas ----
@@ -248,7 +248,7 @@
       if (is.na(pedido) || pedido == "0") return("—")
       js <- paste0("event.stopPropagation();Shiny.setInputValue('crm_ver_pedido',{pedido:",
         jsonlite::toJSON(pedido, auto_unbox = TRUE), ",nonce:Date.now()},{priority:'event'});")
-      shiny::tags$a(href = "#", pedido, title = "Consultar trazabilidad del pedido",
+      shiny::tags$a(href = "#", class = "crm-pedido-enlace", pedido, title = "Consultar trazabilidad del pedido",
         onclick = paste0("event.preventDefault();", js))
     }
     specs[[columna]] <<- spec

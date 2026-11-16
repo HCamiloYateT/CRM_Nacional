@@ -133,7 +133,7 @@ server <- function(input, output, session) {
     campos <- c(linneg = "CLLinNegNo", segmento = "Segmento", estado = "EstadoCliente", rfm = "SegmentoRFM", origen = "Origen")
     titulos <- c(linneg = "LÍNEA DE NEGOCIO", segmento = "SEGMENTO COMERCIAL", estado = "ESTADO OFICIAL",
       rfm = "SEGMENTO RFM", origen = "ORIGEN")
-    tagList(lapply(names(campos), function(dimension) {
+    generales <- tagList(lapply(names(campos), function(dimension) {
       valores <- sort(unique(stats::na.omit(u[[campos[[dimension]]]])))
       valores <- head(valores[nzchar(valores)], 50L)
       if (!length(valores)) return(NULL)
@@ -141,13 +141,31 @@ server <- function(input, output, session) {
         tags$span(class = "kb-scale-swatch", style = paste0("background:", .crm_colores(dimension, v)[[1]], ";")),
         .crm_label_comercial(v))), tags$hr())
     }))
+    m <- maestro_comercial()
+    jerarquia <- unique(m[intersect(c("CLLinNegNo", "Categoria", "Producto"), names(m))])
+    categorias <- if (all(c("CLLinNegNo", "Categoria") %in% names(jerarquia))) {
+      unique(jerarquia[c("CLLinNegNo", "Categoria")])
+    } else data.frame()
+    tagList(generales, if (nrow(categorias)) tags$section(class = "crm-leyenda-grupo",
+      tags$strong("CATEGORÍAS"), lapply(seq_len(nrow(categorias)), function(i) {
+        f <- categorias[i, ]
+        tags$div(tags$span(class = "kb-scale-swatch", style = paste0("background:",
+          .crm_colores("categoria", f$Categoria, f$CLLinNegNo), ";")),
+          paste(.crm_label_comercial(f$CLLinNegNo), f$Categoria, sep = " · "))
+      })), tags$section(class = "crm-leyenda-grupo", tags$strong("CONVENCIONES"),
+        lapply(c("Presupuesto", "Ejecución", "Ritmo requerido"), function(v) {
+          tags$div(tags$span(class = "kb-scale-swatch", style = paste0("background:",
+            .crm_colores("auxiliar", v), ";")), v)
+        })))
   })
 
 
   # Pedido accesible desde las tablas sin consultas adicionales al histórico ----
   pedido_consulta <- reactiveVal(NULL)
   session$userData$trazabilidad_disponible <- TRUE
+  pedido_modal <- reactiveVal(NULL)
   TrazabilidadPedido("TrazabilidadGlobal", maestro_comercial, pedido_consulta)
+  TrazabilidadPedido("TrazabilidadModal", maestro_comercial, pedido_modal)
   observe({
     req(identical(input$menu_principal, "TR_Pedido"))
     codigos <- sort(unique(.crm_id_texto(maestro_comercial()$CLPdcCod)))
@@ -165,9 +183,13 @@ server <- function(input, output, session) {
     codigo <- .crm_id_texto(input$crm_ver_pedido$pedido)
     req(length(codigo) == 1L, !is.na(codigo), codigo != "0",
       codigo %in% .crm_id_texto(maestro_comercial()$CLPdcCod))
-    pedido_consulta(codigo)
-    bs4Dash::updateTabItems(session, "menu_principal", selected = "TR_Pedido")
+    pedido_modal(codigo)
+    showModal(racafeForms::racafeModal(title = paste("Pedido", codigo), size = "ventana", easy_close = FALSE,
+      TrazabilidadPedidoUI("TrazabilidadModal"), footer = racafeForms::racafeModalFooter(
+        right = racafeForms::racafeButton("cerrar_trazabilidad", "Cerrar", variant = "secondary"))))
   })
+
+  observeEvent(input$cerrar_trazabilidad, { pedido_modal(NULL); removeModal() })
 
   # Carga diferida ----
   modulos_cargados <- reactiveValues()

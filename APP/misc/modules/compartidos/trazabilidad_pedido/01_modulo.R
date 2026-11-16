@@ -175,7 +175,7 @@ TrazabilidadPedido <- function(id, maestro, pedido) {
       shiny::req(input$pedido_tab == "Cronología")
       d <- contenido()$eventos
       d$Referencia <- paste("Pedido", d$Pedido, "· línea", d$Linea, "· lote", d$Lote)
-      racafeModulos::TimelineUI(d)
+      racafeModulos::TimelineUI(d, agrupar = TRUE)
     })
     list(datos = datos)
   })

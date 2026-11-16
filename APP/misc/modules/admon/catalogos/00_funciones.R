@@ -314,6 +314,7 @@
   colores[campos]
 }
 .admon_choices_color_local <- function(datos, catalogo, opcion, color, padre = "", padre2 = "") {
+  if (identical(catalogo, "producto")) stop("El color del producto se deriva de su categoría.", call. = FALSE)
   if (length(color) != 1L || is.na(color) || !grepl("^#[[:xdigit:]]{6}$", color)) {
     stop("El color debe tener formato hexadecimal #RRGGBB.", call. = FALSE)
   }
