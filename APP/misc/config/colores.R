@@ -37,7 +37,7 @@
     return(stats::setNames(derivados, valores))
   }
   paletas <- list(prioridad = .COLORES_PRIORIDAD,
-    auxiliar = c(PRESUPUESTO = "#495057", EJECUCIÓN = "#7A2028", `RITMO REQUERIDO` = "#A56F5B",
+    auxiliar = c(PRESUPUESTO = "#495057", EJECUCIÓN = "#DA291C", `RITMO REQUERIDO` = "#A38A33",
       `SIN CLASIFICAR` = "#ADB5BD"), linneg = c(COPRODUCTOS = "#7A2028", CONVENCIONALES = "#7A2028", `10000` = "#7A2028",
       `A LA MEDIDA` = "#9B7160", DIFERENCIADOS = "#9B7160", `21000` = "#9B7160"),
     etapa = c(CONTACTO = "#C8C8C8", LEAD = "#0073A8", PROSPECTO = "#C9A66B", CLIENTE = "#B3001B",

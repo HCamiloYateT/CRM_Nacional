@@ -39,13 +39,13 @@ sys.source("APP/misc/datos/06_integridad_operativa.R", envir = environment())
                    CLMCCod AS MCCod, CLMCNom, CLMrcCod AS MrcCod, CLMrcNom
              FROM  EXPCUALO
              WHERE CiaCod = 10
-               AND (CLLinNegCo = 21000 OR
+               AND (CLLinNegCo IN (20000, 21000) OR
                         (CLLinNegCo = 10000
                            AND CLLinProCo IN (90030, 90040, 40050, 40100, 90025, 40150, 40200, 40010, 90035, 40250)
                         )
                     )
                AND  CLCliNit <> 32
-               AND  CLLinNegCo IN (10000, 21000)
+               AND  CLLinNegCo IN (10000, 20000, 21000)
                AND  CLLotCan > 0")
 }
 .lotes_activos_sql <- function(anho_corte) {
@@ -66,13 +66,13 @@ sys.source("APP/misc/datos/06_integridad_operativa.R", envir = environment())
               CLMCCod AS MCCod, CLMCNom, CLMrcCod AS MrcCod, CLMrcNom
        FROM   EXPCUALO
        WHERE  CiaCod = 10
-         AND  (CLLinNegCo = 21000 OR
+         AND  (CLLinNegCo IN (20000, 21000) OR
                         (CLLinNegCo = 10000
                            AND CLLinProCo IN (90030, 90040, 40050, 40100, 90025, 40150, 40200, 40010, 90035, 40250)
                         )
               )
          AND  CLCliNit <> 32
-         AND  CLLinNegCo IN (10000, 21000)
+         AND  CLLinNegCo IN (10000, 20000, 21000)
          AND  CLLotCan > 0
          AND  YEAR(CONVERT(date, CLLotFec, 23)) >= %d",
       anho_corte
@@ -83,6 +83,11 @@ sys.source("APP/misc/datos/06_integridad_operativa.R", envir = environment())
   if (is.null(datos_previos) || nrow(datos_previos) == 0L) {
     message("Sin cache de lotes: ejecutando carga completa...")
     return(.lotes_full_sql())
+  }
+  if (!identical(attr(datos_previos, "crm_lineas_operativas"), c(10000, 20000, 21000))) {
+    message("Actualizando cobertura del caché para incluir la línea original 20000...")
+    completos <- .lotes_full_sql()
+    return(bind_rows(datos_previos %>% anti_join(completos, by = "CLLotCod"), completos))
   }
   anho_corte    <- lubridate::year(Sys.Date()) - 1L
   lotes_activos <- .lotes_activos_sql(anho_corte)
@@ -99,12 +104,15 @@ sys.source("APP/misc/datos/06_integridad_operativa.R", envir = environment())
     "syscafe",
     query = "SELECT F1.FcnLot AS CLLotCod,
                     F2.FcnFec AS FecFact,
-                    SUM(F1.FcnKilLot / 70.0) AS SacosFact
+                    SUM(CASE WHEN UM.UMeFac = 62.5 THEN F1.FcnSacLot * 62.5 / 70.0
+                             ELSE F1.FcnSacLot END) AS SacosFact
              FROM FCTFACN1 F1
              LEFT JOIN FCTFACNA F2
                ON F1.FcnNum = F2.FcnNum
               AND F1.FcnPrf = F2.FcnPrf
               AND F1.CiaCod = F2.CiaCod
+             LEFT JOIN EXPPEDID PD ON F1.PdcCod = PD.PdcCod AND F1.CiaCod = PD.CiaCod
+             LEFT JOIN NUNIMEDI UM ON PD.UMeCod = UM.UMeCod
              WHERE F1.CiaCod = 10
                AND F2.CiaCod = 10
                AND F2.FcnEtd = 'C'
@@ -143,8 +151,8 @@ sys.source("APP/misc/datos/06_integridad_operativa.R", envir = environment())
                   SacosFact = suppressWarnings(as.numeric(SacosFact))) %>%
     dplyr::filter(!is.na(CLLotCod), !is.na(FecFact), FecFact >= fecha_desde) %>%
     dplyr::group_by(CLLotCod, FecMesFact) %>%
-    dplyr::summarise(FecPrimerFact = min(FecFact, na.rm = TRUE),
-                     FecFact = max(FecFact, na.rm = TRUE),
+    dplyr::summarise(FecPrimerFact = if (length(FecFact)) min(FecFact) else as.Date(NA),
+                     FecFact = if (length(FecFact)) max(FecFact) else as.Date(NA),
                      SacosFact = sum(SacosFact, na.rm = TRUE),
                      .groups = "drop") %>%
     dplyr::mutate(Facturado = TRUE)
@@ -1045,7 +1053,7 @@ ped <- racafeBD::ConsultaSistema(
     PdcCod = as.numeric(PdcCod),
     PdcLin = as.numeric(PdcLin),
     CLCliNit = as.numeric(CLCliNit),
-    LinNegCod = as.numeric(LinNegCod),
+    LinNegCod = if_else(as.numeric(LinNegCod) == 20000, 21000, as.numeric(LinNegCod)),
     LinProCod = as.numeric(LinProCod),
     PdcCan = as.numeric(PdcCan),
     UMeFac = as.numeric(UMeFac),
@@ -1094,7 +1102,7 @@ lotes_raw <- .cargar_lotes_incremental(
     CLPdcCod = as.numeric(CLPdcCod),
     CLPdcLin = as.numeric(CLPdcLin),
     CLCliNit = as.numeric(CLCliNit),
-    LinNegCod = as.numeric(LinNegCod),
+    LinNegCod = if_else(as.numeric(LinNegCod) == 20000, 21000, as.numeric(LinNegCod)),
     LinProCod = as.numeric(LinProCod)
   )
 
@@ -2508,6 +2516,7 @@ if (!dir.exists(dirname(ruta_lotes_cache))) {
   dir.create(dirname(ruta_lotes_cache), recursive = TRUE)
 }
 
+attr(lotes_raw, "crm_lineas_operativas") <- c(10000, 20000, 21000)
 saveRDS(lotes_raw, ruta_lotes_cache)
 
 # EXPORTACION MAESTRA ----
@@ -2782,6 +2791,9 @@ faltan_maestros <- pedidos_clasificacion %>% filter(
   transmute(PdcCod, PdcLin, LinNegCod, LinProCod, MCCod, MrcCod, Diagnostico = "Marca o nombre sin correspondencia en maestro")
 .tz_snapshot_margen(crm_maestro)
 homologaciones$facturas_detalle <- facturas_detalle
+homologaciones$metodologia_facturacion <- list(version = "CANTIDAD-UNIDAD-2",
+  nacional = "Cantidad original; 62,5/70 cuando corresponde; kilos físicos solo para contraste",
+  clave_cabecera = "Compañía + prefijo + número de factura")
 homologaciones$diagnostico_productos_pedido <- bind_rows(diagnostico_producto, faltan_maestros)
 homologaciones$esquemas_auditados <- list(EXPPEDI1 = esquema_pedido_linea, nombres_comerciales = fuente_nombres,
   campo_precio = "EXPPEDID.PdcPrePes",

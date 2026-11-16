@@ -1743,7 +1743,9 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           "El margen de factura abierta y el comercial son provisionales. Si no se pueden calcular, permanecen vacíos.",
           "Ritmo: saldo anual por cumplir distribuido según los pesos presupuestales de los meses restantes.",
           "En el mes del corte solo se ponderan los días que faltan; el presupuesto restante es el mínimo.",
-          "La trayectoria acumulada parte de la ejecución al corte. No modifica la ejecución ni la tabla."))))
+          "El ritmo muestra el mes vigente y los restantes, sin un punto adicional en el día del corte.",
+          "Acumulada: ejecución real al corte más el requerimiento acumulado de cada mes pendiente.",
+          "El switch solo cambia los gráficos; no modifica la ejecución ni la tabla."))))
     })
 
     ## Titulo dinamico sub-card proyeccion ----

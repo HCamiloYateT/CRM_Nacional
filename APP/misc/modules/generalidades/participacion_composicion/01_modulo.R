@@ -10,7 +10,7 @@ AnalisisComercialUI <- function(id, tipo = "participacion", fecha = Sys.Date()) 
         "Participación · categoría y producto" = "participacion"), selected = "absolutos", ns = ns)),
     racafeForms::racafeInputSwitch("abiertos", "Incluir facturación sin cierre financiero", value = FALSE, ns = ns),
     .gc_tarjetas_ui(ns, c(sacos = "Sacos de 70 kg", margen = "Margen FCC · COP", kilos = "Margen por kg · COP")),
-    .crm_plot_output(ns("grafico")), .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("dimensiones")),
+    shiny::uiOutput(ns("detalle_dimension")),
     .crm_nota_metodologica(c("El periodo y el alcance comercial provienen del controlbar.",
       "Los sacos y el margen se suman desde el mismo universo; el porcentaje usa el total completo seleccionado.",
       "El treemap representa sacos positivos; los colores identifican línea, categoría y producto.",
@@ -46,6 +46,13 @@ AnalisisComercial <- function(id, hechos, clientes, filtros, tipo = "participaci
         ParticipacionMargen = "Participación en margen", MargenKg = "Margen por kg · COP"),
       col_specs = list(ParticipacionSacos = list(format = list(percent = TRUE, digits = 1)),
         ParticipacionMargen = list(format = list(percent = TRUE, digits = 1))))
+    output$detalle_dimension <- .crm_render_ui({
+      grafico <- .crm_plot_output(session$ns("grafico"))
+      detalle <- shiny::tagList(.crm_descarga_ui("descargar", session$ns), .crm_tabla_ui(session$ns("dimensiones")))
+      if (identical(input$representacion, "participacion") && dimension() %in% c("Categoria", "Producto")) {
+        shiny::tagList(grafico, detalle)
+      } else shiny::fluidRow(shiny::column(6, grafico), shiny::column(6, detalle))
+    })
     output$grafico <- .crm_render_plotly({
       if (identical(input$representacion, "participacion") && dimension() %in% c("Categoria", "Producto")) {
         .crm_treemap_productos(.crm_resumen_dimension(fuente(), c("CLLinNegNo", "Categoria", "Producto")))

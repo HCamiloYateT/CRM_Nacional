@@ -35,12 +35,19 @@ ValidacionFinancieraUI <- function(id) {
       shiny::column(7, shiny::uiOutput(ns("tabla_extraccion_pyg")), shiny::uiOutput(ns("auditoria_base"))),
       shiny::column(5, shiny::fluidRow(lapply(.tarjetas, function(item) {
         shiny::column(6, .kpi_ui(item[[1]], item[[2]], item[[3]]))
-      }))))
+      })))),
+    .crm_disclosure("Auditoría de conversión: cantidades de factura y kilos físicos",
+      .crm_nota(c("El cuadre usa la cantidad comercial y la unidad del pedido; los kilos físicos no la sustituyen.",
+        "La tabla compara la fórmula de kilos introducida en 12d9cc8 con la conversión comercial corregida.",
+        "Las claves repetidas se señalan sin borrar filas ni multiplicarlas en un cruce.",
+        "Cada diferencia mensual debe explicarse con sus facturas y lotes; no se atribuye a un mes sin evidencia.")),
+      .crm_tabla_ui(ns("conversion_mensual")), .crm_tabla_ui(ns("conversion_documentos")))
   )
 }
 
 # Server ----
-ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal, clientes_snap, n_cliente) {
+ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal, clientes_snap, n_cliente,
+                                facturas_documentales = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
@@ -481,7 +488,8 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
     fact_base <- fact_raw %>%
       dplyr::transmute(
         CLLotCod = suppressWarnings(as.numeric(CLLotCod)),
-        LinNegCodFactura = suppressWarnings(as.numeric(LinNegCod)),
+        LinNegCodFactura = dplyr::if_else(suppressWarnings(as.numeric(LinNegCod)) == 20000,
+          21000, suppressWarnings(as.numeric(LinNegCod))),
         FecMesFact = dplyr::coalesce(
           as.Date(FecMesFact),
           lubridate::floor_date(as.Date(FecFact), "month")
@@ -940,6 +948,24 @@ ValidacionFinanciera <- function(id, filtros, dat, fact, margenes_pyg, nit_ppal,
         )
     })
     
+    # Auditoría de la medida documental; el mismo rango cerrado abastece el modal de cuadre ----
+    documentos_conversion <- shiny::reactive({
+      x <- .resolver(facturas_documentales)
+      shiny::validate(shiny::need(is.data.frame(x) && "MetodoCantidad" %in% names(x),
+        "Actualice el ETL para revisar el origen de las diferencias de conversión."))
+      fechas <- rango_fechas()
+      x[x$FecFact >= fechas[[1L]] & x$FecFact <= fechas[[2L]] &
+        x$FecMes <= ultimo_mes_cerrado() & !is.na(x$FecFact), , drop = FALSE]
+    })
+    .crm_vancouver_server("conversion_documentos", shiny::reactive(.tz_auditar_unidades(documentos_conversion())),
+      col_labels = c(SacosDesdeKilos70 = "Kilos físicos / 70 (fórmula anterior)",
+        SacosFact70 = "Cantidad comercial convertida (corregida)", DiferenciaContraKilos = "Cambio de cantidad",
+        MetodoCantidad = "Conversión aplicada", CausaConversion = "Explicación", ClaveRepetida = "Revisar clave"))
+    .crm_vancouver_server("conversion_mensual", shiny::reactive(.tz_cuadre_unidades(documentos_conversion(),
+      pyg_periodo(), mapa_lotes())), col_labels = c(FacturacionAntes = "Facturación con kilos / 70",
+        FacturacionCorregida = "Facturación corregida", SacosPYG = "Sacos del PyG",
+        DiferenciaAntes = "PyG − kilos / 70", DiferenciaCorregida = "PyG − facturación corregida"))
+
     # Conciliación por mes ----
     conciliacion_mensual <- shiny::reactive({
       pyg_mes <- pyg_periodo() %>%
