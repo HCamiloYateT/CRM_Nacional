@@ -18,7 +18,7 @@ ProductosSinClasificar <- function(id, usuario, al_actualizar,
       x$Accion <- x$Referencia
       x
     })
-    tabla <- .crm_vancouver_server("referencias", filas, id_col = "Referencia", modo_seleccion = "ninguno",
+    tabla <- .crm_vancouver_server("referencias", filas, id_col = "Referencia", modo_seleccion = "fila",
       col_specs = list(Accion = list(name = "Clasificar", html = TRUE, minWidth = 70, cell = function(v, i) {
         accion <- paste0("Shiny.setInputValue(", jsonlite::toJSON(session$ns("clasificar"), auto_unbox = TRUE),
           ",", jsonlite::toJSON(as.character(v), auto_unbox = TRUE), ",{priority: 'event'})")
@@ -27,11 +27,19 @@ ProductosSinClasificar <- function(id, usuario, al_actualizar,
       })),
       columnas = c("Accion", "NumeroLotes", "MrcCod", "Marca", "NombreComercial", "Presentacion", "Linea",
         "Categoria", "Producto",
-        "SacosVendidos", "PrimeraFactura", "UltimaFactura"),
+        "PrimerPedido", "UltimoPedido", "SacosVendidos", "PrimeraFactura", "UltimaFactura"),
       col_labels = c(MrcCod = "Código de marca", SacosVendidos = "Sacos facturados · 70 kg",
-        PrimeraFactura = "Primera factura", UltimaFactura = "Última factura", NumeroLotes = "Lotes distintos",
+        PrimerPedido = "Primer pedido", UltimoPedido = "Último pedido", PrimeraFactura = "Primera factura",
+        UltimaFactura = "Última factura", NumeroLotes = "Lotes distintos",
           NombreComercial = "Nombre comercial", Presentacion = "Presentación / referencia del sistema",
         Linea = "Línea de negocio", Categoria = "Categoría actual", Producto = "Producto actual"))
+    shiny::observeEvent(tabla$seleccion(), {
+      seleccion <- tabla$seleccion()
+      shiny::req(seleccion$id %in% filas()$Referencia)
+      referencia_elegida(seleccion$id)
+      shiny::showModal(racafeForms::racafeModal(title = "Pedidos de esta referencia", size = "ventana",
+        .crm_tabla_ui(session$ns("pedidos")), footer = shiny::modalButton("Cerrar")))
+    }, ignoreNULL = TRUE)
     elegida <- shiny::reactive({
       filas()[filas()$Referencia %in% referencia_elegida(), , drop = FALSE]
     })

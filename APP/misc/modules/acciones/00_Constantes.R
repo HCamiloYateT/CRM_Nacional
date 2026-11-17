@@ -4,8 +4,8 @@
 # Color estandar para mensajes de error en formularios
 COLOR_ERROR = "#C11007"
 # Paleta icono/color por etapa del embudo, usada por .badge_etapa()
-.COLORES_ETAPA <- c(CONTACTO = "#c8c8c8", PROSPECTO = "#C9A66B", LEAD = "#0073A8",
-                    CLIENTE = "#b3001b", DESCARTADO = "#1a1a1a")
+.COLORES_ETAPA <- c(CONTACTO = "#6C757D", PROSPECTO = "#E69F00", LEAD = "#0072B2",
+                    CLIENTE = "#009E73", DESCARTADO = "#CC79A7")
 # Paleta icono/color por canal de recordatorio, usada por .badge_canal() (sin uso hoy, se deja para reuso futuro)
 .CANAL_ESTILO <- list(
   Correo    = list(icono = "envelope",          color = "#1C398E"),
@@ -367,4 +367,4 @@ names(.ICONOS_RED_SOCIAL) <- toupper(names(.ICONOS_RED_SOCIAL))
 )
 ## Crear Tarea -----
 .TSK_PRIORIDADES <- c("URGENTE", "IMPORTANTE", "MEDIA", "BAJA")
-.COLORES_PRIORIDAD <- racafeModulos::PaletaPrioridadesTareas()
+.COLORES_PRIORIDAD <- c(URGENTE = "#D55E00", IMPORTANTE = "#E69F00", MEDIA = "#0072B2", BAJA = "#009E73")

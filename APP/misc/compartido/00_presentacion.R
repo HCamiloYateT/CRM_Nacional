@@ -22,6 +22,13 @@
   if (inherits(texto, c("shiny.tag", "shiny.tag.list"))) texto <- list(texto)
   if (is.character(texto)) {
     html <- inherits(texto, "html")
+    # Lenguaje de ayuda pensado para quien usa el CRM en su gestión comercial.
+    terminos <- c(controlbar = "panel de filtros", snapshot = "reporte", ETL = "actualización de datos",
+      "hechos facturados" = "ventas registradas", "homologar" = "clasificar",
+      "homologación" = "clasificación", "dimensiones" = "grupos", "residual" = "pendiente",
+      "contable" = "financiero", CRMNALCLIENTE = "ficha de clientes", CRMNALMARLOT = "reporte financiero",
+      SYSCAFE = "sistema de facturación", PyG = "reporte financiero")
+    for (termino in names(terminos)) texto <- gsub(termino, terminos[[termino]], texto, ignore.case = TRUE)
     texto <- unlist(strsplit(texto, "\n", perl = TRUE))
     if (html) texto <- lapply(texto, shiny::HTML)
   }
@@ -188,6 +195,14 @@
   stats::setNames(as.list(valores), nombres)
 }
 
+# Un resumen sin cantidades no debe parecer una tabla con resultados.
+.crm_datos_tabla <- function(x) {
+  if (is.function(x)) return(shiny::reactive(.crm_datos_tabla(x())))
+  if (is.data.frame(x) && nrow(x) == 1L && ncol(x) > 0L &&
+      all(vapply(x, is.numeric, logical(1))) && !anyNA(x) && all(unlist(x) == 0)) return(x[0, , drop = FALSE])
+  x
+}
+
 # Tablas Vancouver con búsqueda, ordenamiento y selección estable ----
 .crm_tabla_ui <- function(id, titulo = NULL, subtitulo = NULL, footer = NULL, footer_tipo = "info",
                           sortable = TRUE, mostrar_nota = TRUE, estilo = "minimal", searchable = TRUE) {
@@ -207,6 +222,7 @@
                                    id_col = NULL, modo_seleccion = "ninguno", sortable = TRUE,
                                    searchable = TRUE, page_size = 15, titulo = NULL, subtitulo = NULL,
                                    enlaces_pedido = TRUE, ...) {
+  data <- .crm_datos_tabla(data)
   if (isTRUE(enlaces_pedido)) col_specs <- .crm_specs_pedidos(col_specs %||% list(), id)
   racafeModulos::TablaVancouverServer(id, data, columnas, col_specs, col_labels, id_col, modo_seleccion,
     sortable, searchable, page_size, titulo, subtitulo, ..., preparar_fn = .crm_nits_tabla,
@@ -219,6 +235,7 @@
                                 modal_icon = NULL, modal_footer = NULL, modal_footer_tipo = "info") {
   argumentos <- list(...)
   identificador <- argumentos$id %||% argumentos[[1]]
+  if ("data" %in% names(argumentos)) argumentos$data <- .crm_datos_tabla(argumentos$data)
   argumentos$col_specs <- .crm_specs_pedidos(argumentos$col_specs %||% list(), identificador)
   do.call(racafeModulos::TablaVancouver, c(argumentos, list(footer = footer, footer_tipo = footer_tipo,
     modal_titulo_fn = modal_titulo_fn, modal_contenido_fn = modal_contenido_fn, modal_pre_fn = modal_pre_fn,
@@ -237,6 +254,10 @@
 
 # Acceso transversal al pedido respetando el alcance del maestro de la sesión ----
 .crm_specs_pedidos <- function(specs, id) {
+  if (is.function(specs)) {
+    origen <- specs
+    return(shiny::reactive(.crm_specs_pedidos(origen(), id)))
+  }
   sesion <- shiny::getDefaultReactiveDomain()
   if (is.null(sesion) || !isTRUE(sesion$userData$trazabilidad_disponible)) return(specs)
   for (campo in c("Pedido", "CLPdcCod", "PdcCod", "NumeroPedido")) local({

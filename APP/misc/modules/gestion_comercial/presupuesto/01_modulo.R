@@ -114,12 +114,11 @@ PresupuestoUI <- function(id) {
       .crm_seccion_presupuesto(
         title = "Presupuesto", status = "white", solidHeader = TRUE,
         width = 12, collapsible = FALSE,
-        div(style = "margin-bottom:10px;",
+        div(style = "display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;",
           racafeForms::racafeInputSwitch("incluir_facturacion", "Incluir facturación sin cierre",
             value = FALSE, variant = "primary", ns = ns),
-          shiny::conditionalPanel("input.incluir_facturacion",
-            racafeForms::racafeInputSwitch("incluir_estimados", "Incluir pedidos con fecha estimada",
-              value = FALSE, variant = "primary", ns = ns), ns = ns)),
+          racafeForms::racafeInputSwitch("incluir_estimados", "Incluir pedidos con fecha estimada",
+            value = FALSE, variant = "primary", ns = ns)),
         div(
           style = "overflow-x: auto; width: 100%;",
           uiOutput(ns("Presupuesto"))
@@ -974,7 +973,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       for (campo in intersect(c("Excluir", "ProdExcluir"), names(x))) x <- x[!x[[campo]] %in% "SI", , drop = FALSE]
       estados <- "CERRADO"
       if (isTRUE(input$incluir_facturacion)) estados <- c(estados, "FACTURADO_ABIERTO")
-      if (isTRUE(input$incluir_facturacion) && isTRUE(input$incluir_estimados)) estados <- c(estados, "PROYECTADO")
+      if (isTRUE(input$incluir_estimados)) estados <- c(estados, "PROYECTADO")
       x %>% filter(EstadoFinanciero %in% estados,
         !is.na(MesEjecucionPresupuesto), year(MesEjecucionPresupuesto) == periodo_r()) %>%
         group_by(Periodo = year(MesEjecucionPresupuesto), Fecha = .MESES[month(MesEjecucionPresupuesto)]) %>%
@@ -1683,8 +1682,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           title    = md(paste0("**Seguimiento de Presupuesto ", periodo, "**")),
           subtitle = md(paste0(
             "Comparativo mensual y acumulado de sacos y margen FCC frente al presupuesto",
-            " — ", if (!isTRUE(input$incluir_facturacion)) "MESES CERRADOS" else
-              if (isTRUE(input$incluir_estimados)) "CIERRE + FACTURACIÓN + ESTIMACIONES" else "CIERRE + FACTURACIÓN",
+            " — ", paste(c("MESES CERRADOS", if (isTRUE(input$incluir_facturacion)) "FACTURACIÓN SIN CIERRE",
+              if (isTRUE(input$incluir_estimados)) "PEDIDOS ESTIMADOS"), collapse = " + "),
             " — cierre financiero de indicadores: ",
             if (calendario_r()$mes_actual > 0L) .MESES[calendario_r()$mes_actual] else "SIN CIERRE",
             " — período anterior: ", periodo_ant
@@ -1916,11 +1915,11 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       .crm_disclosure("Metodología de las tablas", racafeForms::racafeNoticeList(
         c("Cumplimiento: ejecutado / presupuesto.",
           "Brecha: ejecutado − presupuesto acumulado al mes.",
-          "Proyección de cierre: ejecutado acumulado + ritmo ponderado de los 3 últimos meses × meses restantes.",
-          "Verosimilitud: proyección / presupuesto anual.",
-          "Meta mensual: max(presupuesto anual / 12, (presupuesto anual − ejecutado) / meses restantes, 0).",
-          "TOTAL suma las dimensiones; los indicadores se calculan sobre esa fila, sin promediar porcentajes.",
-          "Indicadores por dimensión: meses cerrados. Presupuesto: Industria Nacional."), title = NULL,
+          "Cierre esperado: lo vendido más una estimación para los meses que faltan, según las ventas recientes.",
+          "Avance esperado: compara el cierre estimado con la meta del año.",
+          "Meta mensual: cuánto necesitamos vender cada mes para alcanzar el presupuesto.",
+          "La fila TOTAL reúne todos los grupos. Sus porcentajes se calculan con los valores totales.",
+          "Estos indicadores usan ventas de meses cerrados y las metas de Industria Nacional."), title = NULL,
           font_size = 11, text_color = "#495057", accent_color = "#DA291C"))
     })
 

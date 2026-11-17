@@ -6,24 +6,26 @@
   cerrado = "Margen contable cerrado", abierto = "Margen abierto provisional")
 ProductosEjecucionUI <- function(id, periodo_local = FALSE) {
   ns <- shiny::NS(id)
+  controles <- Filter(Negate(is.null), list(
+        if (periodo_local) racafeForms::racafeInputDateRange("periodo", "Periodo de facturación",
+          start = as.Date(format(Sys.Date(), "%Y-01-01")), end = Sys.Date(), ns = ns),
+        .crm_select("nivel", "Agrupar por", choices = c("Producto" = "producto", "Categoría" = "categoria"),
+          selected = "producto", ns = ns),
+        .crm_select("medida", "Medida de los gráficos", choices = c("Sacos 70 kg" = "Sacos",
+          "Margen FCC" = "Margen", "Margen por kilo" = "MargenKg", "Clientes" = "Clientes",
+          "Unidades comerciales" = "Unidades"), selected = "Sacos", ns = ns),
+        racafeForms::racafeInputNumeric("top", "Elementos del ranking", value = 15, min = 3, max = 40,
+          format = "number", decimals = 0, ns = ns),
+        .crm_select("tamano_arbol", "Tamaño en el mapa", choices = c("Unidades comerciales" = "Unidades",
+          "Sacos" = "Sacos", "Margen" = "Margen"), selected = "Unidades", ns = ns),
+        racafeForms::racafeInputSwitch("cerrados", "Solo meses cerrados", value = FALSE, ns = ns)))
   racafeForms::racafeForm(variant = "plain",
-    do.call(racafeForms::racafeFormRow, c(list(columns = 4), Filter(Negate(is.null), list(
-      if (periodo_local) racafeForms::racafeInputDateRange("periodo", "Periodo de facturación",
-        start = as.Date(format(Sys.Date(), "%Y-01-01")), end = Sys.Date(), ns = ns),
-      .crm_select("nivel", "Agrupar por",
-        choices = c("Producto" = "producto", "Categoría" = "categoria"),
-        ns = ns),
-      .crm_select("medida", "Medida de los gráficos", choices = c("Sacos 70 kg" = "Sacos",
-        "Margen FCC" = "Margen", "Margen por kilo" = "MargenKg", "Clientes" = "Clientes",
-          "Unidades comerciales" = "Unidades"), ns = ns))))),
-    racafeForms::racafeFormRow(columns = 2,
-      racafeForms::racafeInputNumeric("top", "Productos/categorías del ranking", value = 15, min = 3, max = 40,
-        format = "number", decimals = 0, ns = ns),
-      racafeForms::racafeInputSwitch("cerrados", "Solo meses cerrados financieramente", value = FALSE, ns = ns)),
+    shiny::tags$div(class = "crm-productos-filtros",
+      shiny::tags$style(".crm-productos-filtros .row{align-items:flex-end;}
+        .crm-productos-filtros label{min-height:32px;display:flex;align-items:flex-end;}"),
+      shiny::fluidRow(lapply(controles, function(control) shiny::column(2, control)))),
     .gc_tarjetas_ui(ns, .PROD_CAJAS),
-    .crm_select("tamano_arbol", "Tamaño de categoría y producto", choices = c("Unidades comerciales" = "Unidades",
-      "Sacos" = "Sacos", "Margen" = "Margen"), ns = ns),
-    .crm_plot_output(ns("arbol_productos")),
+    shiny::tags$div(style = "margin:10px 0;", .crm_plot_output(ns("arbol_productos"))),
     .crm_nota("El tamaño usa valores positivos. Un cliente puede comprar varios productos; sus conteos no se suman."),
     shiny::fluidRow(shiny::column(6, .crm_plot_output(ns("ranking"))),
       shiny::column(6, .crm_descarga_ui("descargar", ns),
@@ -33,11 +35,11 @@ ProductosEjecucionUI <- function(id, periodo_local = FALSE) {
     .crm_plot_output(ns("tendencia")),
     .crm_tabla_ui(ns("calidad"), titulo = "Cobertura y calidad del periodo"),
     .crm_nota(c("Se aplican los filtros del controlbar y su periodo de facturación.",
-      "Las cantidades operativas de lote no se suman: solo hechos facturados, sin proyecciones de pedidos.",
-      "El margen total conserva ajustes y devoluciones. El abierto es provisional y se presenta también por separado.",
-      "Margen/kg = margen neto / (sacos netos × 70); no se promedian márgenes unitarios.",
-      "Pareto usa sacos positivos; la tabla conserva negativos y productos sin homologar.",
-      "Pulse una fila para consultar sus clientes y movimientos. No se asignan presupuestos de cliente a productos.")))
+      "Aquí ve las ventas facturadas. Los pedidos pendientes no se cuentan como ventas.",
+      "El margen incluye devoluciones y ajustes. Puede cambiar mientras el mes no esté cerrado.",
+      "El margen por kilo indica cuánto deja la venta por cada kilo vendido.",
+      "El gráfico de participación destaca los productos que concentran más ventas.",
+      "Pulse una fila para ver los clientes y sus compras. Las metas del cliente no se reparten entre productos.")))
 }
 ProductosEjecucion <- function(id, hechos, filtros = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
@@ -75,15 +77,14 @@ ProductosEjecucion <- function(id, hechos, filtros = NULL) {
       hojas$Etiqueta <- hojas$Producto
       hojas$Tamano <- pmax(0, hojas[[medida_arbol]])
       categorias$Id <- paste("C", categorias$Linea, categorias$Categoria, sep = "|")
-      categorias$Padre <- ""; categorias$Etiqueta <- paste(categorias$Linea, categorias$Categoria, sep = " · ")
+      categorias$Padre <- ""; categorias$Etiqueta <- categorias$Categoria
       categorias$Tamano <- 0
-      categorias$Padre <- paste("L", categorias$Linea, sep = "|")
+      categorias$Padre <- ""
       lineas <- resumir(x, "Linea")
       lineas$Id <- paste("L", lineas$Linea, sep = "|")
       lineas$Padre <- ""; lineas$Etiqueta <- lineas$Linea; lineas$Tamano <- 0
-      arbol <- dplyr::bind_rows(lineas, categorias, hojas)
-      arbol$Color <- c(unname(.crm_colores("linneg", lineas$Linea)),
-        unname(.crm_colores("categoria", categorias$Categoria, categorias$Linea)),
+      arbol <- dplyr::bind_rows(categorias, hojas)
+      arbol$Color <- c(unname(.crm_colores("categoria", categorias$Categoria, categorias$Linea)),
         unname(.crm_colores("producto", hojas$Producto, hojas$Linea, hojas$Categoria)))
       shiny::validate(shiny::need(any(hojas$Tamano > 0, na.rm = TRUE), "No hay valores positivos para esta medida."))
       arbol$Tamano[!is.finite(arbol$Tamano)] <- 0
@@ -184,7 +185,7 @@ ProductosEjecucion <- function(id, hechos, filtros = NULL) {
       color <- .crm_colores(if (nivel() == "categoria") "categoria" else "producto",
         if (nivel() == "categoria") mapa$Categoria else mapa$Producto, mapa$Linea,
         if (nivel() == "categoria") "" else mapa$Categoria)
-      if (nivel() == "categoria") mapa$Etiqueta <- paste(mapa$Linea, mapa$Categoria, sep = " › ")
+      if (nivel() == "categoria") mapa$Etiqueta <- mapa$Categoria
       names(color) <- mapa$Etiqueta
       color <- c(color[!duplicated(names(color))], Otros = "#ADB5BD")
       p <- ggplot2::ggplot(x, ggplot2::aes(x = Mes, y = .data[[medida()]], colour = Serie, group = Serie,

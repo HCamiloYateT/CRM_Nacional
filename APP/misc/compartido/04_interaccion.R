@@ -38,6 +38,27 @@
   compacto <- isTRUE(figura$x$layout$meta$crm_altura_compacta)
   minimo <- if (compacto) 160 else 500
   figura$x$layout$height <- if (length(altura) == 1L && is.finite(altura)) max(minimo, altura) else minimo
+  # Fechas cortas en el eje; los hovers conservan la fecha completa.
+  for (eje in unique(c("xaxis", grep("^xaxis[0-9]+$", names(figura$x$layout), value = TRUE)))) {
+    ax <- figura$x$layout[[eje]] %||% list()
+    referencia <- sub("axis", "", eje)
+    trazas <- Filter(function(t) identical(t$xaxis %||% "x", referencia), figura$x$data)
+    temporal <- identical(ax$type, "date") || any(vapply(trazas, function(t) {
+      inherits(t$x, c("Date", "POSIXt")) || (is.character(t$x) && length(t$x) > 0L &&
+        all(is.na(t$x) | grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}", t$x)))
+    }, logical(1)))
+    if (temporal) {
+      ax$tickformat <- "%b<br>%Y"
+      ax$hoverformat <- "%d/%m/%Y"
+    }
+    if (is.character(ax$ticktext) && length(ax$ticktext) &&
+        all(grepl("^[0-9]{4}-[0-9]{2}(-[0-9]{2})?$", ax$ticktext))) {
+      fechas <- as.Date(ifelse(nchar(ax$ticktext) == 7L, paste0(ax$ticktext, "-01"), ax$ticktext))
+      ax$ticktext <- paste(c("ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC")[
+        as.integer(format(fechas, "%m"))], format(fechas, "%Y"))
+    }
+    figura$x$layout[[eje]] <- ax
+  }
   ejes <- unique(c("xaxis", "yaxis", grep("^[xy]axis[0-9]*$", names(figura$x$layout), value = TRUE)))
   for (eje in ejes) {
     figura$x$layout[[eje]]$showgrid <- FALSE

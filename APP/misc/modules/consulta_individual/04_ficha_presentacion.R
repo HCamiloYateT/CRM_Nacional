@@ -183,7 +183,7 @@
     }))
 }
 # El contador se monta una vez en summary, también con versiones anteriores de racafeShiny.
-.in_ficha_caja <- function(ns, clave, titulo, contenido, open = FALSE, badge = NULL) {
+.in_ficha_caja <- function(ns, clave, titulo, contenido, open = TRUE, badge = NULL) {
   funcion <- racafeShiny::racafeCollapsible
   argumentos <- list(id = ns(paste0("ficha_box_", clave)), title = titulo, open = open,
     contenido, color = "#DA291C", class = "in-ficha-caja")
@@ -198,13 +198,14 @@
   shiny::tags$div(class = "in-ficha",
     .crm_estilos_ui(),
     shiny::uiOutput(ns("alcance_crm")),
+    shiny::uiOutput(ns("alcance_unidad_ficha")), UnidadComercialUI(ns("unidad_ficha")),
     shiny::tags$div(class = "in-ficha-grid",
       .in_ficha_caja(ns, "antiguedad", "Antigüedad y relación comercial", shiny::uiOutput(ns("antiguedad-tabla"))),
       .in_ficha_caja(ns, "presupuesto", "Presupuesto y metas", shiny::uiOutput(ns("presupuesto_ficha"))),
       .in_ficha_caja(ns, "contacto", "Contacto y ubicación", shiny::uiOutput(ns("contacto_sistema-tabla"))),
       .in_ficha_caja(ns, "crm", "Registro CRM asociado", shiny::uiOutput(ns("ficha-tabla"))),
     .in_ficha_caja(ns, "familia", "Cuentas relacionadas", shiny::uiOutput(ns("familia-tabla")),
-      open = FALSE, badge = shiny::uiOutput(ns("familia_contador"), inline = TRUE)),
+      open = TRUE, badge = shiny::uiOutput(ns("familia_contador"), inline = TRUE)),
     .in_ficha_caja(ns, "complementarios", "Registros complementarios", shiny::uiOutput(ns("complementarios")),
-      open = FALSE, badge = shiny::uiOutput(ns("complementarios_contador"), inline = TRUE))))
+      open = TRUE, badge = shiny::uiOutput(ns("complementarios_contador"), inline = TRUE))))
 }

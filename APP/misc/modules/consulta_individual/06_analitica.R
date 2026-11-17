@@ -133,8 +133,8 @@
     mora <- por_documento$Mora[is.finite(por_documento$Mora)]
     data.frame(Corte = as.Date(fecha, origin = "1970-01-01"), Saldo = .com_suma(d$Saldo),
       Vencido = if (anyNA(validos$DiasVencido)) NA_real_ else sum(validos$Saldo[validos$DiasVencido > 0]),
-      DiasMoraPromedio = if (length(mora)) mean(pmax(0, mora)) else NA_real_,
-      DiasMoraMaximo = if (length(mora)) max(pmax(0, mora)) else NA_real_,
+      DiasMoraPromedio = if (length(mora)) mean(mora) else NA_real_,
+      DiasMoraMaximo = if (length(mora)) max(mora) else NA_real_,
       Documentos = .car_distintos(d$Documento))
   }))
   pagos <- data.frame()
