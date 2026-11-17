@@ -70,6 +70,12 @@
     if (!length(titulo) || any(grepl("cumpl|%|porcentaje|probabili|participaci|variaci", titulo, ignore.case = TRUE)) ||
         !any(grepl("margen|precio|COP|\\$", titulo, ignore.case = TRUE))) next
     if (isTRUE(figura$x$layout$meta$crm_eje_transformado)) next
+    if (any(grepl("precio|/kg|por kilo", titulo, ignore.case = TRUE))) {
+      figura$x$layout[[eje]]$tickformat <- "$,.0f"
+      figura$x$layout[[eje]]$tickmode <- "auto"
+      figura$x$layout[[eje]]$tickvals <- figura$x$layout[[eje]]$ticktext <- NULL
+      next
+    }
     coordenada <- substr(eje, 1L, 1L)
     referencia <- sub("axis", "", eje, fixed = TRUE)
     trazas <- Filter(function(t) identical(t[[paste0(coordenada, "axis")]] %||% coordenada, referencia),
@@ -112,7 +118,9 @@
     }
     titulo <- figura$x$layout[[eje]]$title
     if (is.list(titulo)) titulo <- titulo$text
-    if (length(titulo) && any(grepl("clientes|unidades|pedidos|facturas|registros|conteo", titulo,
+    if (length(titulo) && !any(grepl("%|porcentaje|participaci|probabili", titulo, ignore.case = TRUE)) &&
+        !grepl("%", figura$x$layout[[eje]]$tickformat %||% "") &&
+        any(grepl("clientes|unidades|pedidos|facturas|registros|conteo", titulo,
       ignore.case = TRUE))) {
       v <- unlist(lapply(trazas, function(t) t[[coordenada]]), use.names = FALSE)
       if (is.numeric(v) && any(is.finite(v))) {

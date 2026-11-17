@@ -129,7 +129,7 @@
       racafeForms::racafeStatusBadge(paste("Estado operativo:", operativo), size = "xs"),
       racafeForms::racafeStatusBadge(paste("Estado financiero:",
         gsub("_", " ", texto("EstadoFinanciero"))), size = "xs")),
-    racafeForms::racafeInfoGrid(
+    racafeForms::racafeInfoGrid(columns = 3,
       racafeForms::racafeInfoItem("Cuenta principal · NIT", texto("CliNitPpal")),
       racafeForms::racafeInfoItem("Asesor", texto("Asesor")),
       racafeForms::racafeInfoItem("Segmentos por línea",
@@ -260,4 +260,16 @@ TrazabilidadPedido <- function(id, maestro, pedido) {
     })
     list(datos = datos)
   })
+}
+
+# La clasificación de referencias no debe ocultar su pedido por categoría aún vacía.
+.tz_fuente_modal <- function(maestro, filtros, clasificacion = FALSE) {
+  if (!clasificacion) return(.gc_filtrar_dimensiones(maestro, filtros))
+  x <- maestro
+  mapa <- c(Asesor = "asesor", Segmento = "segmento", CLLinNegNo = "linneg")
+  for (campo in names(mapa)) {
+    if (campo %in% names(x)) x <- x[x[[campo]] %in% filtros[[mapa[[campo]]]], , drop = FALSE]
+  }
+  if ("Excluir" %in% names(x)) x <- x[is.na(x$Excluir) | x$Excluir != "SI", , drop = FALSE]
+  x
 }

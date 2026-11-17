@@ -197,7 +197,7 @@
 .in_ficha_ui <- function(ns) {
   shiny::tags$div(class = "in-ficha",
     .crm_estilos_ui(),
-    shiny::uiOutput(ns("alcance_crm")),
+    shiny::uiOutput(ns("identidad")), shiny::uiOutput(ns("alcance_crm")),
     shiny::uiOutput(ns("alcance_unidad_ficha")), UnidadComercialUI(ns("unidad_ficha")),
     shiny::tags$div(class = "in-ficha-grid",
       .in_ficha_caja(ns, "antiguedad", "Antigüedad y relación comercial", shiny::uiOutput(ns("antiguedad-tabla"))),

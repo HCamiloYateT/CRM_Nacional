@@ -165,20 +165,23 @@
 }
 
 # Actualizar solo la clasificación, con bloqueo de la referencia durante la escritura ----
-.clas_actualizar_bd <- function(fila, tabla, llaves, original) {
+.clas_actualizar_bd <- function(fila, tabla, llaves, original, con = NULL) {
   if (!identical(tabla, "CRMNALPRODS") || !all(.CLAS_CLAVES %in% names(llaves)) ||
       !all(names(llaves) %in% c(.CLAS_CLAVES, "FecProceso")) || nrow(fila) != 1L) {
     stop("La referencia de producto no es válida.")
   }
-  con <- racafeBD::ConectarBD()
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  propia <- is.null(con)
+  if (propia) {
+    con <- racafeBD::ConectarBD()
+    on.exit(DBI::dbDisconnect(con), add = TRUE)
+  }
   columna <- function(x) as.character(DBI::dbQuoteIdentifier(con, x))
   literal <- function(x) as.character(DBI::dbQuoteLiteral(con, x))
   condiciones <- vapply(names(llaves), function(n) {
     if (is.na(llaves[[n]])) paste(columna(n), "IS NULL") else paste(columna(n), "=", literal(llaves[[n]]))
   }, character(1))
   donde <- paste(condiciones, collapse = " AND ")
-  DBI::dbWithTransaction(con, {
+  escribir <- function() {
     if (is.null(original)) {
       condiciones_nueva <- condiciones[names(llaves) %in% .CLAS_CLAVES]
       existe <- DBI::dbGetQuery(con, paste0("SELECT Categoria FROM CRMNALPRODS WHERE ",
@@ -197,7 +200,8 @@
       cambios <- vapply(campos, function(n) paste(columna(n), "=", literal(fila[[n]][[1]])), character(1))
       DBI::dbExecute(con, paste0("UPDATE CRMNALPRODS SET ", paste(cambios, collapse = ", "), " WHERE ", donde))
     }
-  })
+  }
+  if (propia) DBI::dbWithTransaction(con, escribir()) else escribir()
   invisible(TRUE)
 }
 
@@ -228,4 +232,56 @@
     FechaPedido = .gc_unico(FechaPedido), Estado = .gc_unico(EstadoPedido),
     SacosFacturados70 = .com_suma(SacosFact[EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO")]),
     .groups = "drop")
+}
+
+# Carga masiva: validar todo el archivo antes de solicitar confirmación.
+.clas_validar_excel <- function(archivo, pendientes, fuente) {
+  columnas <- c("Referencia", .CLAS_CLAVES, "Categoria", "Producto")
+  if (!is.data.frame(archivo) || !all(columnas %in% names(archivo))) {
+    stop("Use la plantilla descargada: faltan columnas necesarias.")
+  }
+  if (nrow(archivo) > 5000L) stop("La carga admite hasta 5.000 referencias por archivo.")
+  archivo$Categoria <- toupper(trimws(as.character(archivo$Categoria)))
+  archivo$Producto <- toupper(trimws(as.character(archivo$Producto)))
+  vacia_categoria <- is.na(archivo$Categoria) | !nzchar(archivo$Categoria)
+  vacio_producto <- is.na(archivo$Producto) | !nzchar(archivo$Producto)
+  if (any(xor(vacia_categoria, vacio_producto))) stop("Complete categoría y producto juntos en cada fila.")
+  archivo <- archivo[!vacia_categoria & !vacio_producto, , drop = FALSE]
+  if (!nrow(archivo)) stop("No hay filas completas para cargar. Diligencie categoría y producto.")
+  if (anyNA(archivo$Referencia) || anyDuplicated(archivo$Referencia)) stop("Hay referencias vacías o repetidas.")
+  if (anyNA(archivo[.CLAS_CLAVES])) stop("Faltan códigos de referencia. Descargue otra plantilla.")
+  if (any(.clas_llave(archivo) != archivo$Referencia)) stop("Los códigos cambiaron. Descargue otra plantilla.")
+  i <- match(archivo$Referencia, pendientes$Referencia)
+  if (anyNA(i)) stop("Hay referencias que ya no están pendientes o no pertenecen a esta plantilla. Actualice.")
+  filas <- pendientes[i, , drop = FALSE]
+  if (anyNA(filas[.CLAS_CLAVES])) stop("Hay referencias sin códigos completos; deben revisarse individualmente.")
+  for (j in seq_len(nrow(filas))) {
+    if (!archivo$Categoria[j] %in% .clas_opciones(fuente, filas[j, ]) ||
+        !archivo$Producto[j] %in% .clas_opciones(fuente, filas[j, ], archivo$Categoria[j])) {
+      stop("Categoría o producto no permitido en la fila ", j, ". Consulte la hoja de opciones de la plantilla.")
+    }
+  }
+  filas$CategoriaNueva <- archivo$Categoria
+  filas$ProductoNuevo <- archivo$Producto
+  filas
+}
+.clas_ejecutar_lote <- function(operaciones) {
+  con <- racafeBD::ConectarBD()
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  DBI::dbWithTransaction(con, {
+    for (op in operaciones) .clas_actualizar_bd(op$fila, op$tabla, op$llaves, op$original, con = con)
+  })
+  invisible(TRUE)
+}
+.clas_guardar_masivo <- function(filas, usuario, cargar = racafeBD::CargarDatos, ejecutar = .clas_ejecutar_lote) {
+  fuente <- .clas_validar(cargar("CRMNALPRODS"))
+  operaciones <- list()
+  planificar <- function(fila, tabla, llaves, original) {
+    operaciones[[length(operaciones) + 1L]] <<- list(fila = fila, tabla = tabla, llaves = llaves, original = original)
+  }
+  for (i in seq_len(nrow(filas))) .clas_guardar(filas[i, ], filas$CategoriaNueva[i], filas$ProductoNuevo[i],
+    usuario, cargar = function(tabla) fuente, guardar = planificar)
+  if (!length(operaciones)) stop("No hay cambios para guardar.")
+  ejecutar(operaciones)
+  .crm_snapshot_productos(.clas_validar(cargar("CRMNALPRODS")))
 }

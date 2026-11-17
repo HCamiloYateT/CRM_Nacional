@@ -60,7 +60,8 @@
         "SIN PRODUCTO", "SIN CLASIFICAR", "SIN HOMOLOGAR")) return("#ADB5BD")
     fijo <- unname(paletas[[dimension]][valores[i]])
     if (length(fijo) && !is.na(fijo)) return(fijo)
-    h <- hash(paste(dimension, padre[i], padre2[i], valores[i], sep = "|"))
+    h <- hash(if (dimension == "categoria") paste(dimension, valores[i], sep = "|") else
+      paste(dimension, padre[i], padre2[i], valores[i], sep = "|"))
     if (dimension %in% c("categoria", "producto")) {
       return(grDevices::hcl(h = h %% 360, c = 55, l = 55))
     }
@@ -77,6 +78,11 @@
     indice <- match(firma(dimension, equivalencia(padre), equivalencia(padre2), equivalencia(valores)),
       firma(configurados$catalogo, equivalencia(configurados$padre), equivalencia(configurados$padre2),
         equivalencia(configurados$opcion)))
+    if (dimension == "categoria") {
+      globales <- which(configurados$catalogo == "categoria" & configurados$padre == "" & configurados$padre2 == "")
+      global <- globales[match(valores, configurados$opcion[globales])]
+      indice[!is.na(global)] <- global[!is.na(global)]
+    }
     colores[!is.na(indice)] <- configurados$color[indice[!is.na(indice)]]
   }
   stats::setNames(colores, valores)
