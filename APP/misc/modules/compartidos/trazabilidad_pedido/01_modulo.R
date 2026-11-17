@@ -157,11 +157,14 @@ TrazabilidadPedidoUI <- function(id) {
     tabPanel("Resumen", .gc_tarjetas_ui(ns, .TZ_CAJAS),
       .crm_nota("Una venta corresponde a un pedido; sus líneas, lotes y facturas no son ventas adicionales.")),
     tabPanel("Líneas", .crm_tabla_ui(ns("lineas"))),
+    tabPanel("Mercado al crear el pedido", .crm_tabla_ui(ns("mercado_pedido")),
+      .crm_nota(c("Estos eran los indicadores de mercado guardados el día en que se creó cada línea del pedido.",
+        "Si no hay información para ese día, lo indicamos; no usamos el valor de otra fecha."))),
     tabPanel("Lotes", .crm_tabla_ui(ns("lotes"))),
     tabPanel("Facturación", .crm_tabla_ui(ns("facturas"))),
     tabPanel("Margen", .crm_tabla_ui(ns("margen")), .crm_nota(c(
-      "El margen residual corresponde a la estimación actual del saldo pendiente.",
-      "No representa una estimación histórica anterior al cierre si no hay una captura documentada."))),
+      "Este margen es una estimación de lo que falta por vender del pedido.",
+      "Se calcula con la información de hoy y puede cambiar cuando se cierre el mes."))),
     tabPanel("Conciliación", .crm_tabla_ui(ns("conciliacion")), .crm_nota(c(
       "Las diferencias pueden corresponder a ejecución parcial o a un desfase de actualización.",
       "Las cantidades desconocidas permanecen vacías; las cantidades se expresan en sacos equivalentes de 70 kg."))),
@@ -184,6 +187,18 @@ TrazabilidadPedido <- function(id, maestro, pedido) {
       c(stats::setNames(rep(list("numero"), 7L), c("solicitados", "asignados", "producidos", "despachados",
         "facturados", "cerrados", "pendiente")),
         list(margen = "dinero", margen_estimado = "dinero", margen_comercial = "dinero")))
+    .crm_vancouver_server("mercado_pedido", shiny::reactive({
+      shiny::req(input$pedido_tab == "Mercado al crear el pedido")
+      x <- datos()$datos
+      fechas <- sort(unique(as.Date(x$FechaCreacionPedido)))
+      fechas <- fechas[!is.na(fechas)]
+      if (!length(fechas)) return(data.frame())
+      fuente <- .in_fuente(racafeBD::CargarDatos, "CRMINDICADORES")
+      dplyr::bind_rows(lapply(fechas, function(fecha) {
+        .in_mercado_fecha(fuente, as.Date(fecha, origin = "1970-01-01"))
+      }))
+    }), col_labels = c(FechaActualizacion = "Fecha de creación del pedido", Indicador = "Indicador de mercado",
+      Valor = "Valor registrado ese día"))
     lineas <- shiny::reactive({
       shiny::req(input$pedido_tab == "Líneas")
       x <- contenido()$datos

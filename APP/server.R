@@ -337,13 +337,65 @@ server <- function(input, output, session) {
     lotes_operativos = reactive(exportacion_rv()$homologaciones$lotes)))
   reglas_productos_rv <- reactiveVal(NA_real_)
   observeEvent(filtros(), { reglas_productos_rv(NA_real_) }, ignoreInit = TRUE)
+  resumen_pipeline <- reactive(.kb_facturacion(cargar_pipeline_embudo(), maestro_base_comercial(),
+    filtros(), usuario(), es_admin(), clientes_raw_cache()))
+  resumen_pendientes <- reactive({
+    x <- .pen_tipificar(.pen_preparar(maestro_comercial(), as.Date(filtros()$fecha[[2]]))$detalle,
+      maestro_comercial())
+    x <- x[x$TipoPendiente %in% .PEN_TIPOS, , drop = FALSE]
+    nrow(unique(x[c("Nivel", "Pedido", "Linea", "Lote")]))
+  })
+  resumen_cartera <- reactive({
+    h <- cartera_financiera_r()
+    c <- .com_clientes(clientes_raw_cache(), as.Date(filtros()$fecha[[2]]), filtros())
+    x <- .car_scope(h$cartera, c, exportacion_rv()$homologaciones$nit_principal)
+    fechas <- as.Date(x$TCEFch)
+    fechas <- fechas[!is.na(fechas) & fechas <= as.Date(filtros()$fecha[[2]])]
+    if (!length(fechas)) return(NA_real_)
+    .com_suma(.car_preparar(x, max(fechas))$Saldo)
+  })
   indicadores_resumen <- reactive({
     presupuesto <- presupuesto_mod$resumen_ejecutivo()
+    seguro <- function(expr) tryCatch(expr, error = function(e) {
+      message("[Resumen ejecutivo] ", conditionMessage(e)); NA_real_
+    })
+    contar_etapa <- function(etapa) seguro(sum(resumen_pipeline()$Etapa %in% etapa))
+    productos <- .prod_indicadores(.prod_preparar(maestro_comercial(), as.Date(filtros()$fecha)))
     list(gc_presupuesto_sacos = presupuesto$sacos, gc_presupuesto_margen = presupuesto$margen,
-      ge_validacion = validacion_mod$cuadre_sacos(), gc_tareas = menu_tareas$tareas$n(),
-      pd_ejecucion = if (length(filtros()$fecha) == 2L) {
-        .prod_indicadores(.prod_preparar(maestro_comercial(), as.Date(filtros()$fecha)))$productos
-      } else NA_real_, pd_marketbasket = reglas_productos_rv())
+      ge_validacion = function() seguro(validacion_mod$cuadre_sacos()), gc_tareas = menu_tareas$tareas$n(),
+      ge_participacion = productos$clientes,
+      ge_evolucion = function() seguro({
+        fechas <- as.Date(filtros()$fecha)
+        anterior <- .prod_preparar(maestro_comercial(),
+          lubridate::add_with_rollback(fechas, -lubridate::years(1)))
+        actual <- .prod_preparar(maestro_comercial(), fechas)
+        previo <- .com_suma(anterior$SacosFact)
+        .gc_ratio(.com_suma(actual$SacosFact) - previo, abs(previo))
+      }),
+      gc_fidelidad = function() seguro({
+        x <- maestro_comercial()
+        corte <- as.Date(filtros()$fecha[[2]])
+        x <- x[x$EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO") &
+          !is.na(x$FecFact) & x$FecFact <= corte & is.finite(x$SacosFact) & x$SacosFact > 0, , drop = FALSE]
+        ultimas <- x %>% dplyr::group_by(CliNitPpal) %>%
+          dplyr::summarise(Ultima = max(FecFact), .groups = "drop")
+        if (!nrow(ultimas)) NA_real_ else mean(as.integer(corte - ultimas$Ultima) <= 90L)
+      }),
+      gc_pendientes = function() seguro(resumen_pendientes()), gc_cartera = function() seguro(resumen_cartera()),
+      pr_kanban = function() seguro(nrow(resumen_pipeline())),
+      pr_contactos = function() contar_etapa("CONTACTO"), pr_leads = function() contar_etapa("LEAD"),
+      pr_prospectos = function() contar_etapa("PROSPECTO"), pr_clientes = function() contar_etapa("CLIENTE"),
+      pr_descartados = function() contar_etapa("DESCARTADO"),
+      gc_oportunidades = function() seguro({
+        contactos <- .op_contactos_visibles(.pr_cargar("CRMNALCONTACTO"), usuario(), es_admin())
+        x <- .op_preparar(.pr_cargar("CRMNALCLOPT"), contactos, maestro_comercial(),
+          usuario(), es_admin(), as.Date(filtros()$fecha[[2]]))
+        f <- filtros()
+        x <- x[.in_linea(x$Linea) %in% f$linneg & x$Categoria %in% f$categoria &
+          x$Producto %in% f$producto & (is.na(x$Asesor) | x$Asesor %in% f$asesor), , drop = FALSE]
+        sum(!x$Descartada, na.rm = TRUE)
+      }),
+      pd_ejecucion = productos$productos, pd_marketbasket = reglas_productos_rv())
   })
 
   ### Generalidades ----
@@ -398,7 +450,7 @@ server <- function(input, output, session) {
   CargarTabUnaVez("GC_Cartera", "ui_GC_Cartera", function() CarteraComercialUI("CarteraComercial"),
     function() CarteraComercial("CarteraComercial", cartera_financiera_r, clientes_raw_cache,
       reactive(exportacion_rv()$homologaciones$nit_principal),
-      filtros, es_admin))
+      filtros, es_admin, maestro = maestro_comercial))
   
   consulta_modal_solicitada <- reactiveVal(NULL)
   consulta_modal_iniciada <- FALSE

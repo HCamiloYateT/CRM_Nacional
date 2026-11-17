@@ -64,9 +64,10 @@
   }
   con_lote <- paste(pedidos$Pedido, pedidos$Linea) %in%
     paste(lotes$Pedido[lotes$LoteDocumentado], lotes$Linea[lotes$LoteDocumentado])
-  elegible <- con_lote | is.na(pedidos$Creacion) | pedidos$Creacion >= as.Date("2020-01-01")
+  inicio_anho <- as.Date(format(hoy, "%Y-01-01"))
+  elegible <- !is.na(pedidos$Creacion) & pedidos$Creacion >= inicio_anho
   sin_trazabilidad <- pedidos[pedidos$Activo & !elegible, , drop = FALSE]
-  sin_trazabilidad$Motivo <- "Pedido anterior a 2020 sin lote documentado; excluido de pendientes operativos"
+  sin_trazabilidad$Motivo <- "Pedido de años anteriores o sin fecha; no se incluye en pendientes de este año"
   agregar(sin_trazabilidad, "Información incompleta", rep(NA_real_, nrow(sin_trazabilidad)), "Pedido")
   activos <- pedidos[pedidos$Activo & elegible, , drop = FALSE]
   etapas <- list("Sin asignar" = activos$SinAsignar > 0.1,
@@ -82,7 +83,8 @@
     saldo <- switch(etapa, "Por producir" = lotes$Asignados - lotes$Producidos,
       "Por despachar" = lotes$Producidos - lotes$Despachados,
       "Por facturar" = lotes$Despachados - lotes$Facturados)
-    filas <- which(saldo > 0.1 & lotes$PedidoActivo)
+    filas <- which(saldo > 0.1 & lotes$PedidoActivo &
+      !is.na(lotes$Asignacion) & lotes$Asignacion >= inicio_anho)
     agregar(lotes[filas, ], etapa, saldo[filas], "Lote")
   }
   filas <- which(activos$Pendientes > 0.1 & !is.finite(activos$MargenEstimado))
@@ -156,14 +158,15 @@ PendientesGestionUI <- function(id) {
           racafeForms::racafeInputSwitch("producir", "Por producir", value = TRUE, ns = ns),
           racafeForms::racafeInputSwitch("despachar", "Por despachar", value = TRUE, ns = ns),
           racafeForms::racafeInputSwitch("facturar", "Por facturar", value = TRUE, ns = ns)),
-        .crm_tabla_ui(ns(paste0(mid, "resumen"))), .crm_plot_output(ns(paste0(mid, "grafico"))),
+        shiny::fluidRow(shiny::column(6, .crm_plot_output(ns(paste0(mid, "grafico")))),
+          shiny::column(6, .crm_tabla_ui(ns(paste0(mid, "resumen"))))),
         .crm_tabla_ui(ns(mid)),
         if (tipo == "Otros pendientes") .crm_disclosure("Gestión documental por lote",
           .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("detalle"))))
     }))), .crm_nota(c("Cada lote aparece una vez en Lotes pendientes, aunque tenga varias gestiones por completar.",
-      "Los interruptores incluyen lotes que cumplan al menos una condición seleccionada.",
+      "Mostramos pedidos y lotes creados este año. Active las situaciones que quiere revisar.",
       "Las cantidades pendientes de producir, despachar y facturar se presentan por separado; no se suman.",
-      "Seleccione un pedido para consultar su trazabilidad.")))
+      "Pulse el número de pedido para ver sus cantidades, fechas y movimientos.")))
 }
 
 PendientesGestion <- function(id, maestro, usuario = function() "SIN IDENTIFICAR", corte = function() Sys.Date()) {
@@ -185,12 +188,13 @@ PendientesGestion <- function(id, maestro, usuario = function() "SIN IDENTIFICAR
       })
       .crm_vancouver_server(paste0(mid, "resumen"), shiny::reactive(.pen_resumen_tipo(filas())))
       sel <- .crm_tabla_servidor(mid, data = filas, id_col = "Registro", modo_seleccion = "fila",
-        columnas = c("Cliente", "Pedido", "Linea", "Lote", "Creacion", "Asignacion", "Fecha", "Cantidad",
+        columnas = c("Cliente", "Pedido", "Linea", "Lote", "Creacion", "Asignacion", "Fecha",
+          if (categoria == "Pendientes de margen") "FecFact", "Cantidad",
           "PorProducir", "PorDespachar", "PorFacturar", "Categoria", "Producto", "CLLinNegNo", "Asesor", "Motivo",
           if (categoria != "Pendientes de margen") "Etapa"),
         col_labels = c(Pedido = "Código de pedido", Linea = "Línea del pedido", Lote = "Código de lote",
           Creacion = "Fecha de creación del pedido", Asignacion = "Fecha de asignación del lote",
-          Fecha = "Fecha estimada del pedido", Cantidad = "Sacos pendientes (70 kg)",
+          FecFact = "Fecha de factura", Fecha = "Fecha estimada del pedido", Cantidad = "Sacos pendientes (70 kg)",
           PorProducir = "Sacos pendientes de producir", PorDespachar = "Sacos pendientes de despachar",
           PorFacturar = "Sacos pendientes de facturar"),
         modal_titulo_fn = function(sel) "Trazabilidad del pedido",
@@ -204,8 +208,9 @@ PendientesGestion <- function(id, maestro, usuario = function() "SIN IDENTIFICAR
         x$Tramo <- dplyr::case_when(is.na(x$Antiguedad) ~ "Sin fecha", x$Antiguedad < 0 ~ "Futuro",
           x$Antiguedad <= 30 ~ "0–30 días", x$Antiguedad <= 60 ~ "31–60 días", TRUE ~ "Más de 60 días")
         x <- x %>% dplyr::group_by(Tramo) %>% dplyr::summarise(Registros = dplyr::n(), .groups = "drop")
-        plotly::plot_ly(x, x = ~Tramo, y = ~Registros, type = "bar", marker = list(color = "#7A2028"),
-          hovertemplate = "%{x}<br>Registros: %{y:.0f}<extra></extra>")
+        plotly::plot_ly(x, x = ~Registros, y = ~Tramo, type = "bar", orientation = "h",
+          marker = list(color = "#0072B2"),
+          hovertemplate = "%{y}<br>Registros: %{x:.0f}<extra></extra>")
       })
     })
     .gc_tarjetas_server(c(pedidos = "Pedidos por gestionar", producir = "Lotes por producir",
@@ -326,6 +331,7 @@ PendientesGestion <- function(id, maestro, usuario = function() "SIN IDENTIFICAR
   dplyr::distinct(x)
 }
 .pen_resumen_tipo <- function(x) {
+  if (!nrow(x)) return(data.frame())
   contar <- function(campos) {
     if (!all(campos %in% names(x))) return(NA_integer_)
     z <- x[campos]; buenos <- Reduce(`&`, lapply(z, function(v) !is.na(v) & !as.character(v) %in% c("", "0")))

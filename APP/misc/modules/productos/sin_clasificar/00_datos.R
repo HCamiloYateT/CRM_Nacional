@@ -29,6 +29,7 @@
       Lote = as.character(.gc_columna(x, "CLLotCod")),
       IdRegistroCRM = as.character(.gc_columna(x, "IdRegistroCRM")),
       EstadoFinanciero = as.character(.gc_columna(x, "EstadoFinanciero")),
+      FechaPedido = as.Date(.gc_columna(x, c("FechaCreacionPedido", "PdcFecCre"))),
       FecFact = as.Date(.gc_columna(x, "FecFact")),
       SacosFact = suppressWarnings(as.numeric(.gc_columna(x, "SacosFact"))), stringsAsFactors = FALSE)
     referencias$Referencia <- .clas_llave(referencias)
@@ -61,6 +62,13 @@
     }
   }
   x <- catalogo[.clas_vacio(catalogo$Categoria) | .clas_vacio(catalogo$Producto), , drop = FALSE]
+  x$PrimerPedido <- rep(as.Date(NA), nrow(x)); x$UltimoPedido <- rep(as.Date(NA), nrow(x))
+  if (nrow(observadas)) {
+    fechas <- observadas %>% dplyr::group_by(Referencia) %>% dplyr::summarise(
+      PrimerPedido = .gc_fecha_min(FechaPedido), UltimoPedido = .gc_fecha_max(FechaPedido), .groups = "drop")
+    i <- match(x$Referencia, fechas$Referencia)
+    x$PrimerPedido <- fechas$PrimerPedido[i]; x$UltimoPedido <- fechas$UltimoPedido[i]
+  }
   x$NumeroLotes <- 0L
   if (nrow(observadas)) {
     lotes <- unique(observadas[!.clas_vacio(observadas$Lote) & observadas$Lote != "0", c("Referencia",
@@ -213,7 +221,8 @@
   x$MarcaCod <- .gc_columna(x, "MarcaPedidoCod")
   x$NombreSolicitado <- .gc_columna(x, "NombreComercialPedido")
   x %>% dplyr::group_by(CLPdcCod, CLPdcLin) %>% dplyr::summarise(
-    Cliente = .gc_unico(PerRazSoc), LineaNegocio = .gc_unico(CLLinNegNo),
+    NIT = .gc_unico(CLCliNit), Cliente = .gc_unico(PerRazSoc), Asesor = .gc_unico(Asesor),
+    LineaNegocio = .gc_unico(CLLinNegNo),
     CodigoProducto = .gc_unico(LinProCodPedido), CodigoMarca = .gc_unico(MarcaCod),
     NombreComercial = .gc_unico(NombreSolicitado), CantidadSolicitada = .gc_unico(CantidadSolicitada),
     FechaPedido = .gc_unico(FechaPedido), Estado = .gc_unico(EstadoPedido),

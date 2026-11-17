@@ -35,8 +35,15 @@ CarteraComercialUI <- function(id) {
   ns <- shiny::NS(id)
   shiny::tagList(shiny::uiOutput(ns("fuente")),
     .gc_tarjetas_ui(ns, c(saldo = "Saldo total · COP", vigente = "Saldo vigente · COP", vencido = "Saldo vencido · COP",
-      porcentaje = "Exposición positiva vencida", mora = "Mayor mora · días", documentos = "Facturas con saldo")),
-    bs4Dash::tabsetPanel(id = ns("cartera_tab"),
+      porcentaje = "% de cartera vencida", mora = "Mayor mora · días", documentos = "Facturas con saldo")),
+    bs4Dash::tabsetPanel(id = ns("cartera_tab"), selected = "Resumen de cartera",
+    tabPanel("Resumen de cartera",
+      .crm_select("dimension_saldo", "Ver cartera por", choices = c("Línea de negocio" = "Negocio",
+        "Categoría" = "Categoria", "Producto" = "Producto"), selected = "Negocio", ns = ns),
+      .crm_plot_output(ns("grafico_saldos")), .crm_tabla_ui(ns("resumen_saldos")),
+      .crm_nota(c("Abierta: dinero que aún le deben. Vencida: la parte que ya pasó su fecha de pago.",
+        "El porcentaje vencido permite identificar dónde conviene concentrar la gestión de cobro.",
+        "Cuando no se puede identificar un único producto, se muestra SIN CLASIFICAR; el saldo no se reparte."))),
     tabPanel("Cosechas de crédito", racafeForms::racafeForm(variant = "plain",
       racafeForms::racafeFormRow(columns = 4,
         .crm_select("origen_cosecha", "Definir cosecha por", choices = c("Fecha de factura" = "Emision",
@@ -57,14 +64,15 @@ CarteraComercialUI <- function(id) {
       .crm_tabla_ui(ns("negocios"))),
     tabPanel("Cambios de mora entre los últimos cortes", .crm_plot_output(ns("deterioro")),
       .crm_tabla_ui(ns("deterioro_detalle"))),
-    tabPanel("Pagos documentados y condiciones de crédito", .crm_tabla_ui(ns("pagos"))),
+    tabPanel("Pagos confirmados", .crm_tabla_ui(ns("pagos")),
+      .crm_nota("Aquí solo se consideran facturas con pago total registrado. Sin fecha no se confirma un pago.")),
     tabPanel("Documentos al corte observado", .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("detalle")))),
-    .crm_nota_metodologica(c("Corte: última fotografía disponible hasta la fecha final del controlbar.",
-      "El porcentaje vencido usa saldos positivos; los saldos a favor permanecen en el saldo total.",
-      "Las reducciones de saldo no se interpretan como pagos. La fuente de recibos aporta la última fecha, no cada abono.",
-      "No se distribuyen saldos entre categorías o productos. El alcance comercial conserva cliente y línea.")))
+    .crm_nota_metodologica(c("Las cifras corresponden al último reporte disponible hasta la fecha que eligió.",
+      "El porcentaje vencido compara lo atrasado con todo lo que está por cobrar.",
+      "Una reducción del saldo puede tener varias causas. Solo mostramos pagos cuando están confirmados.",
+      "Use los filtros generales para consultar los clientes y líneas que tiene a cargo.")))
 }
-CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admin) {
+CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admin, maestro = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     hasta <- shiny::reactive(as.Date(filtros()$fecha[[2]]))
     catalogo <- shiny::reactive(.com_clientes(clientes(), hasta(), filtros()))
@@ -80,7 +88,46 @@ CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admi
     })
     corte <- shiny::reactive({ shiny::validate(shiny::need(length(cortes()) > 0L,
       "No hay cortes dentro del alcance comercial y hasta la fecha seleccionada.")); max(cortes()) })
-    datos <- shiny::reactive(.car_preparar(saldos(), corte()))
+    datos <- shiny::reactive({
+      x <- .car_preparar(saldos(), corte())
+      x$Categoria <- x$Producto <- rep("SIN CLASIFICAR", nrow(x))
+      if (!is.null(maestro) && all(c("LinNegCod", "LinProCod") %in% names(x))) {
+        m <- maestro()
+        m$LinNegCod <- ifelse(m$LinNegCod == 20000, 21000, m$LinNegCod)
+        meta <- m %>% dplyr::group_by(LinNegCod, LinProCod) %>% dplyr::summarise(
+          Categoria = .gc_unico(Categoria), Producto = .gc_unico(Producto), .groups = "drop")
+        claves <- function(z) paste(ifelse(z$LinNegCod == 20000, 21000, z$LinNegCod), z$LinProCod)
+        i <- match(claves(x), claves(meta))
+        for (campo in c("Categoria", "Producto")) {
+          x[[campo]] <- dplyr::coalesce(as.character(meta[[campo]][i]), "SIN CLASIFICAR")
+        }
+      }
+      x
+    })
+    resumen_saldos <- shiny::reactive({
+      x <- datos()
+      campo <- .com_elegir(input$dimension_saldo, c("Negocio", "Categoria", "Producto"), "Negocio")
+      x$Grupo <- as.character(x[[campo]])
+      x %>% dplyr::filter(is.finite(Saldo), Saldo > 0) %>% dplyr::group_by(Grupo) %>%
+        dplyr::summarise(Abierta = sum(Saldo),
+          Vencida = if (anyNA(DiasVencido)) NA_real_ else sum(Saldo[DiasVencido > 0]),
+          Facturas = .car_distintos(Documento), .groups = "drop") %>%
+        dplyr::mutate(PorcentajeVencido = Vencida / Abierta)
+    })
+    .crm_vancouver_server("resumen_saldos", resumen_saldos,
+      col_labels = c(Grupo = "Grupo", Abierta = "Saldo por cobrar · COP", Vencida = "Saldo vencido · COP",
+        PorcentajeVencido = "% vencido"),
+      col_specs = list(PorcentajeVencido = list(format = list(percent = TRUE, digits = 1))))
+    output$grafico_saldos <- .crm_render_plotly({
+      x <- resumen_saldos()
+      shiny::validate(shiny::need(nrow(x) > 0L, "No hay cartera por cobrar para estos filtros."))
+      plotly::plot_ly(x, x = ~Grupo) %>%
+        plotly::add_bars(y = ~Abierta, name = "Por cobrar", marker = list(color = "#0072B2"),
+          hovertemplate = "%{x}<br>Por cobrar: $%{y:,.0f}<extra></extra>") %>%
+        plotly::add_bars(y = ~Vencida, name = "Parte vencida", marker = list(color = "#D55E00"),
+          hovertemplate = "%{x}<br>Vencido: $%{y:,.0f}<extra></extra>") %>%
+        plotly::layout(barmode = "group", title = "Cuánto falta por cobrar y cuánto ya está vencido")
+    })
     facturas <- shiny::reactive({
       f <- fuente()$facturacion
       shiny::validate(shiny::need(is.data.frame(f), "La fuente no contiene facturas históricas."))
@@ -122,7 +169,7 @@ CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admi
     })
     output$fuente <- .crm_render_ui(.crm_nota(paste("Corte observado:", corte(), "· Fuente:", fuente()$origen)))
     .gc_tarjetas_server(c(saldo = "Saldo total · COP", vigente = "Saldo vigente · COP", vencido = "Saldo vencido · COP",
-      porcentaje = "Exposición positiva vencida", mora = "Mayor mora · días", documentos = "Facturas con saldo"),
+      porcentaje = "% de cartera vencida", mora = "Mayor mora · días", documentos = "Facturas con saldo"),
       shiny::reactive({
         d <- datos(); positivos <- d[is.finite(d$Saldo) & d$Saldo > 0, ]
         conocido <- !is.na(positivos$DiasVencido)

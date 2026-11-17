@@ -5,7 +5,7 @@
   b <- rep_len(b, n)
   ifelse(is.finite(b) & b > 0, rep_len(a, n) / b, NA_real_)
 }
-.CAR_TRAMOS <- c("Pago oportuno", "1–7 días", "8–15 días", "16–30 días", "Más de 30 días")
+.CAR_TRAMOS <- c("Al día o antes", "1–7 días", "8–14 días", "15–29 días", "30–60 días", "Más de 60 días")
 .car_fecha <- function(x) {
   y <- as.Date(x)
   y[!is.na(y) & y <= as.Date("1900-01-01")] <- as.Date(NA)
@@ -121,7 +121,7 @@
   x$Saldo <- .gc_num(x$FcnSal)
   x$Pagada <- !is.na(x$FecPag) & is.finite(x$Saldo) & abs(x$Saldo) < 0.01 &
     !is.na(x$DiasPago) & x$DiasPago >= 0
-  x$DiasAtraso <- ifelse(x$Pagada & !is.na(x$FecVto), pmax(0, as.integer(x$FecPag - x$FecVto)), NA_real_)
+  x$DiasAtraso <- ifelse(x$Pagada & !is.na(x$FecVto), as.integer(x$FecPag - x$FecVto), NA_real_)
   x$DiasMoraActual <- ifelse(!x$Pagada & x$Saldo > 0 & !is.na(x$FecVto),
     pmax(0, as.integer(as.Date(hoy) - x$FecVto)), NA_real_)
   x$EstadoPago <- ifelse(x$Pagada, "Pago total registrado", "Sin pago total acreditado")
@@ -148,7 +148,7 @@
 }
 .car_comportamiento <- function(pagos, concepto = "Valor") {
   x <- pagos[pagos$Pagada & !pagos$FueraPeriodo & !is.na(pagos$Documento) & !is.na(pagos$DiasAtraso), ]
-  x$Tramo <- cut(x$DiasAtraso, breaks = c(-Inf, 0, 7, 15, 30, Inf), labels = .CAR_TRAMOS)
+  x$Tramo <- cut(x$DiasAtraso, breaks = c(-Inf, 0, 7, 14, 29, 60, Inf), labels = .CAR_TRAMOS)
   x$FormaPago <- as.character(.gc_columna(x, "ForPagNom", "Sin dato"))
   x$Metrica <- if (concepto == "Valor") x$Valor / 1e6 else if (concepto == "Sacos") {
     .gc_num(.gc_columna(x, "Sacos"))
@@ -249,11 +249,11 @@
   curvas <- dplyr::bind_rows(inicial, curvas) %>% dplyr::arrange(Cohorte, Grupo, Edad)
   if (nrow(curvas)) curvas$Celda <- paste(curvas$Cohorte, curvas$Grupo, curvas$Edad, sep = "|")
   list(curvas = curvas, documentos = f, observaciones = detalle,
-    limitacion = c("Edad 0: referencia del valor original (100%), no un saldo observado.",
-      "Edad 1: último corte disponible del mes de origen; edad 2: mes siguiente, y así sucesivamente.",
-      "Una factura ausente deja el porcentaje desconocido. No se interpolan saldos ni se infieren pagos.",
-      "Las variaciones pueden incluir pagos, notas crédito o ajustes; esta fuente no permite separarlos.",
-      "Asesor y segmento corresponden al catálogo actual, no a una asignación histórica reconstruida."))
+    limitacion = c("Inicio: el 100% representa el valor original de las facturas, no lo que aún deben.",
+      "Mes 1 muestra el último reporte del mes en que nacieron las facturas; mes 2, el mes siguiente.",
+      "Si falta el reporte de una factura, no asumimos que ya fue pagada.",
+      "El saldo puede cambiar por pagos, notas crédito o ajustes. Este reporte no permite distinguir cada causa.",
+      "El asesor y el segmento son los que tiene el cliente hoy; pueden ser distintos de los de años anteriores."))
 }
 .car_detalle_cosecha <- function(x, celda) {
   fila <- x$curvas[x$curvas$Celda %in% celda, , drop = FALSE]
@@ -321,4 +321,15 @@
   attr(f, "limite_alcance") <- paste("Solo se incluyen facturas cuya línea se verificó en cartera y quedó íntegramente autorizada.",
     "Los documentos sin correspondencia o con líneas fuera del alcance no se prorratean.")
   f
+}
+
+# Distribución de pagos: una factura confirmada cuenta una sola vez.
+.car_pagos_tramos <- function(pagos) {
+  if (!is.data.frame(pagos) || !nrow(pagos)) return(data.frame())
+  x <- pagos[pagos$Pagada %in% TRUE & !pagos$FueraPeriodo & is.finite(pagos$DiasAtraso), , drop = FALSE]
+  x <- x[!is.na(x$Documento) & !duplicated(x$Documento), , drop = FALSE]
+  if (!nrow(x)) return(data.frame())
+  tramos <- cut(x$DiasAtraso, breaks = c(-Inf, 0, 7, 14, 29, 60, Inf), labels = .CAR_TRAMOS)
+  n <- as.integer(table(tramos))
+  data.frame(Tramo = .CAR_TRAMOS, Facturas = n, Porcentaje = n / sum(n))
 }

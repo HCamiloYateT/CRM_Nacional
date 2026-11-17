@@ -41,11 +41,12 @@
     pesos_validos <- if (sum(pesos) > 0) pesos else fraccion
     if (sum(pesos_validos) == 0) pesos_validos <- as.numeric(futuro)
     reparto <- (sum(plan) - observado) * pesos_validos / sum(pesos_validos)
-    ritmo[futuro] <- pmax(reparto[futuro], pesos[futuro])
-    minimo_aplicado <- any(reparto[futuro] < pesos[futuro])
+    ritmo[futuro] <- pmax(reparto[futuro], plan[futuro])
+    minimo_aplicado <- any(reparto[futuro] < plan[futuro])
   }
   requerido <- if (acumulada) observado + cumsum(ifelse(futuro, ritmo, 0)) else ritmo
   requerido[!futuro] <- NA_real_
+  if (acumulada) requerido[futuro] <- pmax(requerido[futuro], cumsum(plan)[futuro])
   salida <- data.frame(Mes = fin_mes, Presupuesto = if (acumulada) cumsum(plan) else plan,
     Ejecucion = if (acumulada) cumsum(ejecucion) else ejecucion, Ritmo = requerido,
     Composicion = componentes, BaseCorte = observado)

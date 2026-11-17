@@ -33,7 +33,7 @@
   x$Lote[x$Lote %in% c("", "0")] <- NA_character_
   x$Mes <- .gc_mes(x$FecFact)
   mapa <- x %>% dplyr::distinct(Linea, Categoria, Producto) %>% dplyr::arrange(Linea, Categoria, Producto) %>%
-    dplyr::mutate(Item = seq_len(dplyr::n()), Etiqueta = paste(Linea, Categoria, Producto, sep = " › "))
+    dplyr::mutate(Item = seq_len(dplyr::n()), Etiqueta = paste(Categoria, Producto, sep = " › "))
   x <- dplyr::left_join(x, mapa, by = c("Linea", "Categoria", "Producto"))
   x
 }
@@ -51,8 +51,8 @@
       Participacion = .prod_div(pmax(Sacos, 0), sum(pmax(Sacos, 0), na.rm = TRUE))) %>%
     dplyr::arrange(dplyr::desc(Sacos))
   x$Grupo <- seq_len(nrow(x))
-  x$Etiqueta <- if (nivel == "categoria") paste(x$Linea, x$Categoria, sep = " › ") else {
-    paste(x$Linea, x$Categoria, x$Producto, sep = " › ")
+  x$Etiqueta <- if (nivel == "categoria") x$Categoria else {
+    paste(x$Categoria, x$Producto, sep = " › ")
   }
   x
 }
@@ -85,7 +85,7 @@
     dplyr::mutate(Cesta = dplyr::cur_group_id()) %>% dplyr::ungroup()
   if (nivel == "categoria") {
     mapa <- x %>% dplyr::distinct(Linea, Categoria) %>% dplyr::arrange(Linea, Categoria) %>%
-      dplyr::mutate(Item = seq_len(dplyr::n()), Etiqueta = paste(Linea, Categoria, sep = " › "))
+      dplyr::mutate(Item = seq_len(dplyr::n()), Etiqueta = Categoria)
     x$Item <- x$Etiqueta <- NULL
     x <- dplyr::left_join(x, mapa, by = c("Linea", "Categoria"))
   } else if (nivel != "producto") stop("Nivel de ítem no permitido.")

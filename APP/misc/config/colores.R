@@ -38,10 +38,11 @@
   }
   paletas <- list(prioridad = .COLORES_PRIORIDAD,
     auxiliar = c(PRESUPUESTO = "#495057", EJECUCIÓN = "#DA291C", `RITMO REQUERIDO` = "#A38A33",
-      `SIN CLASIFICAR` = "#ADB5BD"), linneg = c(COPRODUCTOS = "#7A2028", CONVENCIONALES = "#7A2028", `10000` = "#7A2028",
-      `A LA MEDIDA` = "#9B7160", DIFERENCIADOS = "#9B7160", `21000` = "#9B7160"),
-    etapa = c(CONTACTO = "#C8C8C8", LEAD = "#0073A8", PROSPECTO = "#C9A66B", CLIENTE = "#B3001B",
-      DESCARTADO = "#1A1A1A"), estado = c(ACTIVO = "#6C5146", INACTIVO = "#ADB5BD", NUEVO = "#C8A77D"),
+      `SIN CLASIFICAR` = "#ADB5BD"),
+    linneg = c(COPRODUCTOS = "#0072B2", CONVENCIONALES = "#0072B2", `10000` = "#0072B2",
+      `A LA MEDIDA` = "#E69F00", DIFERENCIADOS = "#E69F00", `21000` = "#E69F00"),
+    etapa = c(CONTACTO = "#6C757D", LEAD = "#0072B2", PROSPECTO = "#E69F00", CLIENTE = "#009E73",
+      DESCARTADO = "#CC79A7"), estado = c(ACTIVO = "#009E73", INACTIVO = "#6C757D", NUEVO = "#CC79A7"),
     rfm = c(`LEALES RECIENTES` = "#7A2028", `LEALES EN RIESGO` = "#495057", `NUEVOS OBSERVADOS` = "#C8A77D",
       `RECIENTES OCASIONALES` = "#9B7160", `OCASIONALES RECIENTES` = "#9B7160", `POR REACTIVAR` = "#ADB5BD",
         `COMPRA ÚNICA OBSERVADA` = "#D8C5A8",
@@ -61,13 +62,9 @@
     if (length(fijo) && !is.na(fijo)) return(fijo)
     h <- hash(paste(dimension, padre[i], padre2[i], valores[i], sep = "|"))
     if (dimension %in% c("categoria", "producto")) {
-      base <- if (padre[i] %in% c("A LA MEDIDA", "21000")) 48 else 12
-      categoria <- if (dimension == "categoria") valores[i] else padre2[i]
-      tono <- base + (hash(categoria) %% 29) - 14
-      luz <- if (dimension == "categoria") 45 + hash(categoria) %% 15 else 38 + h %% 35
-      return(grDevices::hcl(h = tono, c = 22 + hash(categoria) %% 15, l = luz))
+      return(grDevices::hcl(h = h %% 360, c = 55, l = 55))
     }
-    grDevices::hcl(h = 12 + h %% 35, c = 18 + h %% 23, l = 35 + (h %/% 37) %% 35)
+    grDevices::hcl(h = h %% 360, c = 55, l = 50 + (h %/% 37) %% 15)
   }, character(1))
   configurados <- .crm_colores_catalogo()
   if (nrow(configurados)) {

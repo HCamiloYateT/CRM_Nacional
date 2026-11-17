@@ -25,7 +25,12 @@
 
 TableroTareasUI <- function(id) {
   ns <- shiny::NS(id)
-  shiny::tags$div(class = "crm-tareas-form", racafeForms::racafeForm(variant = "plain",
+  shiny::tags$div(class = "crm-tareas-form",
+    shiny::tags$style(".crm-tareas-form .kpb-card-menu .btn,.crm-tareas-form .rm-action-trigger{
+      background:#fff!important;color:#495057!important;
+      border:1px solid #adb5bd!important;border-radius:50%;box-shadow:none;width:28px;height:28px;}
+      .crm-tareas-form .kb-collapse-toggle{background:transparent;border:0;color:#495057;padding:4px;}
+      .crm-tareas-form .kpb-card{margin-bottom:10px;}"), racafeForms::racafeForm(variant = "plain",
     racafeForms::racafeActionBar(left = shiny::tagList(
       shiny::tagAppendAttributes(racafeForms::racafeButton("crear", "Nueva tarea o nota", icon = "plus", ns = ns),
         `data-rf-controlbar-tab` = "Crear tareas"),
@@ -76,7 +81,7 @@ TableroTareas <- function(id, usuario, datos, abrir, refrescar, es_admin = funct
         ns = session$ns, campos = c(id = "cons", titulo = "titulo", descripcion = "Descripcion",
           prioridad = "Prioridad", responsable = "Responsable", tipo = "Tipo", cumplido = "Cumplido",
           archivado = "Archivado", vencimiento = "FechaCumplimiento"), nota_fn = .crm_nota,
-            colores = .crm_colores("prioridad", .TSK_PRIORIDADES), arrastrable = !is.null(actuar),
+            colores = .crm_colores("prioridad", .TSK_PRIORIDADES), arrastrable = FALSE,
         acciones_fn = function(fila) {
           acciones <- c(abrir = "Abrir detalle")
           creador <- identical(as.character(fila$Usuario[[1]]), as.character(usuario()))
@@ -103,13 +108,6 @@ TableroTareas <- function(id, usuario, datos, abrir, refrescar, es_admin = funct
       if (is.null(actuar)) {
         if (identical(x$accion, "abrir")) abrir(x$codigo)
       } else actuar(x$codigo, x$accion)
-    })
-    shiny::observeEvent(input$MoverTarjeta, {
-      x <- input$MoverTarjeta
-      fila <- seleccion()[as.character(seleccion()$cons) %in% as.character(x$codigo), , drop = FALSE]
-      shiny::req(!is.null(actuar), nrow(fila) == 1L, identical(as.character(fila$Prioridad), x$desde),
-        x$hacia %in% .TSK_PRIORIDADES)
-      actuar(x$codigo, "prioridad", x$hacia)
     })
     list(datos = seleccion)
   })
