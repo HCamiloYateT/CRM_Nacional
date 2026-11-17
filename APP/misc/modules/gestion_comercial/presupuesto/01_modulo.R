@@ -952,6 +952,24 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     # Reactivos de datos base
     datos_base_r    <- reactive({ procesar_datos_base(datos_centrales_r(), periodo_r() - 1L) })
     datos_act_r     <- reactive({ procesar_datos_base(datos_centrales_r(), periodo_r()) })
+    # La tabla anual incluye el horizonte comercial; los KPIs cerrados conservan su fuente financiera.
+    datos_act_tabla_r <- reactive({
+      if (is.null(maestro)) return(datos_act_r())
+      x <- .resolver_datos(maestro)
+      columnas_ejecucion <- c("MesEjecucionPresupuesto", "SacosEjecucionPresupuesto70", "MargenEjecucionPresupuesto")
+      if (!all(columnas_ejecucion %in% names(x))) x <- .crm_capa_ejecucion(x)
+      f <- filtros_r()
+      if (!is.null(f)) x <- .gc_filtrar_dimensiones(x, f)
+      if ("IdRegistroCRM" %in% names(x) && anyDuplicated(x$IdRegistroCRM[!is.na(x$IdRegistroCRM)])) {
+        stop("El maestro de presupuesto contiene hechos duplicados.")
+      }
+      for (campo in intersect(c("Excluir", "ProdExcluir"), names(x))) x <- x[!x[[campo]] %in% "SI", , drop = FALSE]
+      x %>% filter(EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO", "PROYECTADO"),
+        !is.na(MesEjecucionPresupuesto), year(MesEjecucionPresupuesto) == periodo_r()) %>%
+        group_by(Periodo = year(MesEjecucionPresupuesto), Fecha = .MESES[month(MesEjecucionPresupuesto)]) %>%
+        summarise(Sacos70 = .com_suma(SacosEjecucionPresupuesto70),
+          MargenFCC = .com_suma(MargenEjecucionPresupuesto), .groups = "drop")
+    })
     ppto_r          <- reactive({ obtener_presupuesto(datos_centrales_r(), clientes_presupuesto_r(), periodo_r()) })
     datos_dim_r     <- reactive({ procesar_datos_dim(datos_centrales_r(), periodo_r()) })
     ppto_dim_r      <- reactive({ obtener_presupuesto_dim(datos_centrales_r(), clientes_presupuesto_r(), periodo_r()) })
@@ -1538,13 +1556,13 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
       cn          <- col_names_r()
 
       datos_ant <- datos_base_r() %>% filter(Periodo == periodo_ant)
-      datos_act <- datos_act_r()  %>% filter(Periodo == periodo)
+      datos_act <- datos_act_tabla_r() %>% filter(Periodo == periodo)
       ppto      <- ppto_r()
 
       ventas_mes <- bind_rows(datos_ant, datos_act) %>%
         group_by(Periodo, Fecha) %>%
-        summarise(Sacos70 = sum(Sacos70, na.rm = TRUE),
-                  MargenFCC = sum(MargenFCC, na.rm = TRUE), .groups = "drop")
+        summarise(Sacos70 = .com_suma(Sacos70),
+                  MargenFCC = .com_suma(MargenFCC), .groups = "drop")
       ppto_mes <- ppto %>%
         group_by(Periodo, Fecha) %>%
         summarise(PptoSS = sum(PptoSS, na.rm = TRUE),
@@ -1582,11 +1600,13 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
             cumsum(coalesce(!!sym(cn$ppto_margen), 0)), NA
           ),
           !!cn$acum_sacos_act  := ifelse(
-            !is.na(!!sym(cn$sacos_act)),
+            !is.na(!!sym(cn$sacos_act)) &
+              cumsum(as.character(Fecha) %in% datos_act$Fecha[is.na(datos_act$Sacos70)]) == 0L,
             cumsum(coalesce(!!sym(cn$sacos_act),  0)), NA
           ),
           !!cn$acum_margen_act := ifelse(
-            !is.na(!!sym(cn$margen_act)),
+            !is.na(!!sym(cn$margen_act)) &
+              cumsum(as.character(Fecha) %in% datos_act$Fecha[is.na(datos_act$MargenFCC)]) == 0L,
             cumsum(coalesce(!!sym(cn$margen_act), 0)), NA
           ),
           !!cn$cumpl_ss_acum   := ifelse(
@@ -1627,9 +1647,9 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           !!sym(cn$sacos_ant)   := sum(!!sym(cn$sacos_ant),   na.rm = TRUE),
           !!sym(cn$margen_ant)  := sum(!!sym(cn$margen_ant),  na.rm = TRUE),
           !!sym(cn$ppto_sacos)  := sum(!!sym(cn$ppto_sacos),  na.rm = TRUE),
-          !!sym(cn$sacos_act)   := sum(!!sym(cn$sacos_act),   na.rm = TRUE),
+          !!sym(cn$sacos_act)   := .com_suma(datos_act$Sacos70),
           !!sym(cn$ppto_margen) := sum(!!sym(cn$ppto_margen), na.rm = TRUE),
-          !!sym(cn$margen_act)  := sum(!!sym(cn$margen_act),  na.rm = TRUE),
+          !!sym(cn$margen_act)  := .com_suma(datos_act$MargenFCC),
           across(c(
             !!sym(cn$acum_sacos_ant), !!sym(cn$acum_margen_ant),
             !!sym(cn$acum_ppto_ss),   !!sym(cn$acum_sacos_act),
@@ -1668,7 +1688,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           .list = setNames(
             c(
               "", "Sacos", "Sacos Acum.", "Margen", "Margen Acum.",
-              rep(c("Presupuesto", "Ejecutado", "Cumplimiento", "Comp. Per. Ant."), 4)
+              rep(c("Presupuesto", "Ejecución comercial", "Cumplimiento", "Comp. Per. Ant."), 4)
             ),
             c(
               "Fecha",
@@ -1737,7 +1757,10 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
             paste0("Acumulado: ", periodo_r())), title = "Convenciones",
           swatches = c("#F0FDF4", "#F8FAFC", "#EFF6FF"))),
         .crm_disclosure("Metodología de ejecución y ritmo requerido", .crm_nota(c(
-          "Ejecución integra cierre, factura abierta y estimación residual del ETL en una sola serie.",
+          "La tabla y los gráficos incluyen cierre, factura abierta y estimación residual del ETL.",
+          "Los pedidos futuros se muestran en el mes de cumplimiento estimado, también después del corte seleccionado.",
+          "Ejecución comercial incluye cantidades estimadas; no significa que ya se hayan facturado.",
+          "Los KPIs y el cuadre financiero conservan su definición de ejecución real y meses cerrados.",
           "Un pedido parcial puede aparecer en las tres capas por cantidades diferentes; no se repite la cantidad facturada.",
           "El horizonte incluye las fechas futuras del pedido. Una estimación vencida conserva su fecha original.",
           "El margen de factura abierta y el comercial son provisionales. Si no se pueden calcular, permanecen vacíos.",
