@@ -2775,6 +2775,19 @@ crm_maestro <- crm_maestro %>%
 
 # Integridad del maestro: las cantidades observadas y estimadas conservan filas separadas.
 crm_maestro <- .crm_capa_ejecucion(crm_maestro)
+# Contrato de ejecución presupuestal: estimaciones en su mes, sin fabricar una factura ----
+.proyectados_presupuesto <- crm_maestro$EstadoFinanciero == "PROYECTADO"
+.mes_estimado_presupuesto <- as.Date(format(crm_maestro$FechaEstimadaPedido, "%Y-%m-01"))
+if (any(is.na(crm_maestro$MesEjecucionPresupuesto[.proyectados_presupuesto])) ||
+    any(crm_maestro$MesEjecucionPresupuesto[.proyectados_presupuesto] !=
+      .mes_estimado_presupuesto[.proyectados_presupuesto], na.rm = TRUE)) {
+  stop("La proyección de presupuesto no conserva el mes estimado del pedido.")
+}
+homologaciones$metodologia_presupuesto <- list(version = "EJECUCION-COMERCIAL-1",
+  estados = c("CERRADO", "FACTURADO_ABIERTO", "PROYECTADO"),
+  mes = "MesEjecucionPresupuesto", sacos = "SacosEjecucionPresupuesto70",
+  margen = "MargenEjecucionPresupuesto", proyeccion = "Residual por línea, sin facturación duplicada")
+
 homologaciones$diagnostico_fechas <- crm_maestro %>% filter(!is.na(RevisionFechaAnalitica)) %>%
   select(CLPdcCod, CLPdcLin, CLLotCod, EstadoEjecucion, FechaAnalitica, FechaCreacionPedido, RevisionFechaAnalitica)
 segmentos_vigentes <- .crm_segmento_vigente(margenes_pyg)

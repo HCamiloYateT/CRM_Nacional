@@ -18,6 +18,15 @@
   x$SacosAnaliticos70 <- ifelse(x$EsEstimado, campo("SacosProyectados"), campo("SacosFact"))
   x$MargenAnalitico <- ifelse(estado == "CERRADO", campo("MargenContable"),
     ifelse(estado == "FACTURADO_ABIERTO", campo("MargenAbiertoEstimado"), campo("MargenProyectado")))
+  # El presupuesto usa el mes financiero cerrado o el mes de la fecha comercial correspondiente.
+  fecha_presupuesto <- x$FechaAnalitica
+  cerrado <- estado %in% "CERRADO"
+  fecha_presupuesto[cerrado] <- dplyr::coalesce(as.Date(campo("FecMes", as.Date(NA))),
+    x$FechaAnalitica)[cerrado]
+  x$MesEjecucionPresupuesto <- as.Date(format(fecha_presupuesto, "%Y-%m-01"))
+  x$MesEjecucionPresupuesto[!estado %in% c("CERRADO", "FACTURADO_ABIERTO", "PROYECTADO")] <- as.Date(NA)
+  x$SacosEjecucionPresupuesto70 <- x$SacosAnaliticos70
+  x$MargenEjecucionPresupuesto <- x$MargenAnalitico
   if (all(c("CLLotCod", "SacosFact", "FacturadosOperativos70") %in% names(x))) {
     consolidado <- x %>% dplyr::filter(!is.na(CLLotCod), as.character(CLLotCod) != "0") %>%
       dplyr::group_by(CLLotCod) %>% dplyr::summarise(
