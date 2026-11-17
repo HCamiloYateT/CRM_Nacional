@@ -89,31 +89,92 @@
     "CLLotCod", "FecFact", "FecMes", "CantidadOriginal", "KgPorUnidad", "Kilos",
     "SacosDesdeKilos70",
     "SacosFact70", "DiferenciaContraKilos", "MetodoCantidad", "CausaConversion",
-    "EsValida", "ClaveRepetida"), names(x))]
+    "EsValida", "ClaveRepetida", "CodigoLineaOriginal", "ProductoOriginal", "LinNegCodFinanciero",
+    "ClaseAlcance", "MotivoAlcance"), names(x))]
+}
+
+# El alcance financiero no se deduce únicamente de un código de línea homologado ----
+.tz_clasificar_alcance <- function(documentos, pyg, lotes = data.frame()) {
+  numero <- function(x) suppressWarnings(as.numeric(as.character(x)))
+  unico <- function(x) {
+    v <- unique(x[!is.na(x)])
+    if (length(v) == 1L) v else NA_real_
+  }
+  financiero <- pyg[c("CLLotCod", "LinNegCod")]
+  financiero$CLLotCod <- numero(financiero$CLLotCod)
+  financiero$LinNegCod <- numero(financiero$LinNegCod)
+  financiero$LinNegCod[financiero$LinNegCod == 20000] <- 21000
+  financiero <- financiero %>%
+    dplyr::filter(!is.na(CLLotCod), CLLotCod != 0, LinNegCod %in% c(10000, 21000)) %>%
+    dplyr::group_by(CLLotCod) %>% dplyr::summarise(
+      LineaPYGAlcance = unico(LinNegCod), LineasPYG = dplyr::n_distinct(LinNegCod, na.rm = TRUE), .groups = "drop")
+  original <- data.frame(CLLotCod = numeric(), CodigoLineaOriginal = numeric(), ProductoOriginal = numeric())
+  if (is.data.frame(lotes) && "CLLotCod" %in% names(lotes)) {
+    n <- nrow(lotes)
+    campo <- function(candidatos) {
+      k <- intersect(candidatos, names(lotes))
+      if (length(k)) numero(lotes[[k[1]]]) else rep(NA_real_, n)
+    }
+    codigo <- campo(c("CLLinNegCo", "LinNegCodOrigen"))
+    codigo[codigo %in% 0] <- NA_real_
+    # La homologación solo perdió el origen de 20000/21000; 10000 sigue siendo inequívoco.
+    if ("LinNegCod" %in% names(lotes)) {
+      codigo[is.na(codigo) & numero(lotes$LinNegCod) %in% 10000] <- 10000
+    }
+    original <- data.frame(CLLotCod = numero(lotes$CLLotCod), CodigoLineaOriginal = codigo,
+      ProductoOriginal = campo(c("CLLinProCo", "LinProCod"))) %>%
+      dplyr::filter(!is.na(CLLotCod), CLLotCod != 0) %>% dplyr::group_by(CLLotCod) %>%
+      dplyr::summarise(CodigoLineaOriginal = unico(CodigoLineaOriginal),
+        ProductoOriginal = unico(ProductoOriginal), .groups = "drop")
+  }
+  mapa <- dplyr::full_join(financiero, original, by = "CLLotCod", relationship = "one-to-one")
+  # Mismo catálogo de tipos de producto usado por el universo operativo anterior a la ampliación 20000.
+  tipos_industria <- c(90030, 90040, 40050, 40100, 90025, 40150, 40200, 40010, 90035, 40250)
+  mapa$LineaSistemaAlcance <- ifelse(mapa$CodigoLineaOriginal %in% 21000, 21000,
+    ifelse(mapa$CodigoLineaOriginal %in% 10000 & mapa$ProductoOriginal %in% tipos_industria, 10000, NA_real_))
+  mapa$LinNegCodFinanciero <- dplyr::coalesce(mapa$LineaPYGAlcance, mapa$LineaSistemaAlcance)
+  mapa$LinNegCodFinanciero[which(mapa$LineasPYG > 1L)] <- NA_real_
+  mapa$ClaseAlcance <- dplyr::case_when(
+    mapa$LineasPYG > 1L ~ "POR REVISAR",
+    mapa$LinNegCodFinanciero %in% c(10000, 21000) ~ "INCLUIDO",
+    mapa$CodigoLineaOriginal == 20000 ~ "POR REVISAR",
+    mapa$CodigoLineaOriginal == 10000 &
+      (is.na(mapa$ProductoOriginal) | mapa$ProductoOriginal == 0) ~ "POR REVISAR",
+    !is.na(mapa$CodigoLineaOriginal) ~ "FUERA DEL ALCANCE",
+    TRUE ~ "POR REVISAR")
+  mapa$MotivoAlcance <- dplyr::case_when(
+    mapa$LineasPYG > 1L ~ "El lote tiene varias líneas financieras; no se distribuye su factura arbitrariamente",
+    mapa$LineaPYGAlcance %in% c(10000, 21000) ~ "Lote documentado en el PyG de Industria Nacional",
+    mapa$LineaSistemaAlcance %in% c(10000, 21000) ~ "Lote del universo operativo original de Industria Nacional",
+    mapa$CodigoLineaOriginal == 20000 ~ "Código original 20000 sin evidencia de pertenencia al PyG comparado",
+    mapa$CodigoLineaOriginal == 10000 &
+      (is.na(mapa$ProductoOriginal) | mapa$ProductoOriginal == 0) ~
+      "Falta el tipo de producto original para verificar el alcance comercial",
+    !is.na(mapa$CodigoLineaOriginal) ~ "Línea o tipo de producto fuera del universo comparado",
+    TRUE ~ "No hay una referencia original de lote que permita atribuir la factura")
+  documentos <- documentos %>% dplyr::select(-dplyr::any_of(setdiff(names(mapa), "CLLotCod")))
+  documentos$CLLotCod <- numero(documentos$CLLotCod)
+  documentos <- dplyr::left_join(documentos, mapa, by = "CLLotCod", relationship = "many-to-one")
+  documentos$ClaseAlcance[is.na(documentos$ClaseAlcance)] <- "POR REVISAR"
+  documentos$MotivoAlcance[is.na(documentos$MotivoAlcance)] <-
+    "No hay una referencia original de lote que permita atribuir la factura"
+  documentos
 }
 
 # Comparar ambas medidas contra el PyG por mes y línea, conservando faltantes y claves ambiguas ----
 .tz_cuadre_unidades <- function(documentos, pyg, lotes = data.frame()) {
   requeridos <- c("SacosDesdeKilos70", "SacosFact70", "EsValida", "FecMes", "CLLotCod", "TipoFactura")
   if (!all(requeridos %in% names(documentos))) stop("Actualice el ETL para auditar la conversión de facturas.")
-  mapa <- pyg[c("CLLotCod", "LinNegCod")]
-  if (all(c("CLLotCod", "LinNegCod") %in% names(lotes))) mapa <- dplyr::bind_rows(mapa,
-    lotes[c("CLLotCod", "LinNegCod")])
-  mapa$LinNegCod <- ifelse(mapa$LinNegCod == 20000, 21000, mapa$LinNegCod)
-  mapa <- mapa %>% dplyr::filter(!is.na(CLLotCod)) %>% dplyr::group_by(CLLotCod) %>%
-    dplyr::summarise(LinNegCod = {
-      v <- unique(LinNegCod[!is.na(LinNegCod)])
-      if (length(v) == 1L) v else NA_real_
-    }, .groups = "drop")
+  documentos <- .tz_clasificar_alcance(documentos, pyg, lotes)
   sumar <- function(v) if (anyNA(v)) NA_real_ else sum(v)
-  fact <- documentos %>% dplyr::filter(EsValida %in% TRUE) %>%
-    dplyr::left_join(mapa, by = "CLLotCod", relationship = "many-to-one") %>%
+  fact <- documentos %>% dplyr::filter(EsValida %in% TRUE, ClaseAlcance == "INCLUIDO") %>%
+    dplyr::mutate(LinNegCod = LinNegCodFinanciero) %>%
     dplyr::mutate(Antes = ifelse(TipoFactura == "NACIONAL", SacosDesdeKilos70, SacosFact70)) %>%
     dplyr::group_by(FecMes, LinNegCod) %>%
     dplyr::summarise(FacturacionAntes = sumar(Antes), FacturacionCorregida = sumar(SacosFact70),
       FilasDocumentales = dplyr::n(), TieneFactura = TRUE, .groups = "drop")
   financiero <- pyg %>% dplyr::mutate(LinNegCod = ifelse(LinNegCod == 20000, 21000, LinNegCod)) %>%
-    dplyr::group_by(FecMes, LinNegCod) %>%
+    dplyr::filter(LinNegCod %in% c(10000, 21000)) %>% dplyr::group_by(FecMes, LinNegCod) %>%
     dplyr::summarise(SacosPYG = sumar(SacosPYG), TienePYG = TRUE, .groups = "drop")
   dplyr::full_join(fact, financiero, by = c("FecMes", "LinNegCod"), relationship = "one-to-one") %>%
     dplyr::mutate(
@@ -123,4 +184,29 @@
         ifelse(is.na(TieneFactura), 0, FacturacionCorregida),
       Revision = ifelse(is.na(LinNegCod), "Línea ausente o ambigua: revisar lote", "Comparación por mes y línea")) %>%
     dplyr::arrange(FecMes, LinNegCod)
+}
+
+# Las diferencias mensuales conservan las claves de lote y las referencias de sus facturas ----
+.tz_cuadre_lotes <- function(documentos, pyg, lotes = data.frame()) {
+  documentos <- .tz_clasificar_alcance(documentos, pyg, lotes)
+  sumar <- function(v) if (anyNA(v)) NA_real_ else sum(v)
+  fact <- documentos %>% dplyr::filter(EsValida %in% TRUE, ClaseAlcance == "INCLUIDO") %>%
+    dplyr::mutate(LinNegCod = LinNegCodFinanciero,
+      Referencia = paste(TipoFactura, PrefijoFactura, NumeroFactura, sep = ":")) %>%
+    dplyr::group_by(FecMes, LinNegCod, CLLotCod) %>% dplyr::summarise(
+      SacosFactura = sumar(SacosFact70), Facturas = paste(unique(Referencia), collapse = " | "),
+      TieneFactura = TRUE, .groups = "drop")
+  financiero <- pyg %>% dplyr::mutate(LinNegCod = ifelse(LinNegCod == 20000, 21000, LinNegCod)) %>%
+    dplyr::filter(LinNegCod %in% c(10000, 21000)) %>%
+    dplyr::group_by(FecMes, LinNegCod, CLLotCod) %>%
+    dplyr::summarise(SacosPYG = sumar(SacosPYG), TienePYG = TRUE, .groups = "drop")
+  dplyr::full_join(fact, financiero, by = c("FecMes", "LinNegCod", "CLLotCod"), relationship = "one-to-one") %>%
+    dplyr::mutate(DiferenciaSacos = ifelse(is.na(TienePYG), 0, SacosPYG) -
+      ifelse(is.na(TieneFactura), 0, SacosFactura),
+      Causa = dplyr::case_when(
+        is.na(TieneFactura) ~ "PyG sin factura en este mes; revisar fechas y validez documental",
+        is.na(TienePYG) ~ "Factura sin PyG en este mes; revisar reconocimiento financiero",
+        is.na(DiferenciaSacos) ~ "Cantidad desconocida en alguna fuente",
+        DiferenciaSacos != 0 ~ "Cantidad comercial distinta de los sacos del PyG",
+        TRUE ~ "Conciliado")) %>% dplyr::arrange(FecMes, LinNegCod, CLLotCod)
 }
