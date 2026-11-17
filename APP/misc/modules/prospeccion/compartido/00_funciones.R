@@ -2183,3 +2183,43 @@ tokenizar_motivos_libres <- function(cod_contacto_vec, historial_dat) {
     ifelse(x$LinNegCod == 21000, "A LA MEDIDA", as.character(x$LinNegCod)))
   x
 }
+
+# Tiempos de conversión: recorrer eventos observados, no cada día del historial.
+.pr_curva_conversion <- function(datos, unidad, evento) {
+  d <- data.frame(TiempoDias = as.numeric(datos$TiempoDias), Evento = as.numeric(datos[[evento]]))
+  d <- d[is.finite(d$TiempoDias) & d$TiempoDias >= 0 & d$Evento %in% c(0, 1), , drop = FALSE]
+  if (!nrow(d)) return(NULL)
+  # Producto-límite de Kaplan–Meier; los eventos preceden al retiro de censurados en un empate.
+  observados <- sort(unique(d$TiempoDias))
+  indice <- match(d$TiempoDias, observados)
+  retiros <- tabulate(indice, nbins = length(observados))
+  eventos <- tabulate(indice[d$Evento == 1], nbins = length(observados))
+  en_riesgo <- nrow(d) - c(0, head(cumsum(retiros), -1L))
+  supervivencia <- cumprod(1 - eventos / en_riesgo)
+  tiempos <- sort(unique(c(0, observados[eventos > 0], max(d$TiempoDias))))
+  supervivencia <- c(1, supervivencia)[findInterval(tiempos, observados) + 1L]
+  periodos <- tiempos / .factor_tiempo_embudo(unidad)
+  data.frame(Periodo = periodos,
+    PeriodoTexto = paste(.etiqueta_tiempo_embudo(unidad), round(periodos, 2)),
+    TasaConversionAcum = 100 * (1 - supervivencia), RegistrosIniciales = nrow(d),
+    Convertidos = findInterval(tiempos, sort(d$TiempoDias[d$Evento == 1])))
+}
+.pr_grafico_tiempos <- function(x) {
+  x <- as.numeric(x)
+  x <- x[is.finite(x) & x >= 0]
+  shiny::validate(shiny::need(length(x) > 0L,
+    "No hay conversiones confirmadas con fechas válidas para esta selección."))
+  if (length(x) < 3L || length(unique(x)) < 2L) {
+    tabla <- table(x)
+    return(plotly::plot_ly(x = as.numeric(names(tabla)), y = as.integer(tabla), type = "bar",
+      marker = list(color = "#0072B2"), hovertemplate = "Días: %{x:.1f}<br>Conversiones: %{y:.0f}<extra></extra>") %>%
+      plotly::layout(xaxis = list(title = "Días hasta avanzar de etapa"),
+        yaxis = list(title = "Conversiones registradas"), title = "Tiempos observados · muestra pequeña"))
+  }
+  dens <- stats::density(x, from = 0)
+  plotly::plot_ly(x = dens$x, y = dens$y, type = "scatter", mode = "lines", fill = "tozeroy",
+    line = list(color = "#0072B2"), fillcolor = "rgba(0,114,178,0.18)",
+    hovertemplate = "Días: %{x:.1f}<br>Concentración: %{y:.4f}<extra></extra>") %>%
+    plotly::layout(xaxis = list(title = "Días hasta avanzar de etapa"),
+      yaxis = list(title = "Concentración de conversiones"), title = "En cuánto tiempo avanzan las entidades")
+}
