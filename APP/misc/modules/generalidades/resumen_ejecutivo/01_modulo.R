@@ -8,8 +8,8 @@
          formato = "porcentaje", valor = NA_real_, tab = "GE_Evolucion"),
     list(id = "ge_participacion", texto = "Clientes con compra", icono = "chart-pie",
          formato = "entero", valor = NA_real_, tab = "GE_Participacion"),
-    list(id = "ge_comparacion", texto = "Indicadores de Mercado", icono = "chart-bar",
-         formato = "numero", valor = NA_real_, tab = "GE_Comparacion"),
+    list(id = "ge_comparacion", texto = "Indicadores de mercado disponibles", icono = "chart-bar",
+         formato = "entero", valor = NA_real_, tab = "GE_Comparacion"),
     list(id = "ge_inventarios", texto = "Inventarios", icono = "boxes-stacked",
          formato = "entero", valor = NA_real_, tab = "GE_Inventarios")
   )),

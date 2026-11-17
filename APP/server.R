@@ -164,8 +164,11 @@ server <- function(input, output, session) {
   pedido_consulta <- reactiveVal(NULL)
   session$userData$trazabilidad_disponible <- TRUE
   pedido_modal <- reactiveVal(NULL)
+  pedido_desde_clasificacion <- reactiveVal(FALSE)
+  fuente_pedido_modal <- reactive(.tz_fuente_modal(maestro_base_comercial(), filtros(),
+    pedido_desde_clasificacion()))
   TrazabilidadPedido("TrazabilidadGlobal", maestro_comercial, pedido_consulta)
-  TrazabilidadPedido("TrazabilidadModal", maestro_comercial, pedido_modal)
+  TrazabilidadPedido("TrazabilidadModal", fuente_pedido_modal, pedido_modal)
   observe({
     req(identical(input$menu_principal, "TR_Pedido"))
     codigos <- sort(unique(.crm_id_texto(maestro_comercial()$CLPdcCod)))
@@ -181,8 +184,14 @@ server <- function(input, output, session) {
   })
   observeEvent(input$crm_ver_pedido, {
     codigo <- .crm_id_texto(input$crm_ver_pedido$pedido)
-    req(length(codigo) == 1L, !is.na(codigo), codigo != "0",
-      codigo %in% .crm_id_texto(maestro_comercial()$CLPdcCod))
+    req(length(codigo) == 1L, !is.na(codigo), codigo != "0")
+    clasificacion <- identical(input$menu_principal, "PD_SinClasificar")
+    fuente <- .tz_fuente_modal(maestro_base_comercial(), filtros(), clasificacion)
+    if (!codigo %in% .crm_id_texto(fuente$CLPdcCod)) {
+      showNotification("El pedido no está disponible con los filtros comerciales actuales.", type = "warning")
+      return(invisible(NULL))
+    }
+    pedido_desde_clasificacion(clasificacion)
     pedido_modal(codigo)
     showModal(racafeForms::racafeModal(title = paste("Pedido", codigo), size = "ventana", easy_close = FALSE,
       TrazabilidadPedidoUI("TrazabilidadModal"), footer = racafeForms::racafeModalFooter(
@@ -364,6 +373,12 @@ server <- function(input, output, session) {
     list(gc_presupuesto_sacos = presupuesto$sacos, gc_presupuesto_margen = presupuesto$margen,
       ge_validacion = function() seguro(validacion_mod$cuadre_sacos()), gc_tareas = menu_tareas$tareas$n(),
       ge_participacion = productos$clientes,
+      ge_comparacion = function() seguro({
+        x <- indicadores_mod$datos_r()
+        campos <- intersect(.IND_CLAVES_CANON, names(x))
+        if (!length(campos)) return(NA_real_)
+        sum(vapply(x[campos], function(v) any(is.finite(suppressWarnings(as.numeric(v)))), logical(1)))
+      }),
       ge_evolucion = function() seguro({
         fechas <- as.Date(filtros()$fecha)
         anterior <- .prod_preparar(maestro_comercial(),

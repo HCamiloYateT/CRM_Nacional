@@ -11,7 +11,21 @@
   if (!nrow(datos)) return(.crm_nota("No hay una unidad comercial identificada para esta entidad."))
   campo <- function(x, n) if (n %in% names(x)) x[[n]][1] else NA
   fecha <- function(v) if (!length(v) || is.na(v)) "No disponible" else format(as.Date(v), "%d/%m/%Y")
-  racafeForms::racafePanel(variant = "muted", title = paste(unique(stats::na.omit(datos$PerRazSoc)), collapse = " · "),
+  transversal <- function(nombre) {
+    valor <- .gc_columna(datos, nombre)
+    v <- unique(stats::na.omit(if (grepl("nit", nombre, ignore.case = TRUE)) .crm_id_texto(valor) else
+      as.character(valor)))
+    v <- v[nzchar(v)]
+    if (length(v)) paste(v, collapse = " | ") else "No disponible"
+  }
+  racafeForms::racafePanel(variant = "muted",
+    title = paste(unique(stats::na.omit(datos$PerRazSoc)), collapse = " · "),
+    shiny::tags$style(".crm-unidad-ficha{font-size:12px;}.crm-unidad-ficha strong{font-size:13px;}"),
+    shiny::tags$div(class = "crm-unidad-ficha",
+      racafeForms::racafeInfoGrid(columns = 3,
+        racafeForms::racafeInfoItem("NIT de cuenta principal", transversal("CliNitPpal")),
+        racafeForms::racafeInfoItem("Asesor", transversal("Asesor")),
+        racafeForms::racafeInfoItem("Origen", transversal("Origen")))),
     lapply(seq_len(nrow(datos)), function(i) {
       x <- datos[i, , drop = FALSE]
       referencia <- campo(x, "MesReferencia")
@@ -19,10 +33,6 @@
         c("ene.", "feb.", "mar.", "abr.", "may.", "jun.", "jul.", "ago.", "sep.", "oct.", "nov.", "dic.")[
           as.integer(format(as.Date(referencia), "%m"))], format(as.Date(referencia), "%Y"))
       periodo <- paste(fecha(campo(x, "PeriodoDesde")), fecha(campo(x, "PeriodoHasta")), sep = "–")
-      asesor <- as.character(campo(x, "Asesor"))
-      sin_asesor <- is.na(asesor) || !nzchar(asesor) || asesor %in% c("SIN ASESOR", "SIN DATO")
-      contacto <- identical(as.character(campo(x, "EtapaVigente")), "CONTACTO") && sin_asesor
-      persona <- if (contacto) campo(x, "UsuarioCrea") else if (sin_asesor) "No disponible" else asesor
       campos <- c(SacosMes = paste("Sacos ·", mes), SacosPeriodo = paste("Sacos ·", periodo),
         PresupuestoSacos = paste("Presupuesto sacos ·", periodo),
         CumplimientoSacos = paste("Ejecución sacos ·", periodo),
@@ -35,15 +45,14 @@
         if (grepl("Cumplimiento", n)) return(paste0(format(round(v * 100, 1), trim = TRUE), "%"))
         paste0(if (grepl("Margen", n)) "$" else "", format(round(v, 2), big.mark = ",", trim = TRUE))
       }
-      shiny::tags$section(class = "crm-unidad-resumen crm-unidad-compacta",
+      .crm_disclosure(.crm_label_comercial(campo(x, "CLLinNegNo")),
+        shiny::tags$section(class = "crm-unidad-resumen crm-unidad-compacta crm-unidad-ficha",
         shiny::tags$div(class = "crm-identidad-badges",
-          racafeForms::racafeStatusBadge(paste("NIT", .crm_id_texto(x$CliNitPpal)), size = "xs"),
-          .crm_badge_categoria(.crm_label_comercial(campo(x, "CLLinNegNo")), "linneg"),
+
           .crm_badge_categoria(campo(x, "EtapaVigente"), "etapa"),
           .crm_badge_categoria(campo(x, "EstadoCliente"), "estado"),
           .crm_badge_categoria(campo(x, "Segmento"), "segmento"),
-          .crm_badge_categoria(campo(x, "SegmentoRFM"), "rfm"),
-          shiny::tags$span(paste0(if (contacto) "Creado por: " else "Asesor: ", persona))),
+          .crm_badge_categoria(campo(x, "SegmentoRFM"), "rfm")),
         shiny::tags$div(class = "crm-unidad-metricas", lapply(names(campos), function(n) {
           shiny::tags$div(shiny::tags$small(campos[[n]]), shiny::tags$strong(valor(n)))
         })),
@@ -52,7 +61,7 @@
           shiny::tags$span(paste("Última factura:", fecha(campo(x, "UltimaFacturacion"))))),
         shiny::tags$div(class = "crm-unidad-referencia",
           shiny::tags$small(paste("Estado oficial:", fecha(campo(x, "FechaEstadoOficial")),
-            "· Presupuesto hasta", fecha(campo(x, "CortePresupuesto"))))))
+            "· Presupuesto hasta", fecha(campo(x, "CortePresupuesto")))))), open = nrow(datos) == 1L)
     }))
 }
 

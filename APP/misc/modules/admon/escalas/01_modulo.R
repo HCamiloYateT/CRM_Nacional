@@ -12,6 +12,7 @@
   dplyr::bind_rows(lapply(names(.esc_dimensiones), function(tipo) {
     if (tipo %in% c("categoria", "producto")) {
       filas <- relaciones[relaciones$catalogo == tipo, c("catalogo", "padre", "padre2", "opcion")]
+      if (tipo == "categoria") filas$padre <- filas$padre2 <- rep("", nrow(filas))
     } else {
       valores <- if (tipo %in% names(fijo)) fijo[[tipo]] else .admon_choices_valores(catalogos, tipo)
       filas <- data.frame(catalogo = rep(tipo, length(valores)), padre = rep("", length(valores)),
@@ -45,7 +46,7 @@ EscalasComerciales <- function(id, es_admin) {
         filas <- which(x$catalogo == tipo)
         .crm_disclosure(.esc_dimensiones[[tipo]],
           .crm_nota(if (tipo == "categoria") {
-            "Categorías configurables; sus productos heredan tonalidades deterministas del color padre."
+            "Elija el color de cada categoría. Sus productos usan variantes de ese color."
           } else paste("Escala central utilizada para", tolower(.esc_dimensiones[[tipo]]))),
           if (tipo == "etapa") .crm_nota(c(
             "Código, nombre y orden proceden de las etapas vigentes del embudo.",
@@ -63,8 +64,8 @@ EscalasComerciales <- function(id, es_admin) {
                   "this.parentElement.querySelector('.crm-escala-hex').textContent=this.value;",
                   "Shiny.setInputValue('%s',{fila:%d,color:this.value,nonce:Date.now()})"),
                   session$ns("color"), i)),
-              shiny::tags$span(paste(Filter(nzchar, as.list(f[c("padre", "padre2", "opcion")])),
-                collapse = " → ")),
+              shiny::tags$span(if (tipo == "categoria") f$opcion else
+                paste(Filter(nzchar, as.list(f[c("padre", "padre2", "opcion")])), collapse = " → ")),
               shiny::tags$code(class = "crm-escala-hex", color),
               if (tipo == "etapa") shiny::tags$small(paste("CÓDIGO:", f$opcion, "· ORDEN:",
                 match(f$opcion, ETAPAS_EMBUDO), "· DISPONIBLE ·", switch(f$opcion,

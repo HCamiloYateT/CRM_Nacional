@@ -9,7 +9,7 @@ ConsultaIndividualUI <- function(id) {
     racafeForms::racafeActionBar(left = NULL),
     .crm_select("entidad", "Buscar por nombre o NIT de facturación",
       choices = character(), ns = ns),
-    shiny::uiOutput(ns("identidad")), shiny::uiOutput(ns("visibilidad_tabs")), shiny::uiOutput(ns("contenido")))))
+    shiny::uiOutput(ns("visibilidad_tabs")), shiny::uiOutput(ns("contenido")))))
 }
 ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin, nit_mapa,
                                cartera = function() NULL, tareas = function() data.frame(),
@@ -128,6 +128,9 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     })
     output$identidad <- .crm_render_ui({
       x <- entidad()
+      unidades <- .crm_unidades_sesion()
+      principal <- if (!is.na(x$Principal)) x$Principal else x$NIT
+      if (nrow(unidades) && any(.crm_id_texto(unidades$CliNitPpal) %in% .crm_id_texto(principal))) return(NULL)
       shiny::tagList(.in_ficha_identidad(x, contexto_crm(), contactos(), familia(),
         if (x$Tipo == "CLIENTE") .in_estado_presupuesto(metas_anuales(), x, periodo()[[2]]) else NULL, NULL),
         if (x$VinculoEnRevision) .crm_nota("Hay varios NIT vinculados. Revise el vínculo de facturación."))
@@ -205,6 +208,11 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
             choices = c("SACOS" = "Sacos", "MARGEN" = "Margen", "PRECIO POR KG DEL PEDIDO" = "PrecioKg"),
             selected = "Sacos", ns = session$ns, empty = FALSE),
           .crm_plot_output(session$ns("tendencia"), height = "450px"),
+          shiny::conditionalPanel("input.variable_tendencia == 'PrecioKg'",
+            .crm_nota(c("La línea azul muestra el precio promedio de las líneas de pedido de cada mes.",
+              "La banda clara va del menor al mayor precio; la banda oscura contiene el 90% central de los precios.",
+              "La mediana deja la mitad de los precios por debajo y la mitad por encima.",
+              "Si solo hay un precio, las bandas se juntan. Los meses sin precios quedan vacíos.")), ns = session$ns),
           .crm_select("dimension_ejecucion", "Agrupar ejecución por", choices = c(
             "Categoría y producto" = "producto", "Categoría" = "categoria", "Línea de negocio" = "linea"),
             selected = "producto", ns = session$ns),
@@ -582,15 +590,18 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
             Minimo = min(PrecioKg), Maximo = max(PrecioKg), P5 = stats::quantile(PrecioKg, 0.05),
             P95 = stats::quantile(PrecioKg, 0.95), Pedidos = dplyr::n(), .groups = "drop")
         shiny::validate(shiny::need(nrow(x) > 0L, "No hay precios de pedido disponibles en este periodo."))
+        calendario <- data.frame(Mes = seq(min(x$Mes), max(x$Mes), by = "month"))
+        x <- dplyr::left_join(calendario, x, by = "Mes")
         p <- plotly::plot_ly(x, x = ~Mes) %>%
           plotly::add_ribbons(ymin = ~Minimo, ymax = ~Maximo, name = "Mínimo a máximo",
             fillcolor = "rgba(0,114,178,0.12)", line = list(color = "transparent"),
             hoverinfo = "skip") %>%
           plotly::add_ribbons(ymin = ~P5, ymax = ~P95, name = "90% central de precios (P5–P95)",
             fillcolor = "rgba(0,114,178,0.28)", line = list(color = "transparent"), hoverinfo = "skip") %>%
-          plotly::add_lines(y = ~Mediana, name = "Mediana", line = list(color = "#E69F00", dash = "dash")) %>%
+          plotly::add_lines(y = ~Mediana, name = "Mediana", line = list(color = "#E69F00", dash = "dash"),
+            hovertemplate = "Mediana: $%{y:,.2f}<extra></extra>") %>%
           plotly::add_trace(y = ~Promedio, name = "Precio promedio", type = "scatter", mode = "lines+markers",
-            line = list(color = "#0072B2"),
+            line = list(color = "#0072B2"), marker = list(color = "#0072B2"),
             customdata = .crm_customdata(x, c("Minimo", "Maximo", "Mediana", "P5", "P95", "Pedidos")),
             hovertemplate = paste0("Promedio: $%{y:,.2f}<br>Mínimo: $%{customdata[0]:,.2f}",
               "<br>Máximo: $%{customdata[1]:,.2f}<br>Mediana: $%{customdata[2]:,.2f}",
@@ -707,9 +718,13 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     output$distribucion_pagos <- .crm_render_plotly({
       x <- pagos_tramos()
       shiny::validate(shiny::need(nrow(x) > 0L, "No hay facturas con pago total y fecha de vencimiento confirmados."))
+      x$Tramo <- factor(toupper(x$Tramo), levels = toupper(.CAR_TRAMOS), ordered = TRUE)
       plotly::plot_ly(x, x = ~Tramo, y = ~Porcentaje, type = "bar", marker = list(color = "#0072B2"),
         customdata = ~Facturas, hovertemplate = "%{x}<br>Facturas: %{customdata}<br>%{y:.1%}<extra></extra>") %>%
-        plotly::layout(title = "Cuándo paga este cliente", yaxis = list(title = "% de facturas", tickformat = ".0%"))
+        plotly::layout(title = "Cuándo paga este cliente",
+          xaxis = list(title = "Días de atraso al pagar", categoryorder = "array",
+            categoryarray = toupper(.CAR_TRAMOS)),
+          yaxis = list(title = "% de facturas", tickformat = ".0%", range = c(0, 1)))
     })
     .crm_vancouver_server("pagos_detalle", shiny::reactive(cartera_analitica()$pagos),
       columnas = c("NIT", "Factura", "FcnFec", "FecVto", "FecPag", "Pagada", "DiasPago", "DiasAtraso", "Valor", "Saldo"),

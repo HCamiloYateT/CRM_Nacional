@@ -2,7 +2,13 @@
 ProductosSinClasificarUI <- function(id) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
-    racafeForms::racafeActionBar(left = NULL),
+    racafeForms::racafeActionBar(left = .crm_descarga_ui("plantilla", ns, label = "Descargar plantilla Excel")),
+    .crm_disclosure("Clasificar varias referencias con Excel",
+      .crm_nota(c("Descargue la plantilla y complete únicamente las columnas Categoria y Producto.",
+        "Deje en blanco las referencias que no quiere cambiar. No modifique los códigos.",
+        "Suba el archivo, revise los cambios y confirme. Si una fila no es válida, no se guarda ninguna.")),
+      racafeForms::racafeInputFile("excel", "Subir plantilla completada", accept = ".xlsx", ns = ns),
+      shiny::uiOutput(ns("estado_carga")), .crm_tabla_ui(ns("carga_masiva"))),
     .crm_nota("Use la acción de cada referencia para completar su categoría y producto."),
     .crm_tabla_ui(ns("referencias"), titulo = "Referencias pendientes de clasificación"))
 }
@@ -11,12 +17,70 @@ ProductosSinClasificar <- function(id, usuario, al_actualizar,
   shiny::moduleServer(id, function(input, output, session) {
     revision <- shiny::reactiveVal(0L)
     pendiente <- shiny::reactiveVal(NULL)
+    masivo <- shiny::reactiveVal(NULL)
+    masivo_confirmado <- shiny::reactiveVal(NULL)
     referencia_elegida <- shiny::reactiveVal(NULL)
     fuente <- shiny::reactive({ revision(); .clas_validar(.pr_cargar("CRMNALPRODS", cargar)) })
     filas <- shiny::reactive({
       x <- .clas_pendientes(fuente(), if (is.null(operaciones)) list() else operaciones())
       x$Accion <- x$Referencia
       x
+    })
+    output$plantilla <- shiny::downloadHandler(
+      filename = function() paste0("productos_sin_clasificar_", Sys.Date(), ".xlsx"),
+      content = function(file) {
+        x <- filas()
+        for (n in .CLAS_CLAVES) x[[n]] <- .crm_id_texto(x[[n]])
+        x$Categoria <- x$Producto <- rep("", nrow(x))
+        columnas <- c("Referencia", .CLAS_CLAVES, "Marca", "NombreComercial", "Categoria", "Producto")
+        opciones <- dplyr::bind_rows(lapply(unique(x$LinNegCod), function(linea) {
+          fila <- x[x$LinNegCod == linea, , drop = FALSE][1, ]
+          dplyr::bind_rows(lapply(.clas_opciones(fuente(), fila), function(categoria) {
+            productos <- .clas_opciones(fuente(), fila, categoria)
+            data.frame(LinNegCod = rep(linea, length(productos)),
+              Categoria = rep(categoria, length(productos)), Producto = productos)
+          }))
+        }))
+        if (!ncol(opciones)) opciones <- data.frame(Categoria = character(), Producto = character())
+        writexl::write_xlsx(list(Referencias = x[columnas],
+          Opciones = unique(opciones[c("Categoria", "Producto")])), file)
+      })
+    shiny::observeEvent(input$excel, {
+      masivo(NULL)
+      tryCatch({
+        if (tolower(tools::file_ext(input$excel$name)) != "xlsx") stop("Suba un archivo Excel con extensión .xlsx.")
+        archivo <- as.data.frame(readxl::read_excel(input$excel$datapath, col_types = "text",
+          .name_repair = "check_unique", n_max = 5001L))
+        masivo(.clas_validar_excel(archivo, filas(), fuente()))
+      }, error = function(e) shiny::showNotification(conditionMessage(e), type = "error", duration = 10))
+    })
+    output$estado_carga <- .crm_render_ui({
+      x <- masivo()
+      if (is.null(x)) return(.crm_nota("Suba una plantilla para revisar los cambios antes de guardar."))
+      shiny::tagList(.crm_nota(paste(nrow(x), "referencias listas para clasificar.")),
+        racafeForms::racafeButtonSave("aplicar_masivo", "Guardar clasificación del Excel", ns = session$ns))
+    })
+    .crm_vancouver_server("carga_masiva", shiny::reactive(masivo() %||% data.frame()),
+      columnas = c("Marca", "NombreComercial", "CategoriaNueva", "ProductoNuevo"),
+      col_labels = c(CategoriaNueva = "Nueva categoría", ProductoNuevo = "Nuevo producto"))
+    shiny::observeEvent(input$aplicar_masivo, {
+      shiny::req(masivo())
+      masivo_confirmado(masivo())
+      racafeShiny::MostrarModalConfirmacion(ns = session$ns, titulo = "Confirmar clasificación masiva",
+        texto = paste("Se actualizarán", nrow(masivo()), "referencias. ¿Desea guardar estos cambios?"),
+        id_cancelar = "cancelar_masivo", id_confirmar = "confirmar_masivo", label_confirmar = "Guardar")
+    })
+    shiny::observeEvent(input$cancelar_masivo, { masivo_confirmado(NULL); shiny::removeModal() })
+    shiny::observeEvent(input$confirmar_masivo, {
+      x <- masivo_confirmado()
+      shiny::req(x)
+      masivo_confirmado(NULL); shiny::removeModal()
+      tryCatch({
+        nuevo <- .clas_guardar_masivo(x, usuario(), cargar)
+        al_actualizar(nuevo); .pr_invalidar("CRMNALPRODS")
+        revision(revision() + 1L); masivo(NULL); referencia_elegida(NULL); tabla$limpiar()
+        shiny::showNotification("Clasificaciones guardadas. Los tableros se actualizaron.", type = "message")
+      }, error = function(e) shiny::showNotification(conditionMessage(e), type = "error", duration = 10))
     })
     tabla <- .crm_vancouver_server("referencias", filas, id_col = "Referencia", modo_seleccion = "fila",
       col_specs = list(Accion = list(name = "Clasificar", html = TRUE, minWidth = 70, cell = function(v, i) {
