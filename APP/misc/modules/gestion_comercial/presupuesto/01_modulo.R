@@ -131,12 +131,6 @@ PresupuestoUI <- function(id) {
              )
       )
     ),
-    .crm_disclosure("Conciliación de ejecución cerrada frente al PyG",
-      .crm_nota(c("Se compara mes, línea, NIT de facturación, pedido y lote; las filas se agregan antes del cruce.",
-        "La proyección y la facturación abierta no se comparan contra cierres financieros.",
-        "Una ausencia aporta cero solo a la resta entre fuentes; un importe desconocido permanece sin valor.",
-        "Consulte la causa y las claves de cada diferencia; no se ocultan diferencias por redondeo.")),
-      .crm_tabla_ui(ns("conciliacion_registros"))),
     # Graficos de serie temporal sacos y margen
     fluidRow(
       column(6,
@@ -1755,20 +1749,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         shiny::tags$div(class = "crm-convenciones", .crm_nota(
           c(paste0("Año anterior: ", periodo_r() - 1L), paste0("Mensual: ", periodo_r()),
             paste0("Acumulado: ", periodo_r())), title = "Convenciones",
-          swatches = c("#F0FDF4", "#F8FAFC", "#EFF6FF"))),
-        .crm_disclosure("Metodología de ejecución y ritmo requerido", .crm_nota(c(
-          "La tabla y los gráficos incluyen cierre, factura abierta y estimación residual del ETL.",
-          "Los pedidos futuros se muestran en el mes de cumplimiento estimado, también después del corte seleccionado.",
-          "Ejecución comercial incluye cantidades estimadas; no significa que ya se hayan facturado.",
-          "Los KPIs y el cuadre financiero conservan su definición de ejecución real y meses cerrados.",
-          "Un pedido parcial puede aparecer en las tres capas por cantidades diferentes; no se repite la cantidad facturada.",
-          "El horizonte incluye las fechas futuras del pedido. Una estimación vencida conserva su fecha original.",
-          "El margen de factura abierta y el comercial son provisionales. Si no se pueden calcular, permanecen vacíos.",
-          "Ritmo: saldo anual por cumplir distribuido según los pesos presupuestales de los meses restantes.",
-          "En el mes del corte solo se ponderan los días que faltan; el presupuesto restante es el mínimo.",
-          "El ritmo muestra el mes vigente y los restantes, sin un punto adicional en el día del corte.",
-          "Acumulada: ejecución real al corte más el requerimiento acumulado de cada mes pendiente.",
-          "El switch solo cambia los gráficos; no modifica la ejecución ni la tabla."))))
+          swatches = c("#F0FDF4", "#F8FAFC", "#EFF6FF")))
+      )
     })
 
     ## Titulo dinamico sub-card proyeccion ----
@@ -1919,7 +1901,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           "Verosimilitud: proyección / presupuesto anual.",
           "Meta mensual: max(presupuesto anual / 12, (presupuesto anual − ejecutado) / meses restantes, 0).",
           "TOTAL suma las dimensiones; los indicadores se calculan sobre esa fila, sin promediar porcentajes.",
-          "Indicadores por dimensión: meses cerrados. Presupuesto: Industria Nacional."), title = "Metodología de las tablas",
+          "Indicadores por dimensión: meses cerrados. Presupuesto: Industria Nacional."), title = NULL,
           font_size = 11, text_color = "#495057", accent_color = "#DA291C"))
     })
 

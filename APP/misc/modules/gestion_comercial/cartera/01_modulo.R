@@ -40,11 +40,12 @@ CarteraComercialUI <- function(id) {
     tabPanel("Cosechas de crédito", racafeForms::racafeForm(variant = "plain",
       racafeForms::racafeFormRow(columns = 4,
         .crm_select("origen_cosecha", "Definir cosecha por", choices = c("Fecha de factura" = "Emision",
-          "Fecha de vencimiento" = "Vencimiento"), ns = ns),
+          "Fecha de vencimiento" = "Vencimiento"), selected = "Emision", ns = ns),
         racafeForms::racafeInputDateRange("periodo_cosecha", "Periodo de origen",
           start = as.Date(format(Sys.Date(), "%Y-01-01")), end = Sys.Date(), ns = ns),
         .crm_select("dimension_cosecha", "Comparar por", choices = c("Total" = "Total", "Línea" = "Linea",
-          "Segmento" = "Segmento", "Asesor" = "Asesor", "Unidad comercial" = "UnidadComercial"), ns = ns))),
+          "Segmento" = "Segmento", "Asesor" = "Asesor", "Unidad comercial" = "UnidadComercial"),
+          selected = "Total", ns = ns))),
       .crm_plot_output(ns("matriz_cosechas")), .crm_plot_output(ns("cosechas")),
       shiny::uiOutput(ns("limite_cosechas")),
       .crm_disclosure("Valores y cobertura de las celdas", .crm_tabla_ui(ns("cosechas_celdas"))),
@@ -101,7 +102,9 @@ CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admi
         end = hasta(), max = hasta())
     })
     cosechas <- shiny::reactive({
-      shiny::req(input$cartera_tab == "Cosechas de crédito", length(input$periodo_cosecha) == 2L)
+      shiny::req(input$cartera_tab == "Cosechas de crédito", length(input$periodo_cosecha) == 2L,
+        input$origen_cosecha %in% c("Emision", "Vencimiento"),
+        input$dimension_cosecha %in% c("Total", "Linea", "Segmento", "Asesor", "UnidadComercial"))
       .car_cosechas(corte = hasta(), hasta_origen = as.Date(input$periodo_cosecha[2]),
         origen = input$origen_cosecha %||% "Emision", dimension = input$dimension_cosecha %||% "Total",
         desde = as.Date(input$periodo_cosecha[1]), base = base_cosechas())
@@ -110,7 +113,7 @@ CarteraComercial <- function(id, historico, clientes, nit_mapa, filtros, es_admi
     shiny::observeEvent(cosechas(), celda_cosecha(NULL), ignoreInit = TRUE)
     for (origen_evento in session$ns(c("car_cosechas", "car_matriz"))) local({
       origen <- origen_evento
-      shiny::observeEvent(plotly::event_data("plotly_click", source = origen), {
+      shiny::observeEvent(session$rootScope()$input[[paste0("plotly_click-", origen)]], {
         evento <- plotly::event_data("plotly_click", source = origen)
         clave <- unlist(evento$customdata, use.names = FALSE)[1]
         shiny::req(clave %in% cosechas()$curvas$Celda)
