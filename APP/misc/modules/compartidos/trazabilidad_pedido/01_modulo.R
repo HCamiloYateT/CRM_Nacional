@@ -25,7 +25,7 @@
   facturados <- if ("FacturadosConsolidados70" %in% names(d)) por_lote("FacturadosConsolidados70") else
     if ("FacturadosOperativos70" %in% names(d)) por_lote("FacturadosOperativos70") else
     if (any(reales)) .com_suma(d$SacosFact[reales]) else NA_real_
-  capas <- if ("MetricaMargenEscenario" %in% names(d)) d else .crm_capa_ejecucion(d)
+  capas <- if ("AplicarFechaEstimada" %in% names(d)) d else .crm_capa_ejecucion(d)
   indicadores <- list(solicitados = solicitados, asignados = por_lote("SacosLote70"),
     producidos = por_lote("SacosProducidos70"), despachados = por_lote("SacosDespachados70"),
     facturados = facturados,
@@ -105,17 +105,47 @@
   if (identical(operativo, "FACTURADO") && isTRUE(indicadores$facturados < indicadores$solicitados)) {
     operativo <- "FACTURACIÓN PARCIAL"
   }
+  lineas <- unique(x[c("CLPdcCod", "CLPdcLin")])
+  lotes <- unique(.crm_id_texto(x$CLLotCod))
+  lotes <- lotes[!is.na(lotes) & lotes != "0"]
+  cantidades <- if (all(c("CantidadPedidoOrigen", "UnidadKgPedido") %in% names(x))) {
+    x %>% dplyr::group_by(CLPdcLin) %>% dplyr::summarise(
+      Cantidad = .gc_unico(CantidadPedidoOrigen), KilosUnidad = .gc_unico(UnidadKgPedido), .groups = "drop")
+  } else data.frame()
+  cantidad_texto <- if (nrow(cantidades)) paste(vapply(seq_len(nrow(cantidades)), function(i) {
+    f <- cantidades[i, ]
+    paste0("Línea ", .crm_id_texto(f$CLPdcLin), ": ",
+      if (is.na(f$Cantidad)) "NO DISPONIBLE" else format(f$Cantidad, trim = TRUE, scientific = FALSE),
+      " unidades originales", if (!is.na(f$KilosUnidad)) paste0(" × ", f$KilosUnidad, " kg"))
+  }, character(1)), collapse = " · ") else "No disponible"
   racafeForms::racafePanel(variant = "muted", title = paste("Pedido", .crm_id_texto(pedido)),
     shiny::tags$strong(texto("PerRazSoc")),
     shiny::tags$div(class = "crm-identidad-badges",
       racafeForms::racafeStatusBadge(paste("NIT", texto("CLCliNit")), size = "xs"),
+      racafeForms::racafeStatusBadge(paste("LÍNEAS", nrow(lineas)), size = "xs"),
+      racafeForms::racafeStatusBadge(paste("LOTES", length(lotes)), size = "xs"),
       lapply(unique(stats::na.omit(x$CLLinNegNo)), function(v) .crm_badge_categoria(v, "linneg")),
       racafeForms::racafeStatusBadge(paste("Estado del pedido:", texto("EstadoPedido")), size = "xs"),
       racafeForms::racafeStatusBadge(paste("Estado operativo:", operativo), size = "xs"),
       racafeForms::racafeStatusBadge(paste("Estado financiero:",
         gsub("_", " ", texto("EstadoFinanciero"))), size = "xs")),
     racafeForms::racafeInfoGrid(
+      racafeForms::racafeInfoItem("Cuenta principal · NIT", texto("CliNitPpal")),
+      racafeForms::racafeInfoItem("Asesor", texto("Asesor")),
+      racafeForms::racafeInfoItem("Segmentos por línea",
+        paste(unique(paste(x$CLLinNegNo, x$Segmento, sep = ": ")), collapse = " · ")),
+      racafeForms::racafeInfoItem("Referencia del cliente", texto("PdcRefCli")),
+      racafeForms::racafeInfoItem("Marcas solicitadas", texto("MarcaPedido")),
+      racafeForms::racafeInfoItem("Nombres comerciales solicitados", texto("NombreComercialPedido")),
+      racafeForms::racafeInfoItem("Categorías", texto("Categoria")),
+      racafeForms::racafeInfoItem("Productos", texto("Producto")),
+      racafeForms::racafeInfoItem("Cantidad del pedido · PdcCan", cantidad_texto),
       racafeForms::racafeInfoItem("Fecha de creación", fecha("FechaCreacionPedido")),
+      racafeForms::racafeInfoItem("Fecha de cierre del pedido", fecha("FechaCierrePedido")),
+      racafeForms::racafeInfoItem("Periodo financiero cerrado", fecha("FechaCortePyG")),
+      racafeForms::racafeInfoItem("Fecha de producción", fecha("FechaProduccion")),
+      racafeForms::racafeInfoItem("Fecha de despacho", fecha("FechaDespachoReal")),
+      racafeForms::racafeInfoItem("Fecha de factura", fecha("FecFact")),
       racafeForms::racafeInfoItem("Fecha estimada", fecha(c("FechaEstimadaPedido", "PdcFecEst"))),
       racafeForms::racafeInfoItem("Precio negociado", if (!length(precio)) "No disponible" else
         paste(paste0("$", formatC(precio, format = "f", digits = 2, big.mark = ","), " / kg"), collapse = " · "))))

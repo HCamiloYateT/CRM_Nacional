@@ -10,11 +10,19 @@
   x$EstadoEjecucion <- unname(c(CERRADO = "Cerrado financiero", FACTURADO_ABIERTO = "Facturado sin cierre",
     PROYECTADO = "Estimado comercial")[estado])
   x$EsEstimado <- estado == "PROYECTADO"
+  # El cierre es mensual: un pedido del mismo mes cerrado no habilita una estimación comercial.
+  creacion <- as.Date(campo("FechaCreacionPedido", as.Date(NA)))
+  cierre <- as.Date(campo("FechaCortePyG", as.Date(NA)))
+  mes_creacion <- as.Date(format(creacion, "%Y-%m-01"))
+  mes_cierre <- as.Date(format(cierre, "%Y-%m-01"))
+  x$AplicarFechaEstimada <- x$EsEstimado %in% TRUE & !is.na(mes_creacion) &
+    !is.na(mes_cierre) & mes_creacion > mes_cierre
   x$FechaAnalitica <- as.Date(campo("FecFact", as.Date(NA)))
   x$FechaAnalitica[x$EsEstimado %in% TRUE] <- as.Date(if ("FechaEstimadaPedido" %in% names(x)) {
     dplyr::coalesce(as.Date(x$FechaEstimadaPedido), as.Date(campo("PdcFecEst", as.Date(NA))))
   } else
     campo("PdcFecEst", as.Date(NA)))[x$EsEstimado %in% TRUE]
+  x$FechaAnalitica[x$EsEstimado %in% TRUE & !x$AplicarFechaEstimada] <- as.Date(NA)
   x$SacosAnaliticos70 <- ifelse(x$EsEstimado, campo("SacosProyectados"), campo("SacosFact"))
   x$MargenAnalitico <- ifelse(estado == "CERRADO", campo("MargenContable"),
     ifelse(estado == "FACTURADO_ABIERTO", campo("MargenAbiertoEstimado"), campo("MargenProyectado")))
@@ -48,18 +56,19 @@
   for (par in list(c("CERRADO", "MetricaMargenContable", "MargenContable"),
       c("FACTURADO_ABIERTO", "MetricaMargenAbiertoEstimado", "MargenAbiertoEstimado"),
       c("PROYECTADO", "MetricaMargenProyectado", "MargenProyectado"))) {
-    x[[par[[2]]]] <- ifelse(estado == par[[1]], campo(par[[3]]), 0)
+    x[[par[[2]]]] <- ifelse(estado == par[[1]] &
+      (par[[1]] != "PROYECTADO" | x$AplicarFechaEstimada), campo(par[[3]]), 0)
   }
   for (par in list(c("CERRADO", "MetricaSacosCerrados70", "SacosFact"),
       c("FACTURADO_ABIERTO", "MetricaSacosAbiertos70", "SacosFact"),
       c("PROYECTADO", "MetricaSacosProyectados70", "SacosProyectados"))) {
-    x[[par[[2]]]] <- ifelse(estado == par[[1]], campo(par[[3]]), 0)
+    x[[par[[2]]]] <- ifelse(estado == par[[1]] &
+      (par[[1]] != "PROYECTADO" | x$AplicarFechaEstimada), campo(par[[3]]), 0)
   }
   x$MetricaSacosFacturados70 <- x$MetricaSacosCerrados70 + x$MetricaSacosAbiertos70
   x$MetricaSacosEscenario70 <- x$MetricaSacosFacturados70 + x$MetricaSacosProyectados70
-  creacion <- as.Date(campo("FechaCreacionPedido", as.Date(NA)))
-  mes_creacion <- as.Date(format(creacion, "%Y-%m-01"))
   x$RevisionFechaAnalitica <- dplyr::case_when(
+    x$EsEstimado & !x$AplicarFechaEstimada ~ "Sin estimación: pedido anterior al cierre o sin fecha verificable",
     is.na(x$FechaAnalitica) & !is.na(x$EstadoEjecucion) ~ "Sin fecha para la evidencia disponible",
     estado == "CERRADO" & x$FechaAnalitica < mes_creacion ~ "Reconocimiento anterior al mes del pedido",
     estado != "CERRADO" & x$FechaAnalitica < creacion ~ "Fecha anterior a la creación del pedido",
@@ -121,7 +130,8 @@
 
 # Estados separados por mes: el residual comercial no se suma otra vez como facturación ----
 .crm_capas_mensuales <- function(x, desde, hasta) {
-  if (!all(c("EstadoEjecucion", "FechaAnalitica", "SacosAnaliticos70", "MargenAnalitico") %in% names(x))) {
+  if (!all(c("AplicarFechaEstimada", "EstadoEjecucion", "FechaAnalitica",
+      "SacosAnaliticos70", "MargenAnalitico") %in% names(x))) {
     x <- .crm_capa_ejecucion(x)
   }
   x <- x[!is.na(x$FechaAnalitica) & x$FechaAnalitica >= desde &

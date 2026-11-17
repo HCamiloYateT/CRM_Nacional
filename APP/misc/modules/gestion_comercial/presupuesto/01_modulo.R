@@ -114,6 +114,12 @@ PresupuestoUI <- function(id) {
       .crm_seccion_presupuesto(
         title = "Presupuesto", status = "white", solidHeader = TRUE,
         width = 12, collapsible = FALSE,
+        div(style = "margin-bottom:10px;",
+          racafeForms::racafeInputSwitch("incluir_facturacion", "Incluir facturación sin cierre",
+            value = FALSE, variant = "primary", ns = ns),
+          shiny::conditionalPanel("input.incluir_facturacion",
+            racafeForms::racafeInputSwitch("incluir_estimados", "Incluir pedidos con fecha estimada",
+              value = FALSE, variant = "primary", ns = ns), ns = ns)),
         div(
           style = "overflow-x: auto; width: 100%;",
           uiOutput(ns("Presupuesto"))
@@ -131,12 +137,6 @@ PresupuestoUI <- function(id) {
              )
       )
     ),
-    .crm_disclosure("Conciliación de ejecución cerrada frente al PyG",
-      .crm_nota(c("Se compara mes, línea, NIT de facturación, pedido y lote; las filas se agregan antes del cruce.",
-        "La proyección y la facturación abierta no se comparan contra cierres financieros.",
-        "Una ausencia aporta cero solo a la resta entre fuentes; un importe desconocido permanece sin valor.",
-        "Consulte la causa y las claves de cada diferencia; no se ocultan diferencias por redondeo.")),
-      .crm_tabla_ui(ns("conciliacion_registros"))),
     # Graficos de serie temporal sacos y margen
     fluidRow(
       column(6,
@@ -954,9 +954,17 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     datos_act_r     <- reactive({ procesar_datos_base(datos_centrales_r(), periodo_r()) })
     # La tabla anual incluye el horizonte comercial; los KPIs cerrados conservan su fuente financiera.
     datos_act_tabla_r <- reactive({
-      if (is.null(maestro)) return(datos_act_r())
+      if (is.null(maestro)) {
+        x <- datos_act_r()
+        cierre <- cierre_pyg_r()
+        if (!isTRUE(input$incluir_facturacion)) {
+          x <- x[!is.na(cierre) & as.Date(paste0(x$Periodo, "-", match(x$Fecha, .MESES), "-01")) <= cierre, ]
+        }
+        return(x)
+      }
       x <- .resolver_datos(maestro)
-      columnas_ejecucion <- c("MesEjecucionPresupuesto", "SacosEjecucionPresupuesto70", "MargenEjecucionPresupuesto")
+      columnas_ejecucion <- c("AplicarFechaEstimada", "MesEjecucionPresupuesto",
+        "SacosEjecucionPresupuesto70", "MargenEjecucionPresupuesto")
       if (!all(columnas_ejecucion %in% names(x))) x <- .crm_capa_ejecucion(x)
       f <- filtros_r()
       if (!is.null(f)) x <- .gc_filtrar_dimensiones(x, f)
@@ -964,7 +972,10 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         stop("El maestro de presupuesto contiene hechos duplicados.")
       }
       for (campo in intersect(c("Excluir", "ProdExcluir"), names(x))) x <- x[!x[[campo]] %in% "SI", , drop = FALSE]
-      x %>% filter(EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO", "PROYECTADO"),
+      estados <- "CERRADO"
+      if (isTRUE(input$incluir_facturacion)) estados <- c(estados, "FACTURADO_ABIERTO")
+      if (isTRUE(input$incluir_facturacion) && isTRUE(input$incluir_estimados)) estados <- c(estados, "PROYECTADO")
+      x %>% filter(EstadoFinanciero %in% estados,
         !is.na(MesEjecucionPresupuesto), year(MesEjecucionPresupuesto) == periodo_r()) %>%
         group_by(Periodo = year(MesEjecucionPresupuesto), Fecha = .MESES[month(MesEjecucionPresupuesto)]) %>%
         summarise(Sacos70 = .com_suma(SacosEjecucionPresupuesto70),
@@ -1672,6 +1683,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           title    = md(paste0("**Seguimiento de Presupuesto ", periodo, "**")),
           subtitle = md(paste0(
             "Comparativo mensual y acumulado de sacos y margen FCC frente al presupuesto",
+            " — ", if (!isTRUE(input$incluir_facturacion)) "MESES CERRADOS" else
+              if (isTRUE(input$incluir_estimados)) "CIERRE + FACTURACIÓN + ESTIMACIONES" else "CIERRE + FACTURACIÓN",
             " — cierre financiero de indicadores: ",
             if (calendario_r()$mes_actual > 0L) .MESES[calendario_r()$mes_actual] else "SIN CIERRE",
             " — período anterior: ", periodo_ant
@@ -1755,20 +1768,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         shiny::tags$div(class = "crm-convenciones", .crm_nota(
           c(paste0("Año anterior: ", periodo_r() - 1L), paste0("Mensual: ", periodo_r()),
             paste0("Acumulado: ", periodo_r())), title = "Convenciones",
-          swatches = c("#F0FDF4", "#F8FAFC", "#EFF6FF"))),
-        .crm_disclosure("Metodología de ejecución y ritmo requerido", .crm_nota(c(
-          "La tabla y los gráficos incluyen cierre, factura abierta y estimación residual del ETL.",
-          "Los pedidos futuros se muestran en el mes de cumplimiento estimado, también después del corte seleccionado.",
-          "Ejecución comercial incluye cantidades estimadas; no significa que ya se hayan facturado.",
-          "Los KPIs y el cuadre financiero conservan su definición de ejecución real y meses cerrados.",
-          "Un pedido parcial puede aparecer en las tres capas por cantidades diferentes; no se repite la cantidad facturada.",
-          "El horizonte incluye las fechas futuras del pedido. Una estimación vencida conserva su fecha original.",
-          "El margen de factura abierta y el comercial son provisionales. Si no se pueden calcular, permanecen vacíos.",
-          "Ritmo: saldo anual por cumplir distribuido según los pesos presupuestales de los meses restantes.",
-          "En el mes del corte solo se ponderan los días que faltan; el presupuesto restante es el mínimo.",
-          "El ritmo muestra el mes vigente y los restantes, sin un punto adicional en el día del corte.",
-          "Acumulada: ejecución real al corte más el requerimiento acumulado de cada mes pendiente.",
-          "El switch solo cambia los gráficos; no modifica la ejecución ni la tabla."))))
+          swatches = c("#F0FDF4", "#F8FAFC", "#EFF6FF")))
+      )
     })
 
     ## Titulo dinamico sub-card proyeccion ----
@@ -1919,7 +1920,7 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           "Verosimilitud: proyección / presupuesto anual.",
           "Meta mensual: max(presupuesto anual / 12, (presupuesto anual − ejecutado) / meses restantes, 0).",
           "TOTAL suma las dimensiones; los indicadores se calculan sobre esa fila, sin promediar porcentajes.",
-          "Indicadores por dimensión: meses cerrados. Presupuesto: Industria Nacional."), title = "Metodología de las tablas",
+          "Indicadores por dimensión: meses cerrados. Presupuesto: Industria Nacional."), title = NULL,
           font_size = 11, text_color = "#495057", accent_color = "#DA291C"))
     })
 

@@ -118,6 +118,7 @@
   .crm_validar_clave(productos, claves_producto, "productos_snap")
   cantidades <- pedidos %>%
     dplyr::transmute(CLPdcCod = PdcCod, CLPdcLin = PdcLin,
+                     PdcCan = as.numeric(PdcCan),
                      SacosPedido = as.numeric(PdcCan) * ifelse(UMeFac == 62.5, 62.5 / 70, 1))
   operaciones %>%
     dplyr::left_join(cantidades, by = c("CLPdcCod", "CLPdcLin")) %>%
@@ -259,7 +260,8 @@
     dplyr::left_join(acumulada, by = "CLLotCod", na_matches = "never") %>%
     dplyr::transmute(CLCliNit, LinNegCod, CLPdcCod, CLPdcLin, CLLotCod, LinProCod,
                      ProductoComercial = dplyr::coalesce(Producto, LinProNom),
-                     PdcFecCre = FechaCreacionPedido, SacosPedido = SacosPedido70Linea,
+                     PdcFecCre = FechaCreacionPedido, PdcCan = CantidadPedidoOrigen,
+                     SacosPedido = SacosPedido70Linea,
                      SacLote = SacosLote70, SacProd = SacosProducidos70, SacDesp = SacosDespachados70,
                      FecProd = FechaProduccion, FecDesp = FechaDespachoReal, SacosFact, FecFact,
                      FuenteFactura = ifelse(!is.na(FecFact), "FACTURACIÓN", NA_character_))

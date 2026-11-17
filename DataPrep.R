@@ -2227,7 +2227,7 @@ pedidos_integrados <- ped %>%
     FechaVencida = FechaEstimadaVencida &
       coalesce(SacosPendientes > 0, FALSE),
     Proyectar = PdcEst == "A" & !is.na(PdcFecEst) &
-      (NumLotes > 0L | is.na(PdcFecCre) | PdcFecCre >= as.Date("2020-01-01")) &
+      !is.na(PdcFecCre) & PdcFecCre >= fecha_inicio_operativo &
       coalesce(SacosPendientes > 0, FALSE)
   ) %>%
   left_join(margenes_entrenamiento,
@@ -2783,10 +2783,10 @@ if (any(is.na(crm_maestro$MesEjecucionPresupuesto[.proyectados_presupuesto])) ||
       .mes_estimado_presupuesto[.proyectados_presupuesto], na.rm = TRUE)) {
   stop("La proyección de presupuesto no conserva el mes estimado del pedido.")
 }
-homologaciones$metodologia_presupuesto <- list(version = "EJECUCION-COMERCIAL-1",
+homologaciones$metodologia_presupuesto <- list(version = "EJECUCION-COMERCIAL-2",
   estados = c("CERRADO", "FACTURADO_ABIERTO", "PROYECTADO"),
   mes = "MesEjecucionPresupuesto", sacos = "SacosEjecucionPresupuesto70",
-  margen = "MargenEjecucionPresupuesto", proyeccion = "Residual por línea, sin facturación duplicada")
+  margen = "MargenEjecucionPresupuesto", proyeccion = "Residual de pedidos creados después del último mes cerrado, sin facturación duplicada")
 
 homologaciones$diagnostico_fechas <- crm_maestro %>% filter(!is.na(RevisionFechaAnalitica)) %>%
   select(CLPdcCod, CLPdcLin, CLLotCod, EstadoEjecucion, FechaAnalitica, FechaCreacionPedido, RevisionFechaAnalitica)

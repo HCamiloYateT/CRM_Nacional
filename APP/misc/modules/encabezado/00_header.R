@@ -171,6 +171,8 @@
       Pedido, Línea = Linea,
       `Fecha pedido` = ifelse(is.na(PdcFecCre), "—", format(PdcFecCre, "%d/%m/%Y")),
       Producto, Lote = dplyr::coalesce(Lote, "—"),
+      `Cantidad del pedido (PdcCan)` = ifelse(is.na(PdcCan), "—",
+        format(PdcCan, big.mark = SEP_MILES, decimal.mark = SEP_DECIMAL, trim = TRUE, scientific = FALSE)),
       `Sacos línea` = ifelse(is.na(SacosPedido), "—", format(round(SacosPedido, 2), big.mark = SEP_MILES,
                                                              decimal.mark = SEP_DECIMAL, trim = TRUE)),
       `Sacos lote` = ifelse(is.na(SacLote), "—", format(round(SacLote, 2), big.mark = SEP_MILES,
@@ -220,7 +222,8 @@
     racafeShiny::racafeCollapsible(
       id = "header_detalle_pedidos", title = "Detalle de pedidos, lotes y fechas", open = FALSE,
       .header_tabla(detalle, min_width = "1500px"),
-      .crm_nota("Cantidades expresadas en sacos equivalentes de 70 kg.")
+      .crm_nota(c("Cantidad del pedido (PdcCan): unidades originales solicitadas por línea, sin sumar por lote.",
+        "Las demás cantidades se expresan en sacos equivalentes de 70 kg."))
     )
   )
   attr(contenido, "header_detalle") <- detalle
