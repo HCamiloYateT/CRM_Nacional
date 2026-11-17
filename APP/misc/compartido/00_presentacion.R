@@ -205,10 +205,11 @@
 
 # Tablas Vancouver con búsqueda, ordenamiento y selección estable ----
 .crm_tabla_ui <- function(id, titulo = NULL, subtitulo = NULL, footer = NULL, footer_tipo = "info",
-                          sortable = TRUE, mostrar_nota = TRUE, estilo = "minimal", searchable = TRUE) {
+                          sortable = TRUE, mostrar_nota = TRUE, estilo = "minimal", searchable = TRUE,
+                          descargable = TRUE) {
   racafeModulos::TablaVancouverUI(id, titulo = titulo, subtitulo = subtitulo, footer = footer,
     footer_tipo = footer_tipo, sortable = sortable, mostrar_nota = mostrar_nota, estilo = estilo,
-    searchable = searchable, nota_fn = .crm_nota)
+    searchable = searchable, nota_fn = .crm_nota, descargable = descargable)
 }
 
 .crm_tabla_datos <- function(datos, columnas = NULL, col_specs = NULL, col_labels = NULL,

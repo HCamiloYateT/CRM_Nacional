@@ -30,11 +30,6 @@
 FidelidadRiesgoUI <- function(id) {
   ns <- shiny::NS(id)
   racafeForms::racafeForm(variant = "plain",
-    racafeForms::racafeFormRow(columns = 3,
-      racafeForms::racafeInputNumeric("umbral", .crm_label_ayuda("Umbral de revisión (días)", "Días sin compra a partir de los que conviene revisar al cliente. Un valor menor genera más alertas."), value = 90, min = 1,
-        format = "number", ns = ns),
-      .crm_select("estado", .crm_label_ayuda("Estado de las señales observadas", "Elija las señales comerciales que quiere consultar. Sin opciones no se muestran clientes."), choices = .FID_ESTADOS,
-        selected = .FID_ESTADOS, multiple = TRUE, ns = ns)),
     racafeForms::racafeFormRow(columns = 2,
       racafeForms::racafeInputNumeric("horizonte", .crm_label_ayuda("Horizonte CLV (meses)", "Meses futuros que se estiman, de 1 a 36. Un periodo largo aumenta la incertidumbre."), value = 12, min = 1, max = 36,
         decimals = 0, ns = ns),
@@ -63,13 +58,21 @@ FidelidadRiesgoUI <- function(id) {
       tabPanel("Diagnóstico del modelo",
         shiny::conditionalPanel(sprintf("output['%s']", ns("modelo_disponible")),
           .crm_tabla_ui(ns("modelo_parametros")), .crm_tabla_ui(ns("validacion"))),
-        .crm_nota("Validación retrospectiva de 90 días sobre clientes con historia previa."))),
-    shiny::tags$hr(), .crm_plot_output(ns("estados_arbol")),
-    .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("resumen")), .crm_tabla_ui(ns("clientes")),
-    .crm_nota(c("La primera compra es la primera observada en la exportación: no equivale a la creación del cliente.",
-      "Un cliente sin presupuesto no se clasifica automáticamente como recuperado.",
-      "La inactividad es una señal por días sin compra; el umbral es parametrizable y no cambia el estado del CRM.",
-      "Los datos cerrados y abiertos alimentan la señal comercial; el margen abierto es provisional.")))
+        .crm_nota("Comparamos la estimación con las compras de los últimos 90 días.")),
+
+      tabPanel("Señales comerciales",
+        racafeForms::racafeFormRow(columns = 2,
+          racafeForms::racafeInputNumeric("umbral", "Días sin compra para revisar al cliente", value = 90, min = 1,
+            format = "number", ns = ns),
+          .crm_select("estado", "Situaciones que desea revisar", choices = .FID_ESTADOS,
+            selected = .FID_ESTADOS, multiple = TRUE, ns = ns)),
+        .crm_plot_output(ns("estados_arbol")),
+        .crm_descarga_ui("descargar", ns), .crm_tabla_ui(ns("resumen")), .crm_tabla_ui(ns("clientes")),
+        .crm_nota(c("Primera compra significa la primera que vemos en la historia disponible.",
+          "No tener presupuesto no significa que el cliente se haya recuperado.",
+          "Los días sin compra sirven para orientar la gestión; no cambian el estado registrado del cliente.",
+          "Las ventas del mes abierto pueden cambiar cuando se cierre el mes."))),
+      id = ns("analisis_tab"), selected = "RFM"))
 }
 FidelidadRiesgo <- function(id, hechos, clientes, filtros) {
   shiny::moduleServer(id, function(input, output, session) {
@@ -91,6 +94,7 @@ FidelidadRiesgo <- function(id, hechos, clientes, filtros) {
       }, error = function(e) list(error = conditionMessage(e)))
     })
     modelo <- shiny::reactive({
+      shiny::req(isTRUE(input$modelar > 0))
       m <- modelo_ajustado()
       if (!is.null(m$error)) return(m)
       if (!identical(m$firma, firma())) return(list(error = "Los filtros o parámetros cambiaron. Vuelva a Calcular."))
@@ -190,6 +194,7 @@ FidelidadRiesgo <- function(id, hechos, clientes, filtros) {
         plotly::layout(xaxis = list(title = "Probabilidad de actividad"), yaxis = list(title = "CLV de margen COP"))
     })
     datos <- shiny::reactive({
+      shiny::req(identical(input$analisis_tab, "Señales comerciales"))
       shiny::req(corte(), is.finite(input$umbral), input$umbral > 0)
       x <- .fid_preparar(hechos(), .com_clientes(clientes(), as.Date(corte()), filtros()),
         as.Date(corte()), input$umbral)

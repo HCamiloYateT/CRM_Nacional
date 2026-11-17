@@ -117,7 +117,7 @@ library("racafeForms")
 library("racafeModulos")
 # APIs mínimas requeridas por los adaptadores compartidos.
 .versiones_componentes <- c(racafeCore = "1.0.1", racafeGraph = "1.0.1", racafeForecast = "1.0.1",
-  racafeForms = "0.8.0", racafeShiny = "1.5.0", racafeModulos = "0.6.6")
+  racafeForms = "0.8.0", racafeShiny = "1.5.0", racafeModulos = "0.6.7")
 for (.paquete in names(.versiones_componentes)) {
   if (!requireNamespace(.paquete, quietly = TRUE) ||
       utils::packageVersion(.paquete) < .versiones_componentes[[.paquete]]) {

@@ -47,34 +47,17 @@ DetalleCurvaConversion <- function(id, datos_filtrados) {
     })
     # Curva ----
     .curva_km <- function(sub, unidad) {
-      if (nrow(sub) < 2 || sum(sub$Evento) == 0 || !requireNamespace("survival", quietly = TRUE)) return(NULL)
-      factor_t <- .factor_tiempo_lead(unidad)
-      max_periodo <- ceiling(max(sub$TiempoDias, na.rm = TRUE) / factor_t)
-      periodos <- seq.int(0, max_periodo)
-      tiempos <- periodos * factor_t
-      fit <- survival::survfit(survival::Surv(TiempoDias, Evento) ~ 1, data = sub)
-      resumen <- summary(fit, times = tiempos, extend = TRUE)
-      data.frame(
-        Periodo = periodos,
-        PeriodoTexto = paste0(.etiqueta_tiempo_lead(unidad), " ", periodos),
-        TasaConversionAcum = round((1 - resumen$surv) * 100, 1),
-        ContactosIniciales = nrow(sub),
-        ContactosConvertidos = vapply(tiempos, function(t) {
-          sum(sub$Evento == 1 & sub$TiempoDias <= t, na.rm = TRUE)
-        }, numeric(1))
-      )
+      x <- .pr_curva_conversion(sub, unidad, "Evento")
+      if (!is.null(x)) names(x)[match(c("RegistrosIniciales", "Convertidos"), names(x))] <-
+        c("ContactosIniciales", "ContactosConvertidos")
+      x
     }
-    fit_total_r <- reactive({
-      dat <- datos_supervivencia_r()
-      req(nrow(dat) > 0, sum(dat$Evento) > 0)
-      survival::survfit(survival::Surv(TiempoDias, Evento) ~ 1, data = dat)
-    })
     output$curva_km <- .crm_render_plotly({
       req(input$agrupador, input$unidad_tiempo)
       dat <- datos_supervivencia_r()
       curva_total <- .curva_km(dat, input$unidad_tiempo)
       if (is.null(curva_total)) {
-        validate(need(FALSE, "NO HAY CONVERSIONES CON FECHAS VÁLIDAS PARA ESTIMAR ESTA CURVA."))
+        validate(need(FALSE, "No hay registros con fechas válidas para estimar esta curva."))
       }
       p <- plotly::plot_ly()
       if (!identical(input$agrupador, "ninguno")) {
@@ -129,9 +112,8 @@ DetalleCurvaConversion <- function(id, datos_filtrados) {
     })
     # KPIs ----
     tabla_surv_r <- reactive({
-      fit <- tryCatch(fit_total_r(), error = function(e) NULL)
-      if (is.null(fit)) return(NULL)
-      summary(fit)$table
+      x <- datos_supervivencia_r()
+      c(records = nrow(x), events = sum(x$Evento == 1))
     })
     .pr_caja("kpi_analizados",
               valor = reactive({
@@ -185,7 +167,7 @@ DetalleAnalisisConversionUI <- function(id) {
       column(6, .pr_panel(title = "Tiempo hasta Conversión", width = 12, collapsible = FALSE,
                     .crm_plot_output(ns("kpi_tiempo"), height = "260px"))),
       column(6, .pr_panel(title = "Distribución del Tiempo de Conversión", width = 12, collapsible = FALSE,
-                    .crm_plot_output(ns("densidad_tiempo"), height = "220px"),
+                    .crm_plot_output(ns("densidad_tiempo"), height = "450px"),
                     uiOutput(ns("nota_densidad"))))
     ),
     br(),
@@ -250,38 +232,18 @@ DetalleAnalisisConversion <- function(id, universo_contactos, usuario) {
       .grafico_barras_horizontal(dat, "RangoConversion", "n", color = "#DA291C", titulo_x = "Leads")
     })
     tiempos_conversion_r <- reactive({
-      datos_filtrados_r() %>% filter(EsLead) %>% pull(TiempoConversionDias) %>% na.omit()
+      datos_filtrados_r() %>% filter(EsLead, is.finite(TiempoConversionDias), TiempoConversionDias >= 0) %>%
+        pull(TiempoConversionDias)
     })
-    output$densidad_tiempo <- .crm_render_plotly({
-      x <- tiempos_conversion_r()
-      if (length(x) < 3) {
-        validate(need(FALSE, "NO HAY CONVERSIONES CON FECHAS VÁLIDAS PARA ESTIMAR ESTA CURVA."))
-      }
-      dens <- stats::density(x, from = 0)
-      media <- mean(x, na.rm = TRUE)
-      mediana <- stats::median(x, na.rm = TRUE)
-      plotly::plot_ly(x = dens$x, y = dens$y, type = "scatter", mode = "lines", fill = "tozeroy",
-                      line = list(color = "#DA291C"), fillcolor = "rgba(218,41,28,0.15)",
-                      hovertemplate = "Día %{x:.0f}<extra></extra>") %>%
-        plotly::layout(
-          margin = list(l = 30, r = 20, t = 10, b = 40),
-          xaxis = list(title = "Días hasta conversión"),
-          yaxis = list(title = "Densidad"),
-          paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)",
-          shapes = list(
-            list(type = "line", x0 = media, x1 = media, y0 = 0, y1 = max(dens$y),
-                 line = list(color = "#C11007", dash = "dash", width = 1.5)),
-            list(type = "line", x0 = mediana, x1 = mediana, y0 = 0, y1 = max(dens$y),
-                 line = list(color = "#198754", dash = "dot", width = 1.5))
-          )
-        ) %>%
-        plotly::config(displayModeBar = FALSE)
-    })
+    output$densidad_tiempo <- .crm_render_plotly(.pr_grafico_tiempos(tiempos_conversion_r()))
     output$nota_densidad <- .crm_render_ui({
       x <- tiempos_conversion_r()
-      if (length(x) < 3) return(NULL)
-      .crm_nota(c(paste0("Media: ", round(mean(x), 1), " días (línea continua)."),
-        paste0("Mediana: ", round(median(x), 1), " días (línea punteada).")))
+      x <- x[is.finite(x) & x >= 0]
+      if (!length(x)) return(.crm_nota("No hay avances de etapa con fechas confirmadas para estos filtros."))
+      .crm_nota(c(paste(length(x), "conversiones. Promedio:", round(mean(x), 1),
+        "días; mediana:", round(stats::median(x), 1), "días."),
+        if (length(x) < 3L || length(unique(x)) < 2L) "Mostramos los tiempos registrados, sin estimar una densidad.",
+        "La curva de conversión incluye también a quienes continúan en seguimiento; sin eventos permanece en 0%."))
     })
     # Curva de conversion ----
     DetalleCurvaConversion("mod_curva", datos_filtrados = datos_filtrados_r)
