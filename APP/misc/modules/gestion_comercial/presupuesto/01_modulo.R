@@ -114,6 +114,12 @@ PresupuestoUI <- function(id) {
       .crm_seccion_presupuesto(
         title = "Presupuesto", status = "white", solidHeader = TRUE,
         width = 12, collapsible = FALSE,
+        div(style = "margin-bottom:10px;",
+          racafeForms::racafeInputSwitch("incluir_facturacion", "Incluir facturación sin cierre",
+            value = FALSE, variant = "primary", ns = ns),
+          shiny::conditionalPanel("input.incluir_facturacion",
+            racafeForms::racafeInputSwitch("incluir_estimados", "Incluir pedidos con fecha estimada",
+              value = FALSE, variant = "primary", ns = ns), ns = ns)),
         div(
           style = "overflow-x: auto; width: 100%;",
           uiOutput(ns("Presupuesto"))
@@ -948,9 +954,17 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     datos_act_r     <- reactive({ procesar_datos_base(datos_centrales_r(), periodo_r()) })
     # La tabla anual incluye el horizonte comercial; los KPIs cerrados conservan su fuente financiera.
     datos_act_tabla_r <- reactive({
-      if (is.null(maestro)) return(datos_act_r())
+      if (is.null(maestro)) {
+        x <- datos_act_r()
+        cierre <- cierre_pyg_r()
+        if (!isTRUE(input$incluir_facturacion)) {
+          x <- x[!is.na(cierre) & as.Date(paste0(x$Periodo, "-", match(x$Fecha, .MESES), "-01")) <= cierre, ]
+        }
+        return(x)
+      }
       x <- .resolver_datos(maestro)
-      columnas_ejecucion <- c("MesEjecucionPresupuesto", "SacosEjecucionPresupuesto70", "MargenEjecucionPresupuesto")
+      columnas_ejecucion <- c("AplicarFechaEstimada", "MesEjecucionPresupuesto",
+        "SacosEjecucionPresupuesto70", "MargenEjecucionPresupuesto")
       if (!all(columnas_ejecucion %in% names(x))) x <- .crm_capa_ejecucion(x)
       f <- filtros_r()
       if (!is.null(f)) x <- .gc_filtrar_dimensiones(x, f)
@@ -958,7 +972,10 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         stop("El maestro de presupuesto contiene hechos duplicados.")
       }
       for (campo in intersect(c("Excluir", "ProdExcluir"), names(x))) x <- x[!x[[campo]] %in% "SI", , drop = FALSE]
-      x %>% filter(EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO", "PROYECTADO"),
+      estados <- "CERRADO"
+      if (isTRUE(input$incluir_facturacion)) estados <- c(estados, "FACTURADO_ABIERTO")
+      if (isTRUE(input$incluir_facturacion) && isTRUE(input$incluir_estimados)) estados <- c(estados, "PROYECTADO")
+      x %>% filter(EstadoFinanciero %in% estados,
         !is.na(MesEjecucionPresupuesto), year(MesEjecucionPresupuesto) == periodo_r()) %>%
         group_by(Periodo = year(MesEjecucionPresupuesto), Fecha = .MESES[month(MesEjecucionPresupuesto)]) %>%
         summarise(Sacos70 = .com_suma(SacosEjecucionPresupuesto70),
@@ -1666,6 +1683,8 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
           title    = md(paste0("**Seguimiento de Presupuesto ", periodo, "**")),
           subtitle = md(paste0(
             "Comparativo mensual y acumulado de sacos y margen FCC frente al presupuesto",
+            " — ", if (!isTRUE(input$incluir_facturacion)) "MESES CERRADOS" else
+              if (isTRUE(input$incluir_estimados)) "CIERRE + FACTURACIÓN + ESTIMACIONES" else "CIERRE + FACTURACIÓN",
             " — cierre financiero de indicadores: ",
             if (calendario_r()$mes_actual > 0L) .MESES[calendario_r()$mes_actual] else "SIN CIERRE",
             " — período anterior: ", periodo_ant
