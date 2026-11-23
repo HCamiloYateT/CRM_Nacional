@@ -3,6 +3,7 @@ body <- bs4DashBody(
   .recursos_compartidos,
   .crm_loader_ui(),
   bs4TabItems(
+    bs4TabItem(tabName = "IN_Inicio", uiOutput("ui_IN_Inicio")),
     # Generalidades ----
     bs4TabItem(tabName = "GE_Resumen", uiOutput("ui_GE_Resumen")),
     bs4TabItem(tabName = "GE_Validacion", uiOutput("ui_GE_Validacion")),

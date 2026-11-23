@@ -3,6 +3,7 @@ sidebar <- bs4DashSidebar(
   expandOnHover = FALSE,
   bs4SidebarMenu(
     id = "menu_principal",
+    bs4SidebarMenuItem("Inicio", tabName = "IN_Inicio", icon = icon("house"), selected = TRUE),
     # Generalidades ----
     bs4SidebarMenuItem("Generalidades", icon = icon("clipboard-list"), selected = FALSE,
                        bs4SidebarMenuSubItem("Resumen ejecutivo", tabName = "GE_Resumen", icon = icon("gauge-high")),
