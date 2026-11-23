@@ -149,7 +149,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       comercial = shiny::reactive(isTRUE(es_admin()) && identical(entidad()$Tipo, "CLIENTE")),
       cambios_comerciales = formulario_comercial$refresh,
       al_comercial = function(id_cierre) {
-        shiny::showModal(racafeForms::racafeModal(title = "Información comercial y presupuesto",
+        shiny::showModal(racafeForms::racafeModal(title = "Información comercial",
           size = "subventana2", shiny::tagAppendAttributes(shiny::uiOutput(session$ns("edicion_comercial")),
             `data-crm-action-close` = id_cierre),
           easy_close = TRUE, footer = shiny::modalButton("Cerrar")))
