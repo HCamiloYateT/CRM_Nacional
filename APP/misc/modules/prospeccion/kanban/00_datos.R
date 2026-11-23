@@ -64,7 +64,9 @@
       fila$CodContacto <- paste0("FACTURA:", nit)
       fila$CodigoCRM <- NA_character_
       fila$EsReconstruido <- TRUE
-      fila$FuenteRegistro <- "FACTURACION"
+      fila$FuenteRegistro <- "CARGA_INICIAL"
+      fila$Origen <- "CARGA INICIAL"
+      fila$DetOrigen <- "CLIENTE EXISTENTE"
       fila$IncluirConversion <- FALSE
       fila$Etapa <- "CLIENTE"
       fila$Estado <- "ACTIVO"
@@ -108,6 +110,11 @@
     if (length(indices) != 1L) {
       fila$CodContacto <- paste0("HISTORICO:", nit)
       fila$CodigoCRM <- NA_character_
+      fila$EsReconstruido <- TRUE
+      fila$FuenteRegistro <- "CARGA_INICIAL"
+      fila$Origen <- "CARGA INICIAL"
+      fila$DetOrigen <- "CLIENTE EXISTENTE"
+      fila$IncluirConversion <- FALSE
       nombre <- d$PerRazSoc[!is.na(d$PerRazSoc) & nzchar(d$PerRazSoc)]
       fila$PerRazSoc <- if (length(nombre)) nombre[[1]] else paste("CLIENTE", nit)
       fila$EsSoloFacturacion <- TRUE
