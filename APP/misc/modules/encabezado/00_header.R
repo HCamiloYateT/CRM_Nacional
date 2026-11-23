@@ -382,6 +382,34 @@ HeaderTareasServer <- function(session, usuario, notas = NULL, actualizaciones =
 }
 
 # Clientes ----
+# El universo no depende de una fecha mínima de factura ni de que esa fecha esté informada.
+.header_clientes_operacion <- function(datos, ncliente) {
+  x <- datos
+  x$CLCliNit <- .crm_id_texto(.gc_columna(x, "CLCliNit"))
+  x$CliNitPpal <- .crm_id_texto(.gc_columna(x, "CliNitPpal"))
+  x$LinNegCod <- .crm_id_texto(.gc_columna(x, "LinNegCod"))
+  x$LinNegCod[x$LinNegCod == "20000"] <- "21000"
+  fecha <- as.Date(.gc_columna(x, "FecFact", as.Date(NA)))
+  estado <- as.character(.gc_columna(x, "EstadoFinanciero"))
+  pedido <- .crm_id_texto(.gc_columna(x, "CLPdcCod"))
+  elegible <- !is.na(fecha) | estado %in% c("CERRADO", "FACTURADO_ABIERTO") |
+    (!is.na(pedido) & pedido != "0")
+  elegible[is.na(elegible)] <- FALSE
+  x <- x[elegible & !is.na(x$CLCliNit) & !is.na(x$LinNegCod), , drop = FALSE]
+  x <- x[order(as.Date(.gc_columna(x, "FecFact", as.Date(NA))), decreasing = TRUE, na.last = TRUE), , drop = FALSE]
+  x <- x[!duplicated(x[c("CLCliNit", "LinNegCod")]), , drop = FALSE]
+  nombres <- as.character(.gc_columna(ncliente, "PerRazSoc"))
+  codigos <- .crm_id_texto(.gc_columna(ncliente, "PerCod"))
+  nombre_hija <- nombres[match(x$CLCliNit, codigos)]
+  nombre_padre <- nombres[match(x$CliNitPpal, codigos)]
+  nombre_operacion <- as.character(.gc_columna(x, c("RazonSocialCliNit", "PerRazSoc")))
+  nombre_operacion[nombre_operacion %in% c("", "SIN DATO")] <- NA_character_
+  x$PerRazSoc <- dplyr::coalesce(nombre_hija, nombre_operacion, nombre_padre, paste("NIT", x$CLCliNit))
+  x$CLLinNegNo <- dplyr::coalesce(as.character(.gc_columna(x, "CLLinNegNo")), x$LinNegCod)
+  x$label <- paste0(.crm_label_comercial(x$CLLinNegNo), " — ", x$PerRazSoc, " · ", x$CLCliNit)
+  x[c("CLCliNit", "CliNitPpal", "LinNegCod", "PerRazSoc", "CLLinNegNo", "label")]
+}
+
 HeaderClientesServer <- function(data_c, datos_rv, clientes_raw, usuario,
                                  ncliente, output, es_admin, operaciones = NULL) {
   crm_reciente <- shiny::reactive({
@@ -394,51 +422,13 @@ HeaderClientesServer <- function(data_c, datos_rv, clientes_raw, usuario,
   })
   
   # Clientes sin coincidencia ----
-  clientes_operacion <- shiny::reactive({
-    nombres <- ncliente() %>%
-      dplyr::transmute(
-        codigo = as.character(PerCod),
-        nombre_ncliente = as.character(PerRazSoc)
-      ) %>%
-      dplyr::distinct(codigo, .keep_all = TRUE)
-    
-    datos_rv() %>%
-      dplyr::mutate(
-        FecFact = as.Date(FecFact),
-        CLCliNit = as.character(CLCliNit),
-        CliNitPpal = as.character(CliNitPpal),
-        LinNegCod = as.character(LinNegCod)
-      ) %>%
-      dplyr::filter(
-        !is.na(FecFact),
-        FecFact >= as.Date("2025-01-01"),
-        !is.na(CLCliNit),
-        !is.na(LinNegCod)
-      ) %>%
-      dplyr::arrange(dplyr::desc(FecFact)) %>%
-      dplyr::distinct(CLCliNit, LinNegCod, .keep_all = TRUE) %>%
-      dplyr::left_join(
-        nombres %>% dplyr::rename(CLCliNit = codigo, nombre_hija = nombre_ncliente),
-        by = "CLCliNit"
-      ) %>%
-      dplyr::left_join(
-        nombres %>% dplyr::rename(CliNitPpal = codigo, nombre_padre = nombre_ncliente),
-        by = "CliNitPpal"
-      ) %>%
-      dplyr::mutate(
-        PerRazSoc = dplyr::coalesce(dplyr::na_if(PerRazSoc, "SIN DATO"),
-                                    nombre_hija, nombre_padre, paste("NIT", CLCliNit)),
-        CLLinNegNo = dplyr::coalesce(CLLinNegNo, LinNegCod),
-        label = paste0(CLLinNegNo, " — ", PerRazSoc)
-      ) %>%
-      dplyr::select(CLCliNit, CliNitPpal, LinNegCod, PerRazSoc, CLLinNegNo, label)
-  })
-  
+  clientes_operacion <- shiny::reactive(.header_clientes_operacion(datos_rv(), ncliente()))
+
   incompletos <- shiny::reactive({
     registrados <- clientes_raw() %>%
       dplyr::transmute(
-        CLCliNit = as.character(CLCliNit),
-        LinNegCod = as.character(LinNegCod)
+        CLCliNit = .crm_id_texto(CLCliNit),
+        LinNegCod = .crm_id_texto(ifelse(as.character(LinNegCod) == "20000", 21000, LinNegCod))
       ) %>%
       dplyr::distinct()
     

@@ -36,6 +36,12 @@ IndFormularioUI <- function(id, open = FALSE) {
                                          value = 3L, format = "integer", min = 1, ns = ns)
         )
       ),
+      racafeForms::racafeFormGroup(title = "Presupuesto anual", variant = "soft",
+        racafeForms::racafeFormRow(columns = 2,
+          racafeForms::racafeInputNumeric("frm_PresupuestoSacos", "Presupuesto anual · sacos de 70 kg",
+            value = 0, min = 0, decimals = 2, ns = ns),
+          racafeForms::racafeInputNumeric("frm_PresupuestoMargen", "Presupuesto anual de margen · COP",
+            value = 0, min = 0, format = "currency", decimals = 0, ns = ns))),
       racafeForms::racafeFormFooter(
         racafeForms::racafeButtonSave("btn_guardar", "Guardar cambios", ns = ns, size = "xxs")
       ),
@@ -269,6 +275,10 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
       .crm_update_select(session, "frm_Segmento", selected = if (is.na(seg_val) || seg_val %in% c("Ninguna", "Ninguno")) "" else seg_val)
       .crm_update_select(session, "frm_Excluir", selected = exc_val)
       racafeForms::racafeUpdateNumeric(session, "frm_NumMesesRecuperar", value = meses_val)
+      racafeForms::racafeUpdateNumeric(session, "frm_PresupuestoSacos",
+        value = if (nrow(crm)) as.numeric(crm$SSPpto[[1]]) else 0)
+      racafeForms::racafeUpdateNumeric(session, "frm_PresupuestoMargen",
+        value = if (nrow(crm)) as.numeric(crm$MNFCCPpto[[1]]) else 0)
       padre <- if (nrow(crm)) as.character(crm$CliNitPpal[[1]]) else as.character(d$CliNitPpal[[1]])
       racafeForms::racafeUpdateSwitch(session, "frm_ConvertirPrincipal", value = isTRUE(padre == id_val$nit))
     })
@@ -325,6 +335,14 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
         return()
       }
       payload$NumMesesRecuperar <- as.integer(meses)
+      presupuestos <- suppressWarnings(as.numeric(c(input$frm_PresupuestoSacos, input$frm_PresupuestoMargen)))
+      if (length(presupuestos) != 2L || any(!is.finite(presupuestos) | presupuestos < 0)) {
+        racafeForms::racafeNotify(session, type = "error",
+          title = "Los presupuestos de sacos y margen deben ser números mayores o iguales a cero.")
+        return()
+      }
+      payload$SSPpto <- presupuestos[[1]]
+      payload$MNFCCPpto <- presupuestos[[2]]
       id_val <- identidad_activa()
       pendiente_comercial(list(payload = payload,
                                nit = as.character(id_val$nit),
@@ -334,7 +352,7 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
         title = "Guardar información comercial",
         text = paste0(
           "Se actualizarán los datos comerciales del cliente: asesor, ",
-          "segmento, exclusión y meses para recuperar. ",
+          "segmento, presupuesto de sacos y margen, exclusión y meses para recuperar. ",
           "Estos cambios pueden afectar su seguimiento comercial, ",
           "presupuestos, indicadores y reportes. ¿Desea continuar?"
         ),
