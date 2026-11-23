@@ -219,11 +219,22 @@
     texto_fn = .crm_label_comercial)
 }
 
+# Los observadores de paginación no deben calcular tablas que todavía no están en pantalla.
+.crm_tabla_diferida <- function(datos, id) {
+  sesion <- shiny::getDefaultReactiveDomain()
+  if (is.null(sesion) || !is.function(datos)) return(.crm_datos_tabla(datos))
+  oculto <- paste0("output_", sesion$ns(paste0(id, "-tabla")), "_hidden")
+  shiny::reactive({
+    shiny::req(identical(sesion$clientData[[oculto]], FALSE))
+    .crm_datos_tabla(datos())
+  })
+}
+
 .crm_vancouver_server <- function(id, data, columnas = NULL, col_specs = NULL, col_labels = NULL,
                                    id_col = NULL, modo_seleccion = "ninguno", sortable = TRUE,
                                    searchable = TRUE, page_size = 15, titulo = NULL, subtitulo = NULL,
                                    enlaces_pedido = TRUE, ...) {
-  data <- .crm_datos_tabla(data)
+  data <- .crm_tabla_diferida(data, id)
   if (isTRUE(enlaces_pedido)) col_specs <- .crm_specs_pedidos(col_specs %||% list(), id)
   racafeModulos::TablaVancouverServer(id, data, columnas, col_specs, col_labels, id_col, modo_seleccion,
     sortable, searchable, page_size, titulo, subtitulo, ..., preparar_fn = .crm_nits_tabla,
@@ -236,7 +247,7 @@
                                 modal_icon = NULL, modal_footer = NULL, modal_footer_tipo = "info") {
   argumentos <- list(...)
   identificador <- argumentos$id %||% argumentos[[1]]
-  if ("data" %in% names(argumentos)) argumentos$data <- .crm_datos_tabla(argumentos$data)
+  if ("data" %in% names(argumentos)) argumentos$data <- .crm_tabla_diferida(argumentos$data, identificador)
   argumentos$col_specs <- .crm_specs_pedidos(argumentos$col_specs %||% list(), identificador)
   do.call(racafeModulos::TablaVancouver, c(argumentos, list(footer = footer, footer_tipo = footer_tipo,
     modal_titulo_fn = modal_titulo_fn, modal_contenido_fn = modal_contenido_fn, modal_pre_fn = modal_pre_fn,

@@ -98,7 +98,11 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     contexto_crm <- shiny::reactive(.in_contexto_crm(entidad(), catalogo()))
     familia <- shiny::reactive(.in_familia(entidad(), catalogo(), mapa_nit(), directorio()))
     metas_anuales <- shiny::reactive(.com_clientes(clientes(), periodo()[[2]], filtros(), anual = TRUE))
-    historia <- shiny::reactive(.in_hechos(.gc_filtrar_dimensiones(hechos(), filtros()), entidad()))
+    historia <- shiny::reactive({
+      e <- entidad()
+      # Primero reducir a la entidad elegida; después aplicar exactamente el mismo alcance comercial.
+      .gc_filtrar_dimensiones(.in_hechos(hechos(), e), filtros())
+    })
     historia_completa <- shiny::reactive({
       x <- historia()
       fechas <- x$FecFact[!is.na(x$FecFact) & x$EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO")]

@@ -2872,7 +2872,14 @@ if (!dir.exists("APP/data")) dir.create("APP/data", recursive = TRUE)
 sys.source("APP/misc/datos/01_contrato.R", envir = environment())
 .crm_validar_maestro(crm_maestro, homologaciones)
 
-save(crm_maestro, homologaciones, file = "APP/data/data.RData",
-     compress = "xz")
+# Escribir fuera del archivo vigente evita que la app lea una exportación incompleta.
+ruta_exportacion <- "APP/data/data.RData"
+ruta_temporal <- tempfile("crm_exportacion_", tmpdir = dirname(ruta_exportacion))
+tryCatch({
+  save(crm_maestro, homologaciones, file = ruta_temporal, compress = "gzip")
+  if (!file.rename(ruta_temporal, ruta_exportacion)) stop("No se pudo publicar la exportación del CRM.")
+}, finally = {
+  if (file.exists(ruta_temporal)) unlink(ruta_temporal)
+})
 
 tictoc::toc()

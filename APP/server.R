@@ -54,22 +54,21 @@ server <- function(input, output, session) {
   
   maestro_base_comercial <- reactive({
     h <- exportacion_rv()
-    x <- .crm_medir("transformacion:base_comercial", .crm_preparar_datos(h$crm_maestro, productos_cache(),
+    x <- .crm_medir("transformacion:base_comercial", .crm_base_compartida(h$crm_maestro, productos_cache(),
       h$segmentaciones_actual, h$ord_cmp))
-    if (!"FacturadosConsolidados70" %in% names(x)) x <- .crm_capa_ejecucion(x)
     attr(x, "facturas_detalle") <- h$homologaciones$facturas_detalle
     x
   })
   data_c <- reactive(maestro_base_comercial() %>% dplyr::filter(EstadoFinanciero != "PROYECTADO"))
 
-  data_t <- reactive({
+  # Cambiar fechas no invalida la selección de asesor, segmento, línea y productos.
+  filtros_dimensiones <- reactiveVal(NULL)
+  observeEvent(filtros(), {
     f <- filtros()
-    req(data_c(), !is.null(f))
-    
-    data_c() %>%
-      filter(Excluir != "SI", ProdExcluir != "SI", Asesor %in% f$asesor, Segmento %in% f$segmento,
-             CLLinNegNo %in% f$linneg, Categoria %in% f$categoria, Producto %in% f$producto)
-  })
+    req(!is.null(f))
+    filtros_dimensiones(f[c("asesor", "segmento", "linneg", "categoria", "producto")])
+  }, priority = 100)
+  data_t <- reactive(maestro_comercial() %>% dplyr::filter(EstadoFinanciero != "PROYECTADO"))
   
   data_f <- reactive({
     f <- filtros()
@@ -86,8 +85,11 @@ server <- function(input, output, session) {
     }
   })
   
-  maestro_comercial <- reactive(.crm_medir("filtros:base_comercial",
-    .gc_filtrar_dimensiones(maestro_base_comercial(), filtros())))
+  maestro_comercial <- reactive({
+    req(!is.null(filtros_dimensiones()))
+    .crm_medir("filtros:base_comercial",
+      .gc_filtrar_dimensiones(maestro_base_comercial(), filtros_dimensiones()))
+  })
 
   unidades_comerciales <- reactive(.crm_medir("construccion:unidades_comerciales", {
     contactos <- derivar_etapa_actual(.pr_cargar("CRMNALCONTACTO"), .pr_cargar("CRMNALHISTORIALETAPA"),
@@ -129,6 +131,7 @@ server <- function(input, output, session) {
   })
   session$userData$unidades_comerciales <- datos_unidades
   output$leyenda_dimensiones <- .crm_render_ui({
+    req(isTRUE(input$escalas_color > 0L))
     u <- datos_unidades()
     campos <- c(linneg = "CLLinNegNo", segmento = "Segmento", estado = "EstadoCliente", rfm = "SegmentoRFM", origen = "Origen")
     titulos <- c(linneg = "LÍNEA DE NEGOCIO", segmento = "SEGMENTO COMERCIAL", estado = "ESTADO OFICIAL",

@@ -66,18 +66,29 @@
   invisible(TRUE)
 }
 
-.crm_cargar_exportacion <- function(ruta, destino = globalenv()) {
-  if (!file.exists(ruta)) stop("No existe data/data.RData. Ejecute DataPrep.R antes de iniciar el CRM.", call. = FALSE)
-  datos <- new.env(parent = emptyenv())
-  load(ruta, envir = datos)
-  if (any(c("crm_maestro", "homologaciones") %in% ls(datos))) {
-    .crm_validar_maestro(datos$crm_maestro, datos$homologaciones)
-    datos <- .crm_adaptar_maestro(datos$crm_maestro, datos$homologaciones)
+# Una exportación validada por proceso; las sesiones reciben objetos con copia al modificar.
+.crm_cargar_exportacion <- local({
+  firma_anterior <- NULL
+  exportacion <- NULL
+  function(ruta, destino = globalenv()) {
+    if (!file.exists(ruta)) stop("No existe data/data.RData. Ejecute DataPrep.R antes de iniciar el CRM.", call. = FALSE)
+    info <- file.info(ruta)
+    firma <- list(ruta = normalizePath(ruta), tamano = info$size, fecha = info$mtime, cambio = info$ctime)
+    if (!identical(firma, firma_anterior)) {
+      datos <- new.env(parent = emptyenv())
+      load(ruta, envir = datos)
+      if (any(c("crm_maestro", "homologaciones") %in% ls(datos))) {
+        datos <- .crm_adaptar_maestro(datos$crm_maestro, datos$homologaciones)
+      }
+      .crm_validar_exportacion(datos)
+      # Publicar el caché solo después de validar la nueva exportación completa.
+      exportacion <<- as.list(datos, all.names = TRUE)
+      firma_anterior <<- firma
+    }
+    list2env(exportacion, envir = destino)
+    invisible(TRUE)
   }
-  .crm_validar_exportacion(datos)
-  list2env(as.list(datos, all.names = TRUE), envir = destino)
-  invisible(TRUE)
-}
+})
 
 # Enriquecimiento sin multiplicar hechos financieros ----
 .crm_preparar_datos <- function(dat, productos, segmentaciones, ordenes) {
@@ -306,3 +317,19 @@
   .crm_validar_exportacion(datos)
   datos
 }
+
+# Solo la base sin filtros se comparte entre sesiones; guardar productos reemplaza esta única entrada.
+.crm_base_compartida <- local({
+  anterior <- NULL
+  resultado <- NULL
+  function(dat, productos, segmentaciones, ordenes) {
+    fuentes <- list(dat, productos, segmentaciones, ordenes)
+    if (!identical(fuentes, anterior)) {
+      nuevo <- .crm_preparar_datos(dat, productos, segmentaciones, ordenes)
+      if (!"FacturadosConsolidados70" %in% names(nuevo)) nuevo <- .crm_capa_ejecucion(nuevo)
+      resultado <<- nuevo
+      anterior <<- fuentes
+    }
+    resultado
+  }
+})
