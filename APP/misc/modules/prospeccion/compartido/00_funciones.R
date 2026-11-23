@@ -593,7 +593,20 @@ generar_codigo_contacto <- function() {
   )
 }
 # Carga el pipeline completo del embudo (todas las etapas) para el kanban
+# El embudo se construye una vez por sesión y se invalida con las tablas que realmente utiliza.
 cargar_pipeline_embudo <- function(cargar = .pr_cargar) {
+  sesion <- shiny::getDefaultReactiveDomain()
+  if (is.null(sesion) || !identical(cargar, .pr_cargar)) return(.pr_construir_pipeline(cargar))
+  if (is.null(sesion$userData$pipeline_compartido)) {
+    sesion$userData$pipeline_compartido <- shiny::reactive(.crm_medir("construccion:embudo",
+      .pr_construir_pipeline()))
+  }
+  resultado <- sesion$userData$pipeline_compartido()
+  resultado$DiasEnEtapa <- as.numeric(difftime(Sys.time(), resultado$FechaEntradaEtapa, units = "days"))
+  resultado$EstadoGestion <- .semaforo_gestion(resultado$DiasEnEtapa)
+  resultado
+}
+.pr_construir_pipeline <- function(cargar = .pr_cargar) {
   contactos <- .crm_normalizar_fechas_historia(cargar("CRMNALCONTACTO"))
   historial <- cargar("CRMNALHISTORIALETAPA") %>% mutate(FechaHora = as_datetime(FechaHora, tz = "America/Bogota"))
   contactos <- derivar_etapa_actual(contactos, historial) %>% derivar_fecha_entrada_etapa(historial)

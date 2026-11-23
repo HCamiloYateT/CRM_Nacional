@@ -1376,7 +1376,10 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
     }, ignoreInit = FALSE)
     
     # Auditoría presupuesto ----
-    observeEvent(list(clientes_presupuesto_r(), filtros_r()), {
+    observeEvent({
+      req(isTRUE(getOption("crm.auditoria", FALSE)))
+      list(clientes_presupuesto_r(), filtros_r())
+    }, {
       clientes <- if (shiny::is.reactive(clientes_raw)) clientes_raw() else clientes_raw
       req(is.data.frame(clientes))
       
@@ -1458,7 +1461,10 @@ Presupuesto <- function(id, dat, clientes_raw, filtros = NULL, margenes_pyg = NU
         DiferenciaMargen = "Diferencia de margen (módulo − PyG)", Causa = "Explicación por registro"))
 
     # Auditoría de meses disponibles ----
-    observeEvent(list(datos_centrales_r(), filtros_r()), {
+    observeEvent({
+      req(isTRUE(getOption("crm.auditoria", FALSE)))
+      list(datos_centrales_r(), filtros_r())
+    }, {
       datos_originales <- .resolver_datos(dat) %>%
         mutate(FecMes = as.Date(FecMes),
                LinNegCod = ifelse(as.numeric(LinNegCod) == 20000, 21000, as.numeric(LinNegCod))) %>%

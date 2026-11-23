@@ -67,7 +67,12 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
       limite <- reactiveVal(50L)
       alerta <- reactiveVal(FALSE)
       busqueda <- debounce(reactive(input[[paste0("buscar_", clave)]]), 250)
-      filas_base <- reactive({ x <- pipeline_filtrado(); x[x$Etapa == clave, , drop = FALSE] })
+      filas_base <- reactive({
+        visible <- paste0("output_", ns(paste0("conteo_", clave)), "_hidden")
+        req(identical(session$clientData[[visible]], FALSE))
+        x <- pipeline_filtrado()
+        x[x$Etapa == clave, , drop = FALSE]
+      })
       # La caché pertenece a la etapa y se renueva al cambiar datos o alcance; no comparte permisos entre sesiones.
       tarjetas <- reactive({ filas_base(); new.env(parent = emptyenv()) })
       filas <- reactive({
@@ -79,7 +84,6 @@ KanbanEmbudo <- function(id, usuario, filtros, es_admin = function() FALSE,
       observeEvent(input[[paste0("mas_", clave)]], limite(limite() + 50L))
       observeEvent(input[[paste0("alerta_", clave)]], { alerta(!alerta()); limite(50L) })
       output[[paste0("conteo_", clave)]] <- renderText(nrow(filas()))
-      outputOptions(output, paste0("conteo_", clave), suspendWhenHidden = FALSE)
       if (clave %in% c("CONTACTO", "LEAD")) {
         output[[paste0("alerta_ui_", clave)]] <- .crm_render_ui({
           n <- sum(filas_base()$EstadoGestion %in% "critical")
