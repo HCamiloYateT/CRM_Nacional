@@ -1,71 +1,45 @@
 # Constantes ----
 .RESUMEN_EJECUTIVO_SECCIONES <- list(
   list(seccion = "Generalidades", icono = "clipboard-list", cajas = list(
-    list(id = "ge_validacion", texto = "Validación Financiera", icono = "file-circle-check",
-         formato = "porcentaje", valor = NA_real_, footer = "Cuadre total de sacos en meses cerrados.",
-         tab = "GE_Validacion"),
-    list(id = "ge_evolucion", texto = "Cambio en sacos frente al año anterior", icono = "chart-line",
-         formato = "porcentaje", valor = NA_real_, tab = "GE_Evolucion"),
-    list(id = "ge_participacion", texto = "Clientes con compra", icono = "chart-pie",
-         formato = "entero", valor = NA_real_, tab = "GE_Participacion"),
-    list(id = "ge_comparacion", texto = "Indicadores de mercado disponibles", icono = "chart-bar",
-         formato = "entero", valor = NA_real_, tab = "GE_Comparacion"),
-    list(id = "ge_inventarios", texto = "Inventarios", icono = "boxes-stacked",
-         formato = "entero", valor = NA_real_, tab = "GE_Inventarios")
+    list(id = "ge_validacion", texto = "Validación financiera", icono = "file-circle-check",
+      formato = "porcentaje", valor = NA_real_, footer = "Sacos que cuadran con el cierre financiero.",
+      tab = "GE_Validacion")
   )),
-  list(seccion = "Gestión Comercial", icono = "briefcase", cajas = list(
-    list(id = "gc_presupuesto_sacos", texto = "Cumplimiento total de sacos", icono = "weight-hanging",
-         formato = "porcentaje", valor = NA_real_, footer = "Sacos facturados / presupuesto anual de sacos.",
-         tab = "GC_Presupuesto"),
-    list(id = "gc_presupuesto_margen", texto = "Cumplimiento total de margen", icono = "money-bill-trend-up",
-         formato = "porcentaje", valor = NA_real_, footer = "Margen facturado / presupuesto anual de margen.",
-         tab = "GC_Presupuesto"),
-    list(id = "gc_variables", texto = "Variables (Bono)", icono = "medal",
-         formato = "porcentaje", valor = NA_real_, tab = "GC_Variables"),
-    list(id = "gc_oportunidades", texto = "Oportunidades sin descartar", icono = "bullseye",
-         formato = "entero", valor = NA_real_, tab = "GC_Oportunidades"),
-    list(id = "gc_pendientes", texto = "Casos pendientes de gestión", icono = "list-check",
-         formato = "entero", valor = NA_real_, tab = "GC_Pendientes"),
+  list(seccion = "Gestión comercial", icono = "briefcase", cajas = list(
+    list(id = "gc_presupuesto_sacos", texto = "Cumplimiento de sacos", icono = "weight-hanging",
+      formato = "porcentaje", valor = NA_real_, footer = "Sacos ejecutados frente al presupuesto anual.",
+      tab = "GC_Presupuesto"),
+    list(id = "gc_presupuesto_margen", texto = "Cumplimiento de margen", icono = "money-bill-trend-up",
+      formato = "porcentaje", valor = NA_real_, footer = "Margen ejecutado frente al presupuesto anual.",
+      tab = "GC_Presupuesto"),
+    list(id = "gc_oportunidades", texto = "Oportunidades activas", icono = "bullseye",
+      formato = "entero", valor = NA_real_, footer = "Oportunidades sin descartar y todavía sin cumplir.",
+      tab = "GC_Oportunidades"),
     list(id = "gc_tareas", texto = "Tareas pendientes", icono = "tasks",
-         formato = "entero", valor = NA_real_, tab = "GC_Tareas"),
-    list(id = "gc_fidelidad", texto = "Clientes con compra en los últimos 90 días", icono = "shield-halved",
-         formato = "porcentaje", valor = NA_real_, tab = "GC_Fidelidad"),
-    list(id = "gc_cartera", texto = "Cartera", icono = "file-invoice-dollar",
-         formato = "dinero", valor = NA_real_, tab = "GC_Cartera")
+      formato = "entero", valor = NA_real_, footer = "Tareas pendientes que puedes consultar según tu usuario.",
+      tab = "GC_Tareas"),
+    list(id = "gc_cartera", texto = "Cartera vigente", icono = "file-invoice-dollar",
+      formato = "dinero", valor = NA_real_, footer = "Saldo abierto sin vencer en el último corte disponible.",
+      tab = "GC_Cartera")
   )),
   list(seccion = "Prospección", icono = "filter", cajas = list(
-    list(id = "pr_kanban", texto = "Kanban", icono = "columns",
-         formato = "entero", valor = NA_real_, tab = "PR_Kanban"),
     list(id = "pr_contactos", texto = "Contactos", icono = "address-book",
-         formato = "entero", valor = NA_real_, tab = "PR_Contactos"),
-    list(id = "pr_prospectos", texto = "Prospectos", icono = "handshake",
-         formato = "entero", valor = NA_real_, tab = "PR_Prospectos"),
+      formato = "entero", valor = NA_real_, footer = "Entidades en etapa CONTACTO dentro de tu alcance.",
+      tab = "PR_Contactos"),
     list(id = "pr_leads", texto = "Leads", icono = "bullseye",
-         formato = "entero", valor = NA_real_, tab = "PR_Leads"),
+      formato = "entero", valor = NA_real_, footer = "Entidades en etapa LEAD dentro de tu alcance.",
+      tab = "PR_Leads"),
     list(id = "pr_clientes", texto = "Clientes", icono = "users",
-         formato = "entero", valor = NA_real_, tab = "PR_Clientes"),
+      formato = "entero", valor = NA_real_, footer = "Cuentas principales en etapa CLIENTE dentro de tu alcance.",
+      tab = "PR_Clientes"),
     list(id = "pr_descartados", texto = "Descartados", icono = "ban",
-         formato = "entero", valor = NA_real_, tab = "PR_Descartados"),
-    list(id = "pr_conversion", texto = "Conversión", icono = "funnel-dollar",
-         formato = "porcentaje", valor = NA_real_, tab = "PR_Conversion"),
-    list(id = "pr_potencial", texto = "Potencial de Mercado", icono = "map-location-dot",
-         formato = "entero", valor = NA_real_, tab = "PR_Potencial")
+      formato = "entero", valor = NA_real_, footer = "Entidades descartadas dentro de tu alcance.",
+      tab = "PR_Descartados")
   )),
-  list(seccion = "Cohortes de Clientes", icono = "chart-gantt", cajas = list(
-    list(id = "co_estados", texto = "Estados y transiciones", icono = "people-arrows",
-         formato = "entero", valor = NA_real_, tab = "CO_Estados")
-  )),
-  list(seccion = "Herramientas", icono = "screwdriver-wrench", cajas = list(
-    list(id = "he_calculadoras", texto = "Calculadoras", icono = "calculator",
-         formato = "entero", valor = NA_real_, tab = "HE_Calculadoras")
-  )),
-  list(seccion = "Productos", icono = "boxes-stacked", cajas = list(
-    list(id = "pd_ejecucion", texto = "Productos facturados", icono = "chart-column",
-         formato = "entero", valor = NA_real_, footer = "Productos con compra en el periodo del controlbar.",
-         tab = "PD_Ejecucion"),
-    list(id = "pd_marketbasket", texto = "Market Basket", icono = "basket-shopping",
-         formato = "entero", valor = NA_real_, footer = "Reglas retenidas en el último análisis de compras conjuntas.",
-         tab = "PD_MarketBasket")
+  list(seccion = "Cohortes de clientes", icono = "chart-gantt", cajas = list(
+    list(id = "co_estados", texto = "Unidades de la cohorte al mes de corte", icono = "people-arrows",
+      formato = "entero", valor = NA_real_, footer = "Cliente y línea de negocio: cada combinación cuenta una vez.",
+      tab = "CO_Estados")
   ))
 )
 
@@ -132,3 +106,13 @@ ResumenEjecutivo <- function(id, valores = NULL) {
 
 
 
+
+# Población acumulada de la cohorte hasta el mes del corte, sin repetir cliente y línea.
+.resumen_unidades_cohorte <- function(panel, hechos, corte) {
+  if (!is.data.frame(panel) || !nrow(panel)) return(NA_real_)
+  x <- panel[!is.na(panel$FecProceso) & as.Date(panel$FecProceso) <= corte, , drop = FALSE]
+  if ("FecIngreso" %in% names(x)) x <- x[!is.na(x$FecIngreso) & x$FecIngreso <= corte, , drop = FALSE]
+  claves <- c("CliNitPpal", "LinNegCod")
+  x <- dplyr::semi_join(x, unique(hechos[claves]), by = claves)
+  nrow(unique(x[claves]))
+}

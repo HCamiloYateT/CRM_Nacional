@@ -15,6 +15,7 @@ header <- bs4DashNavbar(status = "white", border = FALSE, sidebarIcon = icon("ba
                                                    racafeForms::racafeButtonDownload("FT_DescargarClientes",
                                                      label = NULL, icon = "users", size = "xxs", variant = "secondary"),
                                                    title = "Descargar clientes"),
+                                                 GlosarioCRMUI(),
                                                  div(class = "dropdown",
                                                    tagAppendAttributes(racafeForms::racafeButton("escalas_color", NULL,
                                                      icon = "palette", title = "Escalas de color", variant = "secondary",
