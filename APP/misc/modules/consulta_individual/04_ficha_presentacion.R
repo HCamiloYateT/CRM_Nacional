@@ -199,6 +199,7 @@
     .crm_estilos_ui(),
     shiny::uiOutput(ns("identidad")), shiny::uiOutput(ns("alcance_crm")),
     shiny::uiOutput(ns("alcance_unidad_ficha")), UnidadComercialUI(ns("unidad_ficha")),
+    shiny::uiOutput(ns("edicion_comercial")),
     shiny::tags$div(class = "in-ficha-grid",
       .in_ficha_caja(ns, "antiguedad", "Antigüedad y relación comercial", shiny::uiOutput(ns("antiguedad-tabla"))),
       .in_ficha_caja(ns, "presupuesto", "Presupuesto y metas", shiny::uiOutput(ns("presupuesto_ficha"))),

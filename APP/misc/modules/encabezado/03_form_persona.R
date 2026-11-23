@@ -7,14 +7,14 @@
 # Selectores compactos ----
 
 # IndFormulario ----
-IndFormularioUI <- function(id) {
+IndFormularioUI <- function(id, open = FALSE) {
   ns <- shiny::NS(id)
   catalogos <- Choices()
   catalogos$personas <- as.character(catalogos$personas %||% character())
   catalogos$segmento <- as.character(catalogos$segmento %||% character())
 
-  racafeShiny::racafeCollapsible(
-    id = ns("informacion_comercial"), title = "Información comercial (editable)", open = FALSE,
+  .accion_formulario_ui(id, racafeShiny::racafeCollapsible(
+    id = ns("informacion_comercial"), title = "Información comercial (editable)", open = open,
     racafeForms::racafeForm(size = "compact", variant = "plain",
       racafeForms::racafeFormGroup(title = "Jerarquía comercial", variant = "soft",
         shiny::uiOutput(ns("ui_frm_padre_nuevo")),
@@ -41,7 +41,7 @@ IndFormularioUI <- function(id) {
       ),
       shiny::uiOutput(ns("aviso_sin_permiso"))
     )
-  )
+  ))
 }
 
 IndFormulario <- function(id, identidad, dat, usr, ncliente,
@@ -49,8 +49,12 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     refresh <- reactiveVal(0L)
+    identidad_activa <- reactiveVal(NULL)
+    pendiente_jerarquia <- reactiveVal(NULL)
+    pendiente_comercial <- reactiveVal(NULL)
     
     observe({
+      input$FormularioListo
       autorizado <- isTRUE(es_admin())
       racafeForms::racafeUpdateEnabled(session, "btn_guardar_hijo", enabled = autorizado)
       racafeForms::racafeUpdateEnabled(session, "btn_guardar", enabled = autorizado)
@@ -63,18 +67,13 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
       )
     })
     
-    identidad_activa <- reactiveVal(NULL)
     observeEvent(identidad(), {
       id_val <- identidad()
-      req(!is.null(id_val))
-      identidad_activa(list(nit = id_val$nit, linneg_cod = id_val$linneg_cod))
-    })
-    
-    observeEvent(identidad(), {
+      identidad_activa(if (is.null(id_val)) NULL else list(nit = id_val$nit, linneg_cod = id_val$linneg_cod))
       pendiente_jerarquia(NULL)
       pendiente_comercial(NULL)
-    }, ignoreInit = TRUE)
-    
+    }, ignoreNULL = FALSE, priority = 30)
+
     output$ui_frm_padre_nuevo <- renderUI({
       id_val <- identidad_activa()
       req(!is.null(id_val), nrow(ncliente()) > 0)
@@ -84,9 +83,13 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
         dplyr::arrange(PerRazSoc) %>%
         {setNames(as.character(.$PerCod), paste0(.$PerCod, " - ", .$PerRazSoc))}
       
+      crm <- data_crm()
+      d <- dat()
+      padre <- if (nrow(crm)) as.character(crm$CliNitPpal[[1]]) else as.character(d$CliNitPpal[[1]])
       .crm_select(
         "frm_CuentaPadreNueva", "Cuenta principal", choices = choices_padre,
-        selected = "", ns = ns, disabled = isTRUE(input$frm_ConvertirPrincipal)
+        selected = intersect(padre, unname(choices_padre)), ns = ns,
+        disabled = isTRUE(input$frm_ConvertirPrincipal)
       )
     })
     
@@ -104,8 +107,6 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
     })
     
     # Guardado de jerarquía ----
-    pendiente_jerarquia <- reactiveVal(NULL)
-    pendiente_comercial <- reactiveVal(NULL)
     
     limpiar_seleccion <- function(x) {
       if (is.null(x) || !length(x) || is.na(x[[1]])) return(NA_character_)
@@ -253,7 +254,8 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
         slice(1)
     })
     
-    observe({
+    observeEvent(list(identidad_activa(), data_crm(), input$FormularioListo), {
+      req(input$FormularioListo)
       crm <- data_crm()
       id_val <- identidad_activa()
       req(!is.null(id_val))
@@ -267,6 +269,8 @@ IndFormulario <- function(id, identidad, dat, usr, ncliente,
       .crm_update_select(session, "frm_Segmento", selected = if (is.na(seg_val) || seg_val %in% c("Ninguna", "Ninguno")) "" else seg_val)
       .crm_update_select(session, "frm_Excluir", selected = exc_val)
       racafeForms::racafeUpdateNumeric(session, "frm_NumMesesRecuperar", value = meses_val)
+      padre <- if (nrow(crm)) as.character(crm$CliNitPpal[[1]]) else as.character(d$CliNitPpal[[1]])
+      racafeForms::racafeUpdateSwitch(session, "frm_ConvertirPrincipal", value = isTRUE(padre == id_val$nit))
     })
     
     construir_payload <- function() {
