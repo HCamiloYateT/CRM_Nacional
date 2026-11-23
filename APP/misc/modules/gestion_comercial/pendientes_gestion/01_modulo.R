@@ -1,7 +1,7 @@
 # Flujo completo: cada saldo conserva su grano y su unidad ----
 .PEN_ETAPAS <- c("Sin asignar", "Por producir", "Por despachar", "Por facturar", "Futuros", "Vencidos",
                  "Sin fecha estimada", "Revisar margen", "Sin pedido", "Sin lote", "Revisar cantidades")
-.pen_preparar <- function(maestro, hoy = Sys.Date()) {
+.pen_preparar <- function(maestro, hoy = Sys.Date(), detalle = TRUE) {
   requeridas <- c("CLPdcCod", "CLPdcLin", "CLLotCod", "EstadoFinanciero", "SacosPedido70Linea",
                  "SacosLote70", "SacosProducidos70", "SacosDespachados70", "SacosFact", "Margen", "FecFact",
                  "FacturadosOperativos70")
@@ -52,6 +52,7 @@
   pedidos$Pendientes <- pmax(pedidos$Pedidos - pedidos$Facturados, 0)
   pedidos$SinAsignar <- pmax(pedidos$Pedidos - pedidos$Asignados, 0)
   pedidos$Activo <- pedidos$Estado %in% c("A", "ACTIVO", "ABIERTO") | is.na(pedidos$Estado)
+  if (!isTRUE(detalle)) return(list(pedidos = pedidos, lotes = lotes))
   inactivos <- pedidos[!pedidos$Activo, c("Pedido", "Linea")]
   lotes$PedidoActivo <- !paste(lotes$Pedido, lotes$Linea) %in% paste(inactivos$Pedido, inactivos$Linea)
   registros <- list()

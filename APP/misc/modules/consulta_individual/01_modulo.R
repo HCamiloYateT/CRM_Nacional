@@ -14,7 +14,7 @@ ConsultaIndividualUI <- function(id) {
 ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin, nit_mapa,
                                cartera = function() NULL, tareas = function() data.frame(),
                                cargar = racafeBD::CargarDatos, directorio = function() data.frame(),
-                               estados = function() data.frame(), solicitud = function() NULL) {
+                               estados = function() data.frame(), solicitud = function() NULL, data_t = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     mapa_nit <- shiny::reactive(if (shiny::is.reactive(nit_mapa)) nit_mapa() else nit_mapa)
     revision <- shiny::reactiveVal(0L)
@@ -40,11 +40,14 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
         "Seleccione fechas válidas para el Período de análisis."))
       x
     })
+    datos_dimensiones <- shiny::reactive({
+      if (shiny::is.reactive(data_t)) data_t() else .gc_filtrar_dimensiones(hechos(), filtros())
+    })
     catalogo_clientes <- shiny::reactive(.com_clientes(clientes(), periodo()[[2]], filtros()))
     catalogo <- shiny::reactive({
       crm <- contactos()
       .in_catalogo(crm, catalogo_clientes(), data.frame(), vinculos()$datos, usuario(), es_admin(),
-        filtros(), .gc_filtrar_dimensiones(hechos(), filtros()) %>%
+        filtros(), datos_dimensiones() %>%
           dplyr::distinct(CLCliNit, CliNitPpal, PerRazSoc, Asesor), directorio(),
         asignaciones = .com_clientes(clientes(), periodo()[[2]]))
     })
@@ -98,11 +101,10 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     contexto_crm <- shiny::reactive(.in_contexto_crm(entidad(), catalogo()))
     familia <- shiny::reactive(.in_familia(entidad(), catalogo(), mapa_nit(), directorio()))
     metas_anuales <- shiny::reactive(.com_clientes(clientes(), periodo()[[2]], filtros(), anual = TRUE))
-    historia <- shiny::reactive({
-      e <- entidad()
-      # Primero reducir a la entidad elegida; después aplicar exactamente el mismo alcance comercial.
-      .gc_filtrar_dimensiones(.in_hechos(hechos(), e), filtros())
-    })
+    # El detalle conserva todo el histórico autorizado del NIT, sin volver a filtrar el maestro completo.
+    data_ind <- shiny::reactive(.in_hechos(datos_dimensiones(), entidad()))
+    historia <- data_ind
+
     historia_completa <- shiny::reactive({
       x <- historia()
       fechas <- x$FecFact[!is.na(x$FecFact) & x$EstadoFinanciero %in% c("CERRADO", "FACTURADO_ABIERTO")]
@@ -544,7 +546,7 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     })
     .crm_vancouver_server("cartera", shiny::reactive(cartera_entidad()$datos),
       columnas = c("NIT", "Factura", "FechaVence", "DiasVencido", "Saldo", "Sacos", "Rango"))
-    poblacion <- shiny::reactive(.gc_filtrar_dimensiones(hechos(), filtros()))
+    poblacion <- datos_dimensiones
     nivel <- shiny::reactive(if (entidad()$Alcance == "Cuenta principal") "principal" else "nit")
     poblacion_nit <- shiny::reactive(.in_poblacion_modelo(poblacion(), "nit"))
     poblacion_principal <- shiny::reactive(.in_poblacion_modelo(poblacion(), "principal"))

@@ -545,6 +545,7 @@ HeaderClientesServer <- function(data_c, datos_rv, clientes_raw, usuario,
   # Actualización ----
   actualizar_clientes <- function() {
     clientes_raw(racafeBD::CargarDatos("CRMNALCLIENTE"))
+    .pr_invalidar("CRMNALCLIENTE")
   }
   
   shiny::observeEvent(form_nuevo$refresh(), {

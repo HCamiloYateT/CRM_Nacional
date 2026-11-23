@@ -5,6 +5,7 @@
   if (is.null(sesion$userData$prospeccion_fuentes)) {
     sesion$userData$prospeccion_fuentes <- list(revision = shiny::reactiveVal(0L),
       tablas = new.env(parent = emptyenv()), revisiones = new.env(parent = emptyenv()),
+      vigentes = new.env(parent = emptyenv()),
       revision_total = shiny::reactiveVal(0L))
   }
   sesion$userData$prospeccion_fuentes
@@ -19,6 +20,12 @@
   fuente <- .pr_fuentes()
   if (is.null(fuente)) return(cargar(tabla))
   .pr_revision(tabla)
+  sesion <- shiny::getDefaultReactiveDomain()
+  exportadas <- sesion$userData$fuentes_etl
+  if (is.function(exportadas)) {
+    tablas <- exportadas()
+    if (tabla %in% names(tablas) && !exists(tabla, fuente$vigentes, inherits = FALSE)) return(tablas[[tabla]])
+  }
   if (!exists(tabla, fuente$tablas, inherits = FALSE)) {
     fuente$tablas[[tabla]] <- .crm_medir(paste0("SQL:", tabla), cargar(tabla))
   }
@@ -33,6 +40,7 @@
     union(tablas, filtradas)
   }
   for (tabla in quitar) {
+    if (!is.null(tablas)) fuente$vigentes[[tabla]] <- TRUE
     if (exists(tabla, fuente$tablas, inherits = FALSE)) rm(list = tabla, envir = fuente$tablas)
     if (exists(tabla, fuente$revisiones, inherits = FALSE)) {
       fuente$revisiones[[tabla]](shiny::isolate(fuente$revisiones[[tabla]]()) + 1L)
@@ -43,6 +51,7 @@
   if (is.null(tablas)) fuente$revision_total(shiny::isolate(fuente$revision_total()) + 1L)
   fuente$revision(shiny::isolate(fuente$revision()) + 1L)
 }
+
 
 # Funciones Embudo ----
 

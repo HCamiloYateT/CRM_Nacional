@@ -2571,8 +2571,21 @@ homologaciones <- list(
   clientes_sistema = n_cliente,
   facturacion = fact,
   margenes_pyg = margenes_pyg,
-  lotes = lotes_raw
+  lotes = lotes_raw,
+  actualizado_en = Sys.time(),
+  fuentes_consulta = list(CRMNALCLIENTE = personas, CRMNALSEGR = segmentos_raw,
+    CRMNALPRODS = productos_hom, CRMNALORDCMP = ordenes_hom)
 )
+
+# La consulta habitual de prospección utiliza esta captura; las escrituras invalidan su tabla en la app.
+for (tabla_crm in c("CRMNALCONTACTO", "CRMNALHISTORIALETAPA", "CONTACTOLEAD", "CRMNALLEADCLIENTE",
+    "CRMNALVINCULONIT", "CRMNALPROSPECTOALIANZA", "CRMNALRELACIONAMIENTO", "CRMNALCLOPT", "CRMNALDESCARTE")) {
+  tryCatch({
+    fuente_crm <- racafeBD::CargarDatos(tabla_crm)
+    if (!is.data.frame(fuente_crm)) stop("La fuente no entregó una tabla.")
+    homologaciones$fuentes_consulta[[tabla_crm]] <- fuente_crm
+  }, error = function(e) message("Sin captura de ", tabla_crm, ": ", conditionMessage(e)))
+}
 
 # Fuente comercial histórica opcional: importar datos, nunca ejecutar los scripts antiguos.
 sys.source("APP/misc/datos/02_fuentes_comerciales.R", envir = environment())

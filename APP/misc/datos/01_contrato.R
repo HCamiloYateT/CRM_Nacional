@@ -66,14 +66,20 @@
   invisible(TRUE)
 }
 
+# La recarga manual inspecciona el archivo, sin abrir conexiones a la base de datos.
+.crm_firma_exportacion <- function(ruta) {
+  if (!file.exists(ruta)) return(NULL)
+  info <- file.info(ruta)
+  list(ruta = normalizePath(ruta), tamano = info$size, fecha = info$mtime, cambio = info$ctime)
+}
+
 # Una exportación validada por proceso; las sesiones reciben objetos con copia al modificar.
 .crm_cargar_exportacion <- local({
   firma_anterior <- NULL
   exportacion <- NULL
   function(ruta, destino = globalenv()) {
     if (!file.exists(ruta)) stop("No existe data/data.RData. Ejecute DataPrep.R antes de iniciar el CRM.", call. = FALSE)
-    info <- file.info(ruta)
-    firma <- list(ruta = normalizePath(ruta), tamano = info$size, fecha = info$mtime, cambio = info$ctime)
+    firma <- .crm_firma_exportacion(ruta)
     if (!identical(firma, firma_anterior)) {
       datos <- new.env(parent = emptyenv())
       load(ruta, envir = datos)
