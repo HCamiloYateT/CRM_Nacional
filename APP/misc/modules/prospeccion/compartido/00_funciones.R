@@ -70,6 +70,7 @@ derivar_etapa_actual <- function(contactos = NULL, historial = NULL, clientes_hi
       EtapaPreDescarte = ifelse(is.na(EtapaPreDescarte), "CONTACTO", EtapaPreDescarte),
       Etapa = case_when(
         .crm_nit_historia(PerCod) %in% nits_clientes ~ "CLIENTE",
+        EsReconstruido & FuenteRegistro == "CARGA_INICIAL" ~ "CLIENTE",
         EsReconstruido ~ "SIN ETAPA OBSERVADA",
         Estado == "DESCARTADO" ~ "DESCARTADO",
         is.na(EtapaUltimaTransicion) ~ "CONTACTO",
@@ -714,7 +715,8 @@ cargar_pipeline_embudo <- function(cargar = .pr_cargar) {
   contexto <- switch(fila$Etapa,
     CONTACTO = paste("ORIGEN:", texto("Origen")),
     PROSPECTO = paste("NIT ALIADO:", texto("NitsAliados", "SIN NIT REGISTRADO")),
-    LEAD = texto("LinNegocio"), CLIENTE = paste("NIT:", nit),
+    LEAD = texto("LinNegocio"), CLIENTE = paste("NIT:", nit,
+      if (texto("Origen", "") == "CARGA INICIAL") "· CARGA INICIAL" else ""),
     DESCARTADO = paste("DE", texto("EtapaPreDescarte"), "·", texto("Razon1", "SIN MOTIVO REGISTRADO")))
   creador <- fila$Etapa == "CONTACTO" || texto("Asesor", "") == ""
   responsables <- if (creador) texto("UsuarioCrea", "SIN REGISTRO") else texto("Asesor", "SIN ASESOR")

@@ -673,6 +673,7 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
       EtapaPreDescarte = ifelse(is.na(EtapaPreDescarte), "CONTACTO", EtapaPreDescarte),
       Etapa = case_when(
         Estado == "DESCARTADO" ~ "DESCARTADO",
+        EsReconstruido & FuenteRegistro == "CARGA_INICIAL" ~ "CLIENTE",
         is.na(EtapaUltimaTransicion) & EsReconstruido ~ "CLIENTE",
         is.na(EtapaUltimaTransicion) ~ "CONTACTO",
         TRUE ~ EtapaUltimaTransicion)
@@ -683,8 +684,9 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
 ## Contactos clientes ----
 .asegurar_contactos_clientes <- function(clientes, usuario = "SISTEMA",
     cargar = racafeBD::CargarDatos, registrar = .crm_registrar_cliente_historico,
-    migrar = .crm_migrar_esquema_historia) {
+    migrar = .crm_migrar_esquema_historia, identificar = .crm_identificar_carga_inicial) {
   migrar(aplicar = TRUE)
+  identificar()
   contactos <- cargar("CRMNALCONTACTO")
   .crm_exigir_marcas_historia(contactos)
   contactos <- .crm_normalizar_fechas_historia(.crm_marcas_historia(contactos))
@@ -714,7 +716,7 @@ NIVELES_MARGEN <- list(c("CLCliNit", "CLLinNegNo", "LinProCod", "MCCod", "MrcCod
   mapa <- clientes %>% select(CliNitPpal) %>% left_join(contactos_etapa, by = "CliNitPpal") %>%
     transmute(CliNitPpal = suppressWarnings(as.numeric(CliNitPpal)), CodContacto,
       TieneContacto = ifelse(.crm_nit_historia(CliNitPpal) %in% faltantes$CliNitPpal, "NO", "SI"),
-      EsReconstruido, FuenteRegistro, FechaHoraCrea, Etapa = Etapa,
+      EsReconstruido, FuenteRegistro, Origen, DetOrigen, FechaHoraCrea, Etapa = Etapa,
       EtapaContacto = Etapa, EstadoContacto = Estado, EtapaPreDescarte)
   if (anyNA(mapa$CodContacto) || anyDuplicated(mapa$CliNitPpal)) stop("Mapa de clientes incompleto o duplicado.")
   message("[Clientes históricos] Universo: ", nrow(clientes), "; faltantes iniciales: ", nrow(faltantes),

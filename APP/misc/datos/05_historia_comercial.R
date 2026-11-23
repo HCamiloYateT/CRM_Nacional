@@ -14,7 +14,7 @@
   datos$EsReconstruido <- toupper(as.character(datos$EsReconstruido)) %in% c("TRUE", "1", "SI")
   datos$FechaImputada <- toupper(as.character(datos$FechaImputada)) %in% c("TRUE", "1", "SI")
   datos$IncluirConversion <- !datos$EsReconstruido & !datos$FechaImputada &
-    !datos$FuenteRegistro %in% c("CLIENTE_HISTORICO", "MIGRACION")
+    !datos$FuenteRegistro %in% c("CLIENTE_HISTORICO", "MIGRACION", "CARGA_INICIAL")
   datos
 }
 es_historia_comercial_real <- function(datos) .crm_marcas_historia(datos)$IncluirConversion
@@ -101,6 +101,19 @@ obtener_clientes_sin_contacto <- function(clientes, contactos) {
   as.character(DBI::dbQuoteLiteral(con, x))
 }
 
+# El ingreso reconstruido no inventa promociones ni modifica las conversiones simuladas.
+.crm_registrar_ingreso_inicial <- function(con, codigo = NULL) {
+  condicion <- if (is.null(codigo)) "" else paste0(" AND c.CodContacto = ", .crm_literal_historia(con, codigo))
+  DBI::dbExecute(con, paste0("INSERT INTO CRMNALHISTORIALETAPA ",
+    "(CodContacto, EtapaAnterior, EtapaNueva, Usuario, FechaHora, Motivo, EsReconstruido) ",
+    "SELECT c.CodContacto, 'SIN REGISTRO', 'CONTACTO', c.UsuarioCrea, ",
+    "COALESCE(c.FechaFuente, c.FechaHoraCrea, CURRENT_TIMESTAMP), ",
+    "'CARGA INICIAL: CLIENTE EXISTENTE; INGRESO RECONSTRUIDO', TRUE FROM CRMNALCONTACTO c ",
+    "LEFT JOIN CRMNALHISTORIALETAPA h ON h.CodContacto = c.CodContacto AND h.EtapaNueva = 'CONTACTO' ",
+    "WHERE c.EsReconstruido = TRUE AND c.FuenteRegistro = 'CARGA_INICIAL'", condicion,
+    " AND h.CodContacto IS NULL"))
+}
+
 # Registro transaccional de clientes históricos ----
 .crm_registrar_cliente_historico <- function(cliente, usuario, generar_codigo) {
   con <- racafeBD::ConectarBD()
@@ -123,16 +136,35 @@ obtener_clientes_sin_contacto <- function(clientes, contactos) {
       imputada <- is.na(fecha) && isTRUE(obligatoria)
       fila <- data.frame(CodContacto = generar_codigo(contactos), PerCod = cliente$CliNitPpal,
       PerRazSoc = cliente$PerRazSoc, Estado = "ACTIVO", EtapaPreDescarte = "CLIENTE",
+      Origen = "CARGA INICIAL", DetOrigen = "CLIENTE EXISTENTE",
       UsuarioCrea = usuario, FechaHoraCrea = if (imputada) Sys.time() else fecha,
       UsuarioMod = usuario, FechaHoraModi = Sys.time(), EsReconstruido = TRUE,
-      FuenteRegistro = "CLIENTE_HISTORICO", FechaFuente = fecha, FechaImputada = imputada)
+      FuenteRegistro = "CARGA_INICIAL", FechaFuente = fecha, FechaImputada = imputada)
       columnas <- paste(DBI::dbQuoteIdentifier(con, names(fila)), collapse = ", ")
       valores <- vapply(fila, function(x) .crm_literal_historia(con, x[[1]]), character(1))
       DBI::dbExecute(con, paste0("INSERT INTO ", DBI::dbQuoteIdentifier(con, "CRMNALCONTACTO"),
         " (", columnas, ") VALUES (", paste(valores, collapse = ", "), ")"))
+      .crm_registrar_ingreso_inicial(con, fila$CodContacto)
       attr(fila, "Creado") <- TRUE
       fila
     }
+  })
+}
+
+# Identificar importaciones anteriores sin modificar contactos ni leads simulados.
+.crm_identificar_carga_inicial <- function(con = NULL) {
+  propia <- is.null(con)
+  if (propia) con <- racafeBD::ConectarBD()
+  if (propia) on.exit(DBI::dbDisconnect(con), add = TRUE)
+  bloqueo <- DBI::dbGetQuery(con, "SELECT GET_LOCK('CRMNAL_CONTACTOS_CLIENTES', 30) AS adquirido")
+  if (!identical(as.integer(bloqueo$adquirido), 1L)) stop("No fue posible bloquear la carga inicial.")
+  on.exit(DBI::dbGetQuery(con, "SELECT RELEASE_LOCK('CRMNAL_CONTACTOS_CLIENTES')"), add = TRUE, after = FALSE)
+  DBI::dbWithTransaction(con, {
+    actualizados <- DBI::dbExecute(con, paste0("UPDATE CRMNALCONTACTO SET Origen = 'CARGA INICIAL', ",
+      "DetOrigen = 'CLIENTE EXISTENTE', FuenteRegistro = 'CARGA_INICIAL' ",
+      "WHERE EsReconstruido = TRUE AND FuenteRegistro = 'CLIENTE_HISTORICO'"))
+    .crm_registrar_ingreso_inicial(con)
+    actualizados
   })
 }
 
