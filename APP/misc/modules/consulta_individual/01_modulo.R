@@ -14,7 +14,8 @@ ConsultaIndividualUI <- function(id) {
 ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin, nit_mapa,
                                cartera = function() NULL, tareas = function() data.frame(),
                                cargar = racafeBD::CargarDatos, directorio = function() data.frame(),
-                               estados = function() data.frame(), solicitud = function() NULL, data_t = NULL) {
+                               estados = function() data.frame(), solicitud = function() NULL, data_t = NULL,
+                               al_actualizar_clientes = function() NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     mapa_nit <- shiny::reactive(if (shiny::is.reactive(nit_mapa)) nit_mapa() else nit_mapa)
     revision <- shiny::reactiveVal(0L)
@@ -80,6 +81,43 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       shiny::validate(shiny::need(nrow(x) == 1L, "Seleccione una entidad disponible para su alcance comercial."))
       x
     })
+    unidades_edicion <- shiny::reactive({
+      shiny::req(isTRUE(es_admin()))
+      .in_edicion_unidades(clientes(), datos_dimensiones(), entidad(), filtros(), directorio())
+    })
+    output$edicion_comercial <- .crm_render_ui({
+      e <- entidad()
+      if (!identical(e$Tipo, "CLIENTE")) return(NULL)
+      if (!isTRUE(es_admin())) return(.crm_nota("La edición comercial está disponible para administradores."))
+      x <- unidades_edicion()
+      if (!nrow(x)) return(.crm_nota("No hay cuentas y líneas disponibles para editar en la selección actual."))
+      anterior <- shiny::isolate(input$editar_unidad)
+      seleccion <- if (length(anterior) == 1L && anterior %in% x$Clave) anterior else x$Clave[[1]]
+      racafeForms::racafeForm(variant = "plain",
+        .crm_select("editar_unidad", "Cuenta y línea de negocio que se modificará",
+          choices = stats::setNames(x$Clave, x$Etiqueta), selected = seleccion, ns = session$ns),
+        .crm_nota("La edición corresponde a la configuración vigente, independientemente del período consultado."),
+        IndFormularioUI(session$ns("editar_comercial"), open = TRUE))
+    })
+    identidad_edicion <- shiny::reactive({
+      if (!isTRUE(es_admin())) return(NULL)
+      x <- unidades_edicion()
+      x <- x[x$Clave %in% input$editar_unidad, , drop = FALSE]
+      if (nrow(x) != 1L) return(NULL)
+      list(nit = x$CLCliNit[[1]], linneg_cod = x$LinNegCod[[1]])
+    })
+    formulario_comercial <- IndFormulario("editar_comercial", identidad_edicion,
+      dat = shiny::reactive({
+        id <- identidad_edicion(); shiny::req(!is.null(id))
+        x <- unidades_edicion()
+        x[x$CLCliNit == id$nit & x$LinNegCod == id$linneg_cod, , drop = FALSE]
+      }), usr = usuario, ncliente = directorio, identificar_por_clinit = TRUE, es_admin = es_admin)
+    shiny::observeEvent(formulario_comercial$refresh(), {
+      shiny::req(formulario_comercial$refresh() > 0L)
+      .pr_invalidar("CRMNALCLIENTE")
+      al_actualizar_clientes()
+      revision(shiny::isolate(revision()) + 1L)
+    }, ignoreInit = TRUE)
     UnidadComercial("unidad_ficha", datos = shiny::reactive({
       shiny::req(input$entidad)
       x <- .crm_unidades_sesion()

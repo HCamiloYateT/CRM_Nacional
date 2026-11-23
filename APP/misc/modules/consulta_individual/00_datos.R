@@ -232,3 +232,30 @@
   !is.na(codigo) && is.data.frame(x) && "CodContacto" %in% names(x) &&
     any(.in_id(x$CodContacto) %in% strsplit(codigo, "|", fixed = TRUE)[[1]])
 }
+
+# Registros editables por cuenta de facturación y línea, sin mezclar la cuenta principal con sus hijas.
+.in_edicion_unidades <- function(clientes, hechos, entidad, filtros, directorio = data.frame()) {
+  preparar <- function(x) data.frame(CLCliNit = .in_id(.gc_columna(x, "CLCliNit")),
+    CliNitPpal = .in_id(.gc_columna(x, "CliNitPpal")), LinNegCod = .in_id(.gc_columna(x, "LinNegCod")),
+    PerRazSoc = as.character(.gc_columna(x, c("RazonSocialFacturacion", "RazonSocialCliNit", "PerRazSoc"))),
+    Asesor = as.character(.gc_columna(x, "Asesor")), Segmento = as.character(.gc_columna(x, "Segmento")))
+  orden <- order(.gc_columna(clientes, "FecProceso"), decreasing = TRUE, na.last = TRUE)
+  x <- dplyr::bind_rows(preparar(clientes[orden, , drop = FALSE]), preparar(hechos)) %>%
+    dplyr::filter(!is.na(CLCliNit), !is.na(LinNegCod)) %>%
+    dplyr::distinct(CLCliNit, LinNegCod, .keep_all = TRUE)
+  datos_hechos <- preparar(hechos)
+  clave <- function(d) paste(d$CLCliNit, d$LinNegCod)
+  nombres <- as.character(.gc_columna(directorio, "PerRazSoc"))
+  nombres <- nombres[match(x$CLCliNit, .in_id(.gc_columna(directorio, "PerCod")))]
+  x$PerRazSoc <- dplyr::coalesce(x$PerRazSoc, nombres,
+    datos_hechos$PerRazSoc[match(clave(x), clave(datos_hechos))], paste("NIT", x$CLCliNit))
+  if (nrow(entidad) != 1L || entidad$Tipo != "CLIENTE") return(x[0, , drop = FALSE])
+  if (identical(entidad$Alcance, "Cuenta principal")) {
+    x <- x[x$CliNitPpal %in% entidad$Principal, , drop = FALSE]
+  } else x <- x[x$CLCliNit %in% entidad$NitFacturacion, , drop = FALSE]
+  x <- x[.in_linea(x$LinNegCod) %in% filtros$linneg & x$Asesor %in% filtros$asesor &
+    x$Segmento %in% filtros$segmento, , drop = FALSE]
+  x$Clave <- paste(x$CLCliNit, x$LinNegCod, sep = "|")
+  x$Etiqueta <- paste(x$CLCliNit, x$PerRazSoc, .crm_label_comercial(.in_linea(x$LinNegCod)), sep = " · ")
+  x
+}

@@ -478,6 +478,12 @@ server <- function(input, output, session) {
       filtros, es_admin, maestro = maestro_comercial))
   
   consulta_modal_solicitada <- reactiveVal(NULL)
+  actualizar_clientes_individual <- function() {
+    tryCatch(clientes_raw_cache(CargarDatos("CRMNALCLIENTE")), error = function(e) {
+      racafeForms::racafeNotify(session, title = "Los cambios se guardaron; falta actualizar la ficha",
+        text = conditionMessage(e), type = "warning")
+    })
+  }
   consulta_modal_iniciada <- FALSE
   abrir_consulta_modal <- function(codigo, nit = "") {
     if (length(codigo) != 1L || is.na(codigo) || nchar(codigo) > 200L) codigo <- ""
@@ -487,7 +493,8 @@ server <- function(input, output, session) {
       ConsultaIndividual("ConsultaIndividualModal", maestro_base_comercial, clientes_raw_cache, filtros,
         usuario, es_admin, reactive(exportacion_rv()$homologaciones$nit_principal), cartera_financiera_r, notas_datos,
         directorio = reactive(exportacion_rv()$n_cliente), estados = data_cohortes,
-        solicitud = consulta_modal_solicitada, data_t = data_t)
+        solicitud = consulta_modal_solicitada, data_t = data_t,
+        al_actualizar_clientes = actualizar_clientes_individual)
       consulta_modal_iniciada <<- TRUE
     }
     consulta_modal_solicitada(list(codigo = codigo, nit = nit, solicitud = Sys.time()))
@@ -597,7 +604,8 @@ server <- function(input, output, session) {
     function() ConsultaIndividual("ConsultaIndividual", maestro_base_comercial, clientes_raw_cache, filtros,
       usuario, es_admin, reactive(exportacion_rv()$homologaciones$nit_principal), cartera_financiera_r, notas_datos,
       directorio = reactive(exportacion_rv()$n_cliente), estados = data_cohortes,
-      solicitud = consulta_solicitada, data_t = data_t))
+      solicitud = consulta_solicitada, data_t = data_t,
+      al_actualizar_clientes = actualizar_clientes_individual))
   
 }
 
