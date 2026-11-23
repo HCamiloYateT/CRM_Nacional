@@ -1,7 +1,8 @@
 # Acciones de la entidad consultada: misma configuración y formularios que el Kanban.
 .in_acciones_disponibles <- function(etapa) {
   acciones <- .acciones_por_etapa(etapa)
-  acciones[names(acciones) != "Consultar"]
+  claves <- c("Editar", "Relacionamiento", "CrearOportunidad", "Descartar")
+  acciones[intersect(claves, names(acciones))]
 }
 .in_registros_accion <- function(contexto, pipeline) {
   codigos <- .in_codigos(contexto)
@@ -44,13 +45,13 @@ ConsultaAcciones <- function(id, contexto, usuario, al_actualizar = function(tab
       x <- registros(); e <- elegido()
       opciones <- if (nrow(e)) .in_acciones_disponibles(as.character(e$Etapa[[1]])) else character()
       config <- .CONFIG_ACCIONES_EMBUDO
-      if (nrow(e) && identical(as.character(e$Etapa[[1]]), "CLIENTE")) {
-        config$Editar$etiqueta <- "Geografía y potencial"
-        opciones[["Editar"]] <- config$Editar$etiqueta
+      if (nrow(e) && identical(as.character(e$Etapa[[1]]), "CLIENTE") &&
+          !isFALSE(.accion_cliente_activo(as.character(e$CodContacto[[1]]), fila = e, cargar = .pr_cargar))) {
+        opciones <- opciones[names(opciones) != "Descartar"]
       }
       if (isTRUE(comercial())) {
-        opciones <- c(Comercial = "Información comercial y presupuesto", opciones)
-        config$Comercial <- list(etiqueta = "Información comercial y presupuesto", icono = "briefcase",
+        opciones <- c(Comercial = "Información comercial", opciones)
+        config$Comercial <- list(etiqueta = "Información comercial", icono = "briefcase",
           color = "#495057", modal = "subventana2")
       }
       if (!length(opciones)) return(NULL)
@@ -95,6 +96,11 @@ ConsultaAcciones <- function(id, contexto, usuario, al_actualizar = function(tab
           type = "warning")
         return()
       }
+      if (identical(sel$accion, "Descartar") && identical(vigente, "CLIENTE") &&
+          !isFALSE(.accion_cliente_activo(as.character(sel$codigo)))) {
+        shiny::showNotification("No se puede descartar un cliente activo o con estado sin verificar.", type = "warning")
+        return()
+      }
       al_abrir()
       codigo(as.character(sel$codigo)); accion(sel$accion); activo(TRUE)
       if (identical(sel$accion, "Reactivar")) {
@@ -123,7 +129,7 @@ ConsultaAcciones <- function(id, contexto, usuario, al_actualizar = function(tab
       shiny::req(activo(), identical(accion(), tipo), codigo() %in% registros()$CodContacto)
       codigo()
     })
-    editar <- Editar("Editar", usuario, codigo_formulario("Editar"))
+    editar <- Editar("Editar", usuario, codigo_formulario("Editar"), directorio_cliente = TRUE)
     gestion <- Relacionamiento("Relacionamiento", usuario, codigo_formulario("Relacionamiento"))
     promover <- Promover("Promover", usuario, codigo_formulario("Promover"))
     descartar <- Descartar("Descartar", usuario, codigo_formulario("Descartar"))

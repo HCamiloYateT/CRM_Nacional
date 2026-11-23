@@ -661,12 +661,40 @@ registrar_descarte <- function(cod_contacto, etapa, razon1, razon2, razon3, usr)
   ReemplazarDatos(fila, "CRMNALDESCARTE", llaves = list(CodContacto = cod_contacto))
   invisible(fila)
 }
+.accion_cliente_activo <- function(codigo, fila = NULL, cargar = CargarDatos) {
+  if (is.null(fila)) {
+    fila <- cargar("CRMNALCONTACTO", condicion = sprintf("CodContacto = '%s'", .rc_escapar_sql(codigo)))
+  }
+  vinculos <- cargar("CRMNALVINCULONIT")
+  nits <- unique(stats::na.omit(c(.crm_id_texto(.gc_columna(fila, "PerCod")),
+    .crm_id_texto(.gc_columna(vinculos, "NitVinculado"))[as.character(vinculos$CodContacto) %in% codigo])))
+  clientes <- cargar("CRMNALCLIENTE")
+  if (all(c("FecProceso", "CLCliNit", "LinNegCod") %in% names(clientes))) {
+    clientes <- clientes %>% arrange(desc(FecProceso)) %>% distinct(CLCliNit, LinNegCod, .keep_all = TRUE)
+  }
+  padres <- .crm_id_texto(.gc_columna(clientes, "CliNitPpal"))
+  nits <- unique(c(nits, padres[.crm_id_texto(.gc_columna(clientes, "CLCliNit")) %in% nits]))
+  estados <- cargar("CRMNALSEGR")
+  if (!all(c("CliNitPpal", "LinNegCod", "FecProceso", "SegmentoRacafe") %in% names(estados))) return(NA)
+  estados <- estados[.crm_id_texto(estados$CliNitPpal) %in% nits, , drop = FALSE]
+  estados$FecProceso <- as.Date(estados$FecProceso)
+  estados <- estados[!is.na(estados$FecProceso) & estados$FecProceso <= Sys.Date(), , drop = FALSE]
+  if (!nrow(estados)) return(NA)
+  estados <- estados %>% group_by(CliNitPpal, LinNegCod) %>% filter(FecProceso == max(FecProceso)) %>% ungroup()
+  estado <- toupper(trimws(as.character(estados$SegmentoRacafe)))
+  if (any(estado %in% c("CLIENTE", "ACTIVO") | grepl("NUEVO", estado), na.rm = TRUE)) return(TRUE)
+  if (any(is.na(estado) | !grepl("INACTIVO|RECUPERAR", estado))) return(NA)
+  FALSE
+}
 descartar_generico <- function(cod_contacto, etapa_origen, motivo, usr, razon1 = NA_character_,
                                razon2 = NA_character_, razon3 = NA_character_) {
   if (length(motivo) != 1L || is.na(motivo) || !nzchar(trimws(motivo))) stop("Indique el motivo de descarte.")
   if (length(etapa_origen) != 1L || !etapa_origen %in% c("CONTACTO", "PROSPECTO", "LEAD", "CLIENTE") ||
       !identical(obtener_etapa_contacto(cod_contacto), etapa_origen)) {
     stop("La etapa cambió o no permite este descarte. Actualice la entidad.")
+  }
+  if (identical(etapa_origen, "CLIENTE") && !isFALSE(.accion_cliente_activo(cod_contacto))) {
+    stop("No se puede descartar un cliente activo, nuevo o cuyo estado no se haya podido verificar.")
   }
   fila_actual <- CargarDatos("CRMNALCONTACTO") %>% filter(CodContacto == cod_contacto)
   if (nrow(fila_actual) == 0) stop("Contacto no encontrado: ", cod_contacto)
