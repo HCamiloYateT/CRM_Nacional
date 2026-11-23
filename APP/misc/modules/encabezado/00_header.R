@@ -382,22 +382,16 @@ HeaderTareasServer <- function(session, usuario, notas = NULL, actualizaciones =
 }
 
 # Clientes ----
-# La información comercial se exige desde el inicio de cobertura de CRMNALCLIENTE (2024).
+# Solo se exige información comercial para clientes con pedidos creados desde enero de 2025.
 .header_clientes_operacion <- function(datos, ncliente) {
   x <- datos
   x$CLCliNit <- .crm_id_texto(.gc_columna(x, "CLCliNit"))
   x$CliNitPpal <- .crm_id_texto(.gc_columna(x, "CliNitPpal"))
   x$LinNegCod <- .crm_id_texto(.gc_columna(x, "LinNegCod"))
   x$LinNegCod[x$LinNegCod == "20000"] <- "21000"
-  fecha <- as.Date(.gc_columna(x, "FecFact", as.Date(NA)))
-  estado <- as.character(.gc_columna(x, "EstadoFinanciero"))
+  creacion <- as.Date(.gc_columna(x, c("FechaCreacionPedido", "PdcFecCre"), as.Date(NA)))
   pedido <- .crm_id_texto(.gc_columna(x, "CLPdcCod"))
-  elegible <- !is.na(fecha) | estado %in% c("CERRADO", "FACTURADO_ABIERTO") |
-    (!is.na(pedido) & pedido != "0")
-  fecha_operacion <- dplyr::coalesce(fecha,
-    as.Date(.gc_columna(x, "FecMes", as.Date(NA))),
-    as.Date(.gc_columna(x, "FechaCreacionPedido", as.Date(NA))))
-  elegible <- elegible & !is.na(fecha_operacion) & fecha_operacion >= as.Date("2024-01-01")
+  elegible <- !is.na(pedido) & pedido != "0" & !is.na(creacion) & creacion >= as.Date("2025-01-01")
   elegible[is.na(elegible)] <- FALSE
   x <- x[elegible & !is.na(x$CLCliNit) & !is.na(x$LinNegCod), , drop = FALSE]
   x <- x[order(as.Date(.gc_columna(x, "FecFact", as.Date(NA))), decreasing = TRUE, na.last = TRUE), , drop = FALSE]
@@ -410,7 +404,9 @@ HeaderTareasServer <- function(session, usuario, notas = NULL, actualizaciones =
   nombre_operacion[nombre_operacion %in% c("", "SIN DATO")] <- NA_character_
   x$PerRazSoc <- dplyr::coalesce(nombre_hija, nombre_operacion, nombre_padre, paste("NIT", x$CLCliNit))
   x$CLLinNegNo <- dplyr::coalesce(as.character(.gc_columna(x, "CLLinNegNo")), x$LinNegCod)
-  x$label <- paste0(.crm_label_comercial(x$CLLinNegNo), " — ", x$PerRazSoc, " · ", x$CLCliNit)
+  x$label <- if (nrow(x)) {
+    paste0(.crm_label_comercial(x$CLLinNegNo), " — ", x$PerRazSoc, " · ", x$CLCliNit)
+  } else character()
   x[c("CLCliNit", "CliNitPpal", "LinNegCod", "PerRazSoc", "CLLinNegNo", "label")]
 }
 
