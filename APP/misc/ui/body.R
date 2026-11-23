@@ -16,6 +16,7 @@ body <- bs4DashBody(
     bs4TabItem(tabName = "GC_Presupuesto", uiOutput("ui_GC_Presupuesto")),
     bs4TabItem(tabName = "GC_Variables", uiOutput("ui_GC_Variables")),
     bs4TabItem(tabName = "GC_Oportunidades", uiOutput("ui_GC_Oportunidades")),
+    bs4TabItem(tabName = "GC_Planeacion", uiOutput("ui_GC_Planeacion")),
     bs4TabItem(tabName = "GC_Pendientes", uiOutput("ui_GC_Pendientes")),
     bs4TabItem(tabName = "GC_Tareas", uiOutput("ui_GC_Tareas")),
     bs4TabItem(tabName = "GC_Alertas", uiOutput("ui_GC_Alertas")),

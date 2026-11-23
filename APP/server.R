@@ -47,19 +47,28 @@ server <- function(input, output, session) {
 
   filtros <- Filtros("Filtros", usuario, es_admin, dat = data_c)
   
-  exportacion_rv <- reactiveVal(list(crm_maestro = crm_maestro, homologaciones = homologaciones,
-    segmentaciones_actual = segmentaciones_actual, ord_cmp = ord_cmp, n_cliente = n_cliente))
-  datos_rv <- reactiveVal(data)
-  productos_cache <- reactiveVal(productos_snap)
-  
-  maestro_base_comercial <- reactive({
+  # Una exportación compartida por proceso alimenta las sesiones sin releer SQL.
+  ruta_exportacion <- file.path(.ruta_app, "data", "data.RData")
+  inicial <- new.env(parent = emptyenv())
+  .crm_cargar_exportacion(ruta_exportacion, inicial)
+  exportacion_rv <- reactiveVal(as.list(inicial))
+  datos_rv <- reactiveVal(inicial$data)
+  productos_cache <- reactiveVal(inicial$productos_snap)
+  clientes_raw_cache <- reactiveVal(inicial$homologaciones$fuentes_consulta$CRMNALCLIENTE %||%
+    inicial$clientes_raw)
+  firma_en_uso <- reactiveVal(.crm_firma_exportacion(ruta_exportacion))
+  session$userData$fuentes_etl <- reactive(exportacion_rv()$homologaciones$fuentes_consulta)
+
+  # Base completa, selección comercial y selección temporal: una sola transformación por capa.
+  data_c <- reactive({
     h <- exportacion_rv()
     x <- .crm_medir("transformacion:base_comercial", .crm_base_compartida(h$crm_maestro, productos_cache(),
       h$segmentaciones_actual, h$ord_cmp))
     attr(x, "facturas_detalle") <- h$homologaciones$facturas_detalle
     x
   })
-  data_c <- reactive(maestro_base_comercial() %>% dplyr::filter(EstadoFinanciero != "PROYECTADO"))
+  maestro_base_comercial <- data_c
+  data_facturada <- reactive(data_c() %>% dplyr::filter(EstadoFinanciero != "PROYECTADO"))
 
   # Cambiar fechas no invalida la selección de asesor, segmento, línea y productos.
   filtros_dimensiones <- reactiveVal(NULL)
@@ -68,7 +77,13 @@ server <- function(input, output, session) {
     req(!is.null(f))
     filtros_dimensiones(f[c("asesor", "segmento", "linneg", "categoria", "producto")])
   }, priority = 100)
-  data_t <- reactive(maestro_comercial() %>% dplyr::filter(EstadoFinanciero != "PROYECTADO"))
+  data_t <- reactive({
+    req(!is.null(filtros_dimensiones()))
+    .crm_medir("filtros:base_comercial", .gc_filtrar_dimensiones(data_c(), filtros_dimensiones()))
+  })
+  maestro_comercial <- data_t
+  session$userData$data_c <- data_c
+  session$userData$data_t <- data_t
   
   data_f <- reactive({
     f <- filtros()
@@ -85,11 +100,7 @@ server <- function(input, output, session) {
     }
   })
   
-  maestro_comercial <- reactive({
-    req(!is.null(filtros_dimensiones()))
-    .crm_medir("filtros:base_comercial",
-      .gc_filtrar_dimensiones(maestro_base_comercial(), filtros_dimensiones()))
-  })
+  session$userData$data_f <- data_f
 
   unidades_comerciales <- reactive(.crm_medir("construccion:unidades_comerciales", {
     contactos <- derivar_etapa_actual(.pr_cargar("CRMNALCONTACTO"), .pr_cargar("CRMNALHISTORIALETAPA"),
@@ -254,20 +265,36 @@ server <- function(input, output, session) {
     actualizaciones = notas_creadas$actualizaciones,
     on_success = function() notas_revision(isolate(notas_revision()) + 1L))
   ### Clientes ----
-  clientes_raw_cache <- reactiveVal(CargarDatos("CRMNALCLIENTE"))
-  
+  recargar_exportacion <- function() {
+    firma <- .crm_firma_exportacion(ruta_exportacion)
+    if (identical(firma, isolate(firma_en_uso()))) return(invisible(FALSE))
+    nueva <- new.env(parent = emptyenv())
+    .crm_cargar_exportacion(ruta_exportacion, nueva)
+    # Resolver primero las excepciones por guardado; un fallo conserva la carga anterior completa.
+    vigentes <- .pr_fuentes()$vigentes
+    nuevos_productos <- if (exists("CRMNALPRODS", vigentes, inherits = FALSE)) {
+      .crm_snapshot_productos(CargarDatos("CRMNALPRODS"))
+    } else nueva$productos_snap
+    nuevos_clientes <- if (exists("CRMNALCLIENTE", vigentes, inherits = FALSE)) {
+      CargarDatos("CRMNALCLIENTE")
+    } else nueva$homologaciones$fuentes_consulta$CRMNALCLIENTE %||% nueva$clientes_raw
+    exportacion_rv(as.list(nueva))
+    datos_rv(nueva$data)
+    productos_cache(nuevos_productos)
+    clientes_raw_cache(nuevos_clientes)
+    firma_en_uso(firma)
+    .pr_invalidar()
+    invisible(TRUE)
+  }
+  revisar_exportacion <- function() tryCatch(recargar_exportacion(), error = function(e) {
+    racafeForms::racafeNotify(session, title = "Se conserva la última carga válida",
+      text = conditionMessage(e), type = "error")
+    invisible(FALSE)
+  })
   observeEvent(input$FT_Actualizar, {
-    tryCatch({
-      nueva <- new.env(parent = emptyenv())
-      .crm_cargar_exportacion(file.path(.ruta_app, "data", "data.RData"), nueva)
-      exportacion_rv(as.list(nueva))
-      datos_rv(nueva$data)
-    }, error = function(e) racafeForms::racafeNotify(session, title = "No se recargó el ETL",
-      text = conditionMessage(e), type = "error"))
+    revisar_exportacion()
     notas_revision(isolate(notas_revision()) + 1L)
     .pr_invalidar()
-    productos_cache(.crm_snapshot_productos(CargarDatos("CRMNALPRODS")))
-    clientes_raw_cache(CargarDatos("CRMNALCLIENTE"))
   })
   
   # Descarga de clientes ----
@@ -285,7 +312,7 @@ server <- function(input, output, session) {
         dplyr::arrange(dplyr::desc(FecProceso)) %>%
         dplyr::distinct(CLCliNit, LinNegCod, .keep_all = TRUE) %>%
         dplyr::left_join(
-          n_cliente %>%
+          exportacion_rv()$n_cliente %>%
             dplyr::transmute(
               CLCliNit = as.character(PerCod),
               RazonSocial = as.character(PerRazSoc)
@@ -303,8 +330,8 @@ server <- function(input, output, session) {
   
   HeaderClientesServer(
     data_c = data_c, datos_rv = datos_rv, clientes_raw = clientes_raw_cache,
-    usuario = usuario, ncliente = reactive(n_cliente), output = output,
-    es_admin = es_admin, operaciones = crm_detalle_operaciones
+    usuario = usuario, ncliente = reactive(exportacion_rv()$n_cliente), output = output,
+    es_admin = es_admin, operaciones = reactive(exportacion_rv()$crm_detalle_operaciones)
   )
   
   ### Migración de Cartera ----
@@ -336,11 +363,11 @@ server <- function(input, output, session) {
 
   ## Body ----
   # Fuentes del resumen disponibles antes de abrir sus pestañas ----
-  presupuesto_mod <- Presupuesto("GC_Presupuesto_mod", dat = data_c, maestro = maestro_base_comercial,
+  presupuesto_mod <- Presupuesto("GC_Presupuesto_mod", dat = data_facturada, maestro = maestro_base_comercial,
     clientes_raw = clientes_raw_cache, filtros = filtros,
     margenes_pyg = reactive(exportacion_rv()$homologaciones$margenes_pyg))
   validacion_mod <- isolate(ValidacionFinanciera(id = "ValidacionFinanciera", filtros = filtros,
-    dat = data_c, fact = reactive(exportacion_rv()$homologaciones$facturacion),
+    dat = data_facturada, fact = reactive(exportacion_rv()$homologaciones$facturacion),
     margenes_pyg = reactive(exportacion_rv()$homologaciones$margenes_pyg),
     nit_ppal = reactive(exportacion_rv()$homologaciones$nit_principal),
     clientes_snap = reactive(exportacion_rv()$homologaciones$clientes),
@@ -399,13 +426,14 @@ server <- function(input, output, session) {
   CargarTabUnaVez("GE_Validacion", "ui_GE_Validacion", function() ValidacionFinancieraUI("ValidacionFinanciera"))
 
   CargarTabUnaVez("GE_Evolucion", "ui_GE_Evolucion",
-    function() EvolucionNegocioUI("EvolucionNegocio", ultimo_periodo_pyg),
+    function() EvolucionNegocioUI("EvolucionNegocio", exportacion_rv()$ultimo_periodo_pyg),
     function() EvolucionNegocio("EvolucionNegocio", maestro_base_comercial, clientes_raw_cache, filtros,
-      ultimo_periodo_pyg, es_admin, historico = function() {
+      exportacion_rv()$ultimo_periodo_pyg, es_admin, historico = function() {
         if (!is.null(exportacion_rv()$homologaciones$evolucion_historica)) return(exportacion_rv()$homologaciones$evolucion_historica)
         ruta <- Sys.getenv("CRM_EVOLUCION_HISTORICA", unset = file.path(.ruta_app, "data", "evolucion_historica.rds"))
         if (file.exists(ruta)) .ev_leer_historico(ruta) else NULL
-      }, primera_compra = function() .ev_primera_compra(fact_cliente, nit_ppal),
+      }, primera_compra = function() .ev_primera_compra(exportacion_rv()$fact_cliente,
+        exportacion_rv()$nit_ppal),
       navegar = function(tab) bs4Dash::updateTabItems(session, "menu_principal", selected = tab)))
   
   CargarTabUnaVez("GE_Participacion", "ui_GE_Participacion",
@@ -425,11 +453,13 @@ server <- function(input, output, session) {
     PresupuestoUI("GC_Presupuesto_mod")
   })
   
-  CargarTabUnaVez("GC_Variables", "ui_GC_Variables", function() VariablesBonoUI("VariablesBono", ultimo_periodo_pyg),
+  CargarTabUnaVez("GC_Variables", "ui_GC_Variables", function() VariablesBonoUI("VariablesBono", exportacion_rv()$ultimo_periodo_pyg),
     function() VariablesBono("VariablesBono", hechos_analisis_comercial, clientes_raw_cache, filtros,
       comercial_historico_r, ultimo_periodo_pyg))
   CargarTabUnaVez("GC_Oportunidades", "ui_GC_Oportunidades", function() OportunidadesGestionUI("Oportunidades"),
     function() OportunidadesGestion("Oportunidades", usuario, es_admin, maestro_base_comercial, filtros = filtros))
+  CargarTabUnaVez("GC_Planeacion", "ui_GC_Planeacion", function() PlaneacionComercialUI("Planeacion"),
+    function() PlaneacionComercial("Planeacion", data_t, filtros))
   CargarTabUnaVez("GC_Pendientes", "ui_GC_Pendientes", function() PendientesGestionUI("Pendientes"),
     function() PendientesGestion("Pendientes", maestro_comercial, usuario,
       corte = shiny::reactive(as.Date(filtros()$fecha[[2]]))))
@@ -456,7 +486,8 @@ server <- function(input, output, session) {
     if (!consulta_modal_iniciada) {
       ConsultaIndividual("ConsultaIndividualModal", maestro_base_comercial, clientes_raw_cache, filtros,
         usuario, es_admin, reactive(exportacion_rv()$homologaciones$nit_principal), cartera_financiera_r, notas_datos,
-        directorio = reactive(exportacion_rv()$n_cliente), estados = data_cohortes, solicitud = consulta_modal_solicitada)
+        directorio = reactive(exportacion_rv()$n_cliente), estados = data_cohortes,
+        solicitud = consulta_modal_solicitada, data_t = data_t)
       consulta_modal_iniciada <<- TRUE
     }
     consulta_modal_solicitada(list(codigo = codigo, nit = nit, solicitud = Sys.time()))
@@ -493,9 +524,7 @@ server <- function(input, output, session) {
     function() PotencialMercado("PotencialMercado", usuario, es_admin, maestro_comercial, filtros = filtros))
   
   ### Cohortes de Clientes ----
-  segmentos_cohortes <- eventReactive(input$FT_Actualizar, {
-    .pr_cargar("CRMNALSEGR")
-  }, ignoreNULL = FALSE)
+  segmentos_cohortes <- reactive(.pr_cargar("CRMNALSEGR"))
   data_cohortes <- reactive({
     req(length(filtros()$fecha) == 2L)
     .coha_preparar(segmentos_cohortes(), clientes_raw_cache(), maestro_base_comercial(),
@@ -529,7 +558,10 @@ server <- function(input, output, session) {
   
   ### Productos ----
   CargarTabUnaVez("PD_SinClasificar", "ui_PD_SinClasificar", function() ProductosSinClasificarUI("SinClasificar"),
-    function() ProductosSinClasificar("SinClasificar", usuario, function(x) productos_cache(x),
+    function() ProductosSinClasificar("SinClasificar", usuario, function(x) {
+      productos_cache(x)
+      .pr_invalidar("CRMNALPRODS")
+    },
       operaciones = shiny::reactive(list(exportacion_rv()$homologaciones$lotes, exportacion_rv()$crm_maestro))))
   CargarTabUnaVez("PD_Ejecucion", "ui_PD_Ejecucion", function() ProductosEjecucionUI("ProductosEjecucion"),
     function() ProductosEjecucion("ProductosEjecucion", maestro_comercial, filtros))
@@ -564,7 +596,8 @@ server <- function(input, output, session) {
   CargarTabUnaVez("IN_Consulta", "ui_IN_Consulta", function() ConsultaIndividualUI("ConsultaIndividual"),
     function() ConsultaIndividual("ConsultaIndividual", maestro_base_comercial, clientes_raw_cache, filtros,
       usuario, es_admin, reactive(exportacion_rv()$homologaciones$nit_principal), cartera_financiera_r, notas_datos,
-      directorio = reactive(exportacion_rv()$n_cliente), estados = data_cohortes, solicitud = consulta_solicitada))
+      directorio = reactive(exportacion_rv()$n_cliente), estados = data_cohortes,
+      solicitud = consulta_solicitada, data_t = data_t))
   
 }
 
