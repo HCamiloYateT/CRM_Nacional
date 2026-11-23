@@ -485,7 +485,7 @@ server <- function(input, output, session) {
     })
   }
   consulta_modal_iniciada <- FALSE
-  abrir_consulta_modal <- function(codigo, nit = "") {
+  abrir_consulta_modal <- function(codigo, nit = "", clave = NULL) {
     if (length(codigo) != 1L || is.na(codigo) || nchar(codigo) > 200L) codigo <- ""
     nit <- .crm_nit_historia(nit)
     if (!nzchar(codigo) && (length(nit) != 1L || is.na(nit))) return(invisible(NULL))
@@ -494,10 +494,11 @@ server <- function(input, output, session) {
         usuario, es_admin, reactive(exportacion_rv()$homologaciones$nit_principal), cartera_financiera_r, notas_datos,
         directorio = reactive(exportacion_rv()$n_cliente), estados = data_cohortes,
         solicitud = consulta_modal_solicitada, data_t = data_t,
-        al_actualizar_clientes = actualizar_clientes_individual)
+        al_actualizar_clientes = actualizar_clientes_individual,
+        al_restaurar = function(clave, codigo, nit) abrir_consulta_modal(codigo, nit, clave))
       consulta_modal_iniciada <<- TRUE
     }
-    consulta_modal_solicitada(list(codigo = codigo, nit = nit, solicitud = Sys.time()))
+    consulta_modal_solicitada(list(codigo = codigo, nit = nit, clave = clave, solicitud = Sys.time()))
     showModal(racafeForms::racafeModal(title = "Consulta individual", size = "ventana", easy_close = TRUE,
       ConsultaIndividualUI("ConsultaIndividualModal")))
   }

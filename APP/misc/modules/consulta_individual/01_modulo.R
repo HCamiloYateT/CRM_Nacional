@@ -1,4 +1,4 @@
-# Consulta integral de una entidad, sin modificar registros ----
+# Consulta integral y acciones sobre la entidad seleccionada ----
 .IN_CAJAS <- c(pedidos = "Pedidos únicos", lineas = "Líneas de pedido únicas", lotes = "Lotes únicos",
   facturas = "Facturas identificadas", productos = "Productos diferentes", sacos = "Sacos facturados · 70 kg",
   margen = "Margen FCC · COP", precio = "Precio promedio de pedido · COP/kg")
@@ -6,16 +6,17 @@ ConsultaIndividualUI <- function(id) {
   ns <- shiny::NS(id)
   .accion_formulario_ui(id, shiny::tags$div(class = "in-analitica",
   racafeForms::racafeForm(variant = "plain",
-    racafeForms::racafeActionBar(left = NULL),
     .crm_select("entidad", "Buscar por nombre o NIT de facturación",
       choices = character(), ns = ns),
+    ConsultaAccionesUI(ns("acciones")),
     shiny::uiOutput(ns("visibilidad_tabs")), shiny::uiOutput(ns("contenido")))))
 }
 ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin, nit_mapa,
                                cartera = function() NULL, tareas = function() data.frame(),
                                cargar = racafeBD::CargarDatos, directorio = function() data.frame(),
                                estados = function() data.frame(), solicitud = function() NULL, data_t = NULL,
-                               al_actualizar_clientes = function() NULL) {
+                               al_actualizar_clientes = function() NULL,
+                               al_restaurar = function(clave, codigo, nit) NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     mapa_nit <- shiny::reactive(if (shiny::is.reactive(nit_mapa)) nit_mapa() else nit_mapa)
     revision <- shiny::reactiveVal(0L)
@@ -67,6 +68,9 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
         }
         por_nit <- which(!is.na(x$NIT) & as.character(x$NIT) %in% destino$nit)
         if (length(por_nit)) coincidencias <- por_nit
+        if (length(destino$clave) == 1L && destino$clave %in% x$Clave) {
+          coincidencias <- which(x$Clave == destino$clave)
+        }
         if (length(coincidencias)) seleccion <- x$Clave[coincidencias[1]] else {
           seleccion <- character()
           shiny::showNotification("La entidad no está disponible para el alcance actual.", type = "warning")
@@ -137,6 +141,18 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
       }
     })
     contexto_crm <- shiny::reactive(.in_contexto_crm(entidad(), catalogo()))
+    retorno_accion <- shiny::reactiveVal(NULL)
+    shiny::observeEvent(input$entidad, retorno_accion(NULL), ignoreInit = TRUE)
+    ConsultaAcciones("acciones", contexto = contexto_crm, usuario = usuario, al_abrir = function() {
+      e <- shiny::isolate(entidad())
+      retorno_accion(list(clave = e$Clave[[1]], codigo = e$Codigo[[1]], nit = e$NitFacturacion[[1]]))
+    }, al_actualizar = function(tablas) {
+      .pr_invalidar(tablas)
+      revision(shiny::isolate(revision()) + 1L)
+    }, al_volver = function() {
+      e <- shiny::isolate(retorno_accion())
+      if (!is.null(e)) al_restaurar(e$clave, e$codigo, e$nit)
+    })
     familia <- shiny::reactive(.in_familia(entidad(), catalogo(), mapa_nit(), directorio()))
     metas_anuales <- shiny::reactive(.com_clientes(clientes(), periodo()[[2]], filtros(), anual = TRUE))
     # El detalle conserva todo el histórico autorizado del NIT, sin volver a filtrar el maestro completo.
