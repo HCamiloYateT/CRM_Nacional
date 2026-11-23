@@ -382,7 +382,7 @@ HeaderTareasServer <- function(session, usuario, notas = NULL, actualizaciones =
 }
 
 # Clientes ----
-# El universo no depende de una fecha mínima de factura ni de que esa fecha esté informada.
+# La información comercial se exige desde el inicio de cobertura de CRMNALCLIENTE (2024).
 .header_clientes_operacion <- function(datos, ncliente) {
   x <- datos
   x$CLCliNit <- .crm_id_texto(.gc_columna(x, "CLCliNit"))
@@ -394,6 +394,10 @@ HeaderTareasServer <- function(session, usuario, notas = NULL, actualizaciones =
   pedido <- .crm_id_texto(.gc_columna(x, "CLPdcCod"))
   elegible <- !is.na(fecha) | estado %in% c("CERRADO", "FACTURADO_ABIERTO") |
     (!is.na(pedido) & pedido != "0")
+  fecha_operacion <- dplyr::coalesce(fecha,
+    as.Date(.gc_columna(x, "FecMes", as.Date(NA))),
+    as.Date(.gc_columna(x, "FechaCreacionPedido", as.Date(NA))))
+  elegible <- elegible & !is.na(fecha_operacion) & fecha_operacion >= as.Date("2024-01-01")
   elegible[is.na(elegible)] <- FALSE
   x <- x[elegible & !is.na(x$CLCliNit) & !is.na(x$LinNegCod), , drop = FALSE]
   x <- x[order(as.Date(.gc_columna(x, "FecFact", as.Date(NA))), decreasing = TRUE, na.last = TRUE), , drop = FALSE]
