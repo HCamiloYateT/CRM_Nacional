@@ -6,9 +6,11 @@ ConsultaIndividualUI <- function(id) {
   ns <- shiny::NS(id)
   .accion_formulario_ui(id, shiny::tags$div(class = "in-analitica",
   racafeForms::racafeForm(variant = "plain",
-    .crm_select("entidad", "Buscar por nombre o NIT de facturación",
-      choices = character(), ns = ns),
-    ConsultaAccionesUI(ns("acciones")),
+    shiny::tags$div(style = "display:flex;align-items:flex-end;gap:10px;margin-bottom:10px",
+      shiny::tags$div(style = "flex:1;min-width:0",
+        .crm_select("entidad", "Buscar por nombre o NIT de facturación",
+          choices = character(), ns = ns)),
+      ConsultaAccionesUI(ns("acciones"))),
     shiny::uiOutput(ns("visibilidad_tabs")), shiny::uiOutput(ns("contenido")))))
 }
 ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin, nit_mapa,
@@ -143,7 +145,15 @@ ConsultaIndividual <- function(id, hechos, clientes, filtros, usuario, es_admin,
     contexto_crm <- shiny::reactive(.in_contexto_crm(entidad(), catalogo()))
     retorno_accion <- shiny::reactiveVal(NULL)
     shiny::observeEvent(input$entidad, retorno_accion(NULL), ignoreInit = TRUE)
-    ConsultaAcciones("acciones", contexto = contexto_crm, usuario = usuario, al_abrir = function() {
+    ConsultaAcciones("acciones", contexto = contexto_crm, usuario = usuario,
+      comercial = shiny::reactive(isTRUE(es_admin()) && identical(entidad()$Tipo, "CLIENTE")),
+      cambios_comerciales = formulario_comercial$refresh,
+      al_comercial = function(id_cierre) {
+        shiny::showModal(racafeForms::racafeModal(title = "Información comercial y presupuesto",
+          size = "subventana2", shiny::tagAppendAttributes(shiny::uiOutput(session$ns("edicion_comercial")),
+            `data-crm-action-close` = id_cierre),
+          easy_close = TRUE, footer = shiny::modalButton("Cerrar")))
+      }, al_abrir = function() {
       e <- shiny::isolate(entidad())
       retorno_accion(list(clave = e$Clave[[1]], codigo = e$Codigo[[1]], nit = e$NitFacturacion[[1]]))
     }, al_actualizar = function(tablas) {

@@ -1,6 +1,8 @@
 # Contratos analíticos: conservar procedencia y no sustituir importes desconocidos ----
 .crm_id_texto <- function(x) {
+  faltantes <- is.na(x)
   if (is.numeric(x)) x <- format(x, scientific = FALSE, trim = TRUE, digits = 22, big.mark = "")
+  x[faltantes] <- NA_character_
   y <- trimws(as.character(x)); y[is.na(x) | y == ""] <- NA_character_; y
 }
 .crm_capa_ejecucion <- function(x) {

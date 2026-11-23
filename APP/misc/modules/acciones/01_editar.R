@@ -31,7 +31,7 @@ IdentificacionUI <- function(id) {
 Identificacion <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
     contador_actualizaciones <- reactiveVal(0)
-    .confirmar_guardado <- .accion_guardado(input, session, codigo_contacto, usuario)
+    .confirmar_guardado <- .accion_guardado(input, session, codigo_contacto, usuario, proteger_contacto = TRUE)
     datos_contacto <- reactive({
       contador_actualizaciones(); req(codigo_contacto())
       .accion_cargar_contacto("CRMNALCONTACTO", codigo_contacto())
@@ -170,7 +170,7 @@ DirectorioUI <- function(id) {
 }
 Directorio <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
-    .confirmar_guardado <- .accion_guardado(input, session, codigo_contacto, usuario)
+    .confirmar_guardado <- .accion_guardado(input, session, codigo_contacto, usuario, proteger_contacto = TRUE)
     ns <- session$ns
     
     # Contadores de actualizzacion de las bases -----
@@ -1178,25 +1178,39 @@ Potencial <- function(id, usuario, codigo_contacto) {
 
 EditarUI <- function(id) {
   ns <- NS(id)
-  tagList(uiOutput(ns("Encabezado")), bs4Dash::tabsetPanel(id = ns("tabs_editar"),
-    tabPanel("Identificación", Saltos(), IdentificacionUI(ns("Identificacion"))),
-    tabPanel("Directorio", Saltos(), DirectorioUI(ns("Directorio"))),
-    tabPanel("Geografía", Saltos(), GeografiaUI(ns("Geografia"))),
-    tabPanel("Potencial", Saltos(), PotencialUI(ns("Potencial")))
-  ))
+  tagList(uiOutput(ns("Encabezado")), uiOutput(ns("campos_editar")))
 }
 Editar <- function(id, usuario, codigo_contacto) {
   moduleServer(id, function(input, output, session) {
     .accion_encabezado(output, codigo_contacto)
+    es_cliente <- reactive({
+      req(codigo_contacto())
+      identical(obtener_etapa_contacto(codigo_contacto()), "CLIENTE")
+    })
+    output$campos_editar <- .crm_render_ui({
+      cliente <- es_cliente()
+      ns <- session$ns
+      tabs <- list()
+      if (!cliente) tabs <- list(
+        tabPanel("Identificación", Saltos(), IdentificacionUI(ns("Identificacion"))),
+        tabPanel("Directorio", Saltos(), DirectorioUI(ns("Directorio"))))
+      tabs <- c(tabs, list(tabPanel("Geografía", Saltos(), GeografiaUI(ns("Geografia"))),
+        tabPanel("Potencial", Saltos(), PotencialUI(ns("Potencial")))))
+      tagList(if (cliente) .crm_nota(
+        "La identificación y el directorio del cliente se conservan desde su fuente original."),
+        do.call(bs4Dash::tabsetPanel, c(list(id = ns("tabs_editar")), tabs)))
+    })
     codigo_tab <- function(tab) reactive({
-      req(identical(input$tabs_editar %||% "Identificación", tab))
+      cliente <- es_cliente()
+      if (tab %in% c("Identificación", "Directorio")) req(!cliente)
+      inicial <- if (cliente) "Geografía" else "Identificación"
+      req(identical(input$tabs_editar %||% inicial, tab))
       codigo_contacto()
     })
-    modulo_identificacion <- Identificacion(id = "Identificacion", usuario = usuario, codigo_contacto = codigo_tab("Identificación"))
-    Directorio(id = "Directorio", usuario = usuario, codigo_contacto = codigo_tab("Directorio"))
-    Geografia(id = "Geografia", usuario = usuario, codigo_contacto = codigo_tab("Geografía"))
-    Potencial(id = "Potencial", usuario = usuario, codigo_contacto = codigo_tab("Potencial"))
-    
+    modulo_identificacion <- Identificacion("Identificacion", usuario, codigo_tab("Identificación"))
+    Directorio("Directorio", usuario, codigo_tab("Directorio"))
+    Geografia("Geografia", usuario, codigo_tab("Geografía"))
+    Potencial("Potencial", usuario, codigo_tab("Potencial"))
     list(actualizaciones = modulo_identificacion$actualizaciones)
   })
 }

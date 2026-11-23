@@ -13,7 +13,9 @@ ConsultaAccionesUI <- function(id) {
   shiny::uiOutput(shiny::NS(id)("menu"))
 }
 ConsultaAcciones <- function(id, contexto, usuario, al_actualizar = function(tablas) NULL,
-                             al_volver = function() NULL, al_abrir = function() NULL) {
+                             al_volver = function() NULL, al_abrir = function() NULL,
+                             comercial = function() FALSE, al_comercial = function(id_cierre) NULL,
+                             cambios_comerciales = function() 0L) {
   shiny::moduleServer(id, function(input, output, session) {
     activo <- shiny::reactiveVal(FALSE)
     codigo <- shiny::reactiveVal(NULL)
@@ -40,11 +42,20 @@ ConsultaAcciones <- function(id, contexto, usuario, al_actualizar = function(tab
     }, ignoreInit = TRUE, priority = 30)
     output$menu <- .crm_render_ui({
       x <- registros(); e <- elegido()
-      if (!nrow(e)) return(.crm_nota("Esta entidad no tiene un registro CRM asociado para ejecutar acciones."))
-      opciones <- .in_acciones_disponibles(as.character(e$Etapa[[1]]))
+      opciones <- if (nrow(e)) .in_acciones_disponibles(as.character(e$Etapa[[1]])) else character()
+      config <- .CONFIG_ACCIONES_EMBUDO
+      if (nrow(e) && identical(as.character(e$Etapa[[1]]), "CLIENTE")) {
+        config$Editar$etiqueta <- "Geografía y potencial"
+        opciones[["Editar"]] <- config$Editar$etiqueta
+      }
+      if (isTRUE(comercial())) {
+        opciones <- c(Comercial = "Información comercial y presupuesto", opciones)
+        config$Comercial <- list(etiqueta = "Información comercial y presupuesto", icono = "briefcase",
+          color = "#495057", modal = "subventana2")
+      }
       if (!length(opciones)) return(NULL)
-      menu <- racafeModulos::MenuAccionesUI(as.character(e$CodContacto[[1]]), opciones,
-        config = .CONFIG_ACCIONES_EMBUDO, ns = session$ns)
+      identificador <- if (nrow(e)) as.character(e$CodContacto[[1]]) else as.character(contexto()$Clave[[1]])
+      menu <- racafeModulos::MenuAccionesUI(identificador, opciones, config = config, ns = session$ns)
       menu <- htmltools::tagQuery(menu)$find(".rm-action-trigger")$addClass("pr-action-trigger")$allTags()
       menu <- htmltools::tagQuery(menu)$find(".rm-action-panel")$addClass("pr-action-panel")$allTags()
       racafeForms::racafeActionBar(left = if (nrow(x) > 1L) {
@@ -59,6 +70,14 @@ ConsultaAcciones <- function(id, contexto, usuario, al_actualizar = function(tab
     shiny::observeEvent(input$AccionSeleccionada, {
       sel <- input$AccionSeleccionada
       e <- elegido()
+      if (identical(sel$accion, "Comercial")) {
+        identificador <- if (nrow(e)) as.character(e$CodContacto[[1]]) else as.character(contexto()$Clave[[1]])
+        if (!isTRUE(comercial()) || !identical(as.character(sel$codigo), identificador)) return()
+        al_abrir()
+        accion("Comercial"); activo(TRUE)
+        al_comercial(session$ns("CerrarAccion"))
+        return()
+      }
       if (length(sel$codigo) != 1L || length(sel$accion) != 1L || is.na(sel$accion) ||
           nrow(e) != 1L || !identical(as.character(sel$codigo), as.character(e$CodContacto[[1]])) ||
           !sel$accion %in% names(.in_acciones_disponibles(as.character(e$Etapa[[1]])))) {
@@ -90,6 +109,9 @@ ConsultaAcciones <- function(id, contexto, usuario, al_actualizar = function(tab
         easy_close = TRUE, footer = shiny::modalButton("Cerrar")))
     })
     shiny::observeEvent(input$CerrarAccion, cerrar(), ignoreInit = TRUE)
+    shiny::observeEvent(cambios_comerciales(), {
+      if (identical(accion(), "Comercial")) cerrar()
+    }, ignoreInit = TRUE)
     shiny::observeEvent(input[["Reactivar-REA_Confirmar"]], {
       if (identical(accion(), "Reactivar") && isFALSE(input[["Reactivar-REA_Confirmar"]])) cerrar()
     }, ignoreInit = TRUE)

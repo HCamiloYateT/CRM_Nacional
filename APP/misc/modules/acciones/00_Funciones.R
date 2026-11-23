@@ -944,7 +944,7 @@ descartar_oportunidad <- function(id_oportunidad, razon, usr) {
 }
 
 # Guardados secundarios: congelar el formulario validado y escribir solo al confirmar ----
-.accion_guardado <- function(input, session, codigo_contacto, usuario) {
+.accion_guardado <- function(input, session, codigo_contacto, usuario, proteger_contacto = FALSE) {
   ocupado <- shiny::reactiveVal(FALSE)
   pendiente <- shiny::reactiveVal(NULL)
   shiny::observeEvent(input$ConfirmarRegistroCancelar, { pendiente(NULL); invisible(NULL) })
@@ -957,6 +957,14 @@ descartar_oportunidad <- function(id_oportunidad, razon, usr) {
       racafeForms::racafeNotify(title = "La entidad o el usuario cambió. Revise el registro nuevamente.",
         type = "warning", session = session)
       return(invisible(NULL))
+    }
+    if (isTRUE(proteger_contacto)) {
+      etapa <- tryCatch(obtener_etapa_contacto(codigo_contacto()), error = function(e) NA_character_)
+      if (length(etapa) != 1L || is.na(etapa) || identical(etapa, "CLIENTE")) {
+        racafeForms::racafeNotify(title = "Los datos de contacto del cliente no se pueden modificar aquí.",
+          type = "warning", session = session)
+        return(invisible(NULL))
+      }
     }
     actuales <- shiny::reactiveValuesToList(input)
     campos <- grep("^(Campo|Direccion)", names(solicitud$valores), value = TRUE)
