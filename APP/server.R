@@ -238,6 +238,7 @@ server <- function(input, output, session) {
   ## Contolbar ----
   Cotizacion(id = "Cotizador", usuario = usuario, dat = data_c)
   notas_creadas <- CrearNotas(id = "CrearNota", usuario = usuario)
+  notas_modal <- CrearNotas(id = "CrearNotaModal", usuario = usuario, abrir = reactive(input[["Tareas-crear"]]))
   CrearContacto("AccionCrear", usuario)
   RegistrarCompetencia(id = "RegistrarCompetencia", usr = usuario)
   
@@ -259,6 +260,7 @@ server <- function(input, output, session) {
   notas_datos <- reactive({
     notas_revision()
     notas_creadas$actualizaciones()
+    notas_modal$actualizaciones()
     racafeBD::CargarDatos("CRMNALNOTAS")
   })
   menu_tareas <- HeaderTareasServer(session = session, usuario = usuario, notas = notas_datos, es_admin = es_admin,
