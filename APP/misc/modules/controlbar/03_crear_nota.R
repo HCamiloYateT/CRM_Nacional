@@ -1,8 +1,6 @@
-CrearNotasUI <- function(id) {
+CrearNotasUI <- function(id, en_modal = FALSE) {
   ns <- NS(id)
-  racafeForms::racafePanel(
-    title = NULL, padding = "compact", bordered = FALSE,
-    racafeForms::racafeForm(size = "compact", variant = "plain",
+  formulario <- racafeForms::racafeForm(size = "compact", variant = "plain",
                             racafeForms::racafeFormGroup(
                               racafeForms::racafeFormRow(columns = 2, responsive = "fixed",
                                 .crm_select("NOT_Tipo", label = "Tipo", required = TRUE,
@@ -31,6 +29,8 @@ CrearNotasUI <- function(id) {
                                 )
                               )
                             ),
+                            conditionalPanel(condition = sprintf("input['%s'] != 'list'", ns("NOT_Tipo")),
+                              uiOutput(ns("prioridad_nota"))),
                             racafeForms::racafeFormGroup(
                               shiny::tags$div(class = "nota-etiquetas",
                                               racafeModulos::ListaDesplegableAgregableUI(ns("NOT_Tags")))
@@ -54,12 +54,47 @@ CrearNotasUI <- function(id) {
                               racafeForms::racafeButton("NOT_Crear", "Crear Nota", icon = "note-sticky",
                                                         variant = "primary", size = "xs", ns = ns), align = "right"
                             )
-    )
   )
+  if (en_modal) return(tags$div(class = "w-100", formulario))
+  racafeForms::racafePanel(title = NULL, formulario, padding = "compact", bordered = FALSE)
 }
-CrearNotas <- function(id, usuario) {
+
+.enviar_tarea_nacional <- function(registro) {
+  responsable <- as.character(registro$Responsable[[1]])
+  i <- match(toupper(responsable), toupper(VENDEDORES_DATA$Nombre))
+  correo <- if (isTRUE(getOption("crm.desarrollo"))) "hcyate@racafe.com" else if (!is.na(i)) {
+    VENDEDORES_DATA$Email[i]
+  } else {
+    clave <- tolower(trimws(responsable))
+    if (!grepl("^[a-z0-9._-]+$", clave)) stop("El responsable no tiene correo corporativo asociado.")
+    paste0(clave, "@racafe.com")
+  }
+  tarea <- identical(as.character(registro$Tipo[[1]]), "list")
+  descripcion <- as.character(registro$Descripcion[[1]])
+  datos <- list(tipo = if (tarea) "Nueva tarea" else "Nueva nota", titulo = registro$titulo[[1]],
+                creador = registro$Usuario[[1]], fecha = format(registro$FechaHoraCrea[[1]], "%d/%m/%y"),
+                responsable = responsable, prioridad = registro$Prioridad[[1]],
+                vencimiento = if (tarea) format(registro$FechaCumplimiento[[1]], "%d/%m/%Y") else "Sin vencimiento",
+                descripcion = if (nzchar(descripcion)) descripcion else "Sin descripción")
+  if (!requireNamespace("racafeMail", quietly = TRUE)) stop("El paquete racafeMail no está instalado.")
+  if (utils::packageVersion("racafeMail") >= "0.2.2") {
+    datos$aplicacion <- "CRM Nacional"
+    return(racafeMail::racafeMailEnviar(correo, "asignacion_crm", datos))
+  }
+  racafeMail::racafeMailNotificacion(correo, responsable,
+    paste("CRM Nacional", paste(unlist(datos, use.names = FALSE), collapse = " · "), sep = " · "))
+}
+
+CrearNotas <- function(id, usuario, abrir = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    en_modal <- !is.null(abrir)
+    if (en_modal) observeEvent(abrir(), {
+      req(abrir() > 0L)
+      showModal(racafeForms::racafeModalDetail(title = "Nueva tarea o nota", size = "subventana3",
+        CrearNotasUI(id, en_modal = TRUE),
+        footer = racafeForms::racafeModalFooter(modalButton("Cancelar"))))
+    })
     
     # Reactivos ----
     catalogos_iniciados_rv <- reactiveVal(FALSE)
@@ -84,6 +119,11 @@ CrearNotas <- function(id, usuario) {
       multiple = TRUE, fem = TRUE
     )
     
+    output$prioridad_nota <- renderUI({
+      .crm_select("NOT_PrioridadNota", label = "Prioridad", choices = .TSK_PRIORIDADES, selected = "MEDIA",
+                  empty = FALSE, ns = ns)
+    })
+
     # Funciones ----
     .estado_actividad <- function(indice) {
       isTRUE(actividades_cumplidas_rv[[as.character(indice)]])
@@ -186,6 +226,9 @@ CrearNotas <- function(id, usuario) {
         errores <- c(errores, "El título es obligatorio.")
       }
       
+      if (any(grepl("|", .obtener_actividades()$actividades, fixed = TRUE))) {
+        errores <- c(errores, "Las actividades no pueden contener el carácter |.")
+      }
       if (identical(input$NOT_Tipo, "list")) {
         if (is.null(input$NOT_FechaFin)) {
           errores <- c(errores, "La fecha de cumplimiento es obligatoria.")
@@ -234,6 +277,7 @@ CrearNotas <- function(id, usuario) {
       racafeForms::racafeUpdateDate(session = session, id = "NOT_FechaFin", value = Sys.Date() + 1)
       
       .crm_update_select(session, "NOT_Prioridad", selected = "MEDIA")
+      .crm_update_select(session, "NOT_PrioridadNota", selected = "MEDIA")
       
       .crm_update_select(session, "NOT_Responsable", selected = usuario())
       
@@ -249,10 +293,10 @@ CrearNotas <- function(id, usuario) {
     
     .registrar_observers_actividad(1L)
     
-    observeEvent(usuario(), {
+    observeEvent(list(usuario(), if (en_modal) abrir()), {
       req(usuario())
-      
-      .crm_update_select(session, "NOT_Responsable", selected = usuario())
+      personas <- unique(c(usuario(), as.character(catalogos_r()$personas)))
+      .crm_update_select(session, "NOT_Responsable", choices = personas, selected = usuario())
     }, ignoreNULL = FALSE)
     
     observeEvent(input$NOT_Agregar, {
@@ -335,11 +379,19 @@ CrearNotas <- function(id, usuario) {
       )
       errores <- .validar_formulario()
       racafeForms::racafeShowValidation(session, validacion, mode = "inline")
+      if (length(errores)) {
+        racafeForms::racafeNotify(session, "Revise el formulario", paste(errores, collapse = " "), type = "warning")
+      }
       if (!validacion$valid || length(errores) > 0L) return(invisible(NULL))
       
       es_tarea <- identical(input$NOT_Tipo, "list")
       
       confirmacion_rv(TRUE)
+      if (en_modal) {
+        racafeForms::racafeConfirm(session, "NOT_ConfirmarModal",
+          if (es_tarea) "¿Crear esta tarea?" else "¿Crear esta nota?", trimws(input$NOT_Titulo), ns = ns)
+        return(invisible(NULL))
+      }
       showModal(racafeForms::racafeModalDetail(
         title = if (es_tarea) "Confirmar tarea" else "Confirmar nota",
         size = "subventana3",
@@ -360,7 +412,11 @@ CrearNotas <- function(id, usuario) {
       removeModal()
     })
     
-    observeEvent(input$NOT_Confirmar, {
+    observeEvent(if (en_modal) input$NOT_ConfirmarModal else input$NOT_Confirmar, {
+      if (en_modal && !isTRUE(input$NOT_ConfirmarModal)) {
+        confirmacion_rv(FALSE)
+        return(invisible(NULL))
+      }
       on.exit(racafeShiny::racafeUpdateOverlayLoader(session, "guardar", FALSE), add = TRUE)
       if (!isTRUE(confirmacion_rv()) || isTRUE(guardando_rv())) return(invisible(NULL))
       errores <- .validar_formulario()
@@ -387,24 +443,36 @@ CrearNotas <- function(id, usuario) {
         registro <- .nota_construir_registro(
           titulo = input$NOT_Titulo, tipo = input$NOT_Tipo, descripcion = input$NOT_Descripcion,
           fecha_cumplimiento = if (es_tarea) as.Date(input$NOT_FechaFin) else as.Date(NA),
-          prioridad = if (es_tarea) stringr::str_to_upper(trimws(input$NOT_Prioridad)) else NA_character_,
-          responsable = if (es_tarea) input$NOT_Responsable else NA_character_,
+          prioridad = if (es_tarea) stringr::str_to_upper(trimws(input$NOT_Prioridad)) else {
+            input$NOT_PrioridadNota %||% "MEDIA"
+          },
+          responsable = if (es_tarea) input$NOT_Responsable else usuario(),
           etiquetas = etiquetas_modulo$seleccion(), actividades = actividades$actividades,
           cumplidas = actividades$cumplidas, usuario = usuario()
         )
         
+        if (any(actividades$cumplidas == "1")) {
+          historial <- .tareas_historial("")
+          historial$actividades <- lapply(actividades$cumplidas, function(x) {
+            if (x == "1") list(fecha = as.numeric(Sys.time()), autor = usuario(), nota = "") else list()
+          })
+          registro$Respuesta <- .tareas_codificar(historial)
+        }
         racafeBD::AgregarDatos(registro, "CRMNALNOTAS")
         
-        removeModal()
-        
         actualizaciones_rv(isolate(actualizaciones_rv()) + 1L)
-        
         .limpiar_formulario()
+        removeModal()
         
         racafeForms::racafeNotify(
           session, if (es_tarea) "Tarea creada" else "Nota creada",
           "El registro se guardó correctamente.", type = "success", duration = 4
         )
+        tryCatch(.enviar_tarea_nacional(registro), error = function(e) {
+          racafeForms::racafeNotify(session, "Registro guardado. Correo sin enviar",
+                                    "Revise el correo corporativo del responsable y la configuración SMTP.",
+                                    type = "warning")
+        })
       }, error = function(e) {
         removeModal()
         
