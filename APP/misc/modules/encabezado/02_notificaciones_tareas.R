@@ -45,7 +45,7 @@
                   "FechaCumplimiento", "Prioridad", "Archivado", "Cumplido")
   faltantes <- setdiff(requeridas, names(datos))
   if (length(faltantes)) {
-    stop(paste("CRMNALNOTAS: faltan columnas", paste(faltantes, collapse = ", ")),
+    stop(paste("Notas y tareas: faltan columnas", paste(faltantes, collapse = ", ")),
          call. = FALSE)
   }
   
@@ -65,17 +65,12 @@
     dplyr::arrange(prioridad_orden, is.na(fecha_orden), fecha_orden, cons)
 }
 
-.tareas_modificar_bd <- function(original, accion, usuario, es_admin = FALSE, cambios = NULL) {
-  con <- racafeBD::ConectarBD()
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
-  DBI::dbWithTransaction(con, {
-    sql <- DBI::sqlInterpolate(
-      con, "SELECT cons, Actividades, Cumplidas, Archivado, Cumplido, Respuesta, Usuario, Responsable,
-                   titulo, Descripcion, Prioridad, Tipo
-            FROM CRMNALNOTAS WHERE cons = ?id FOR UPDATE",
-      id = as.numeric(original$cons[[1]])
-    )
-    actual <- DBI::dbGetQuery(con, sql)
+.tareas_modificar_local <- function(original, accion, usuario, es_admin = FALSE, cambios = NULL,
+                                    ruta = .notas_ruta()) {
+  .notas_transaccion(function(estado) {
+    datos <- estado$registros
+    i <- which(datos$cons == as.numeric(original$cons[[1]]))
+    actual <- datos[i, , drop = FALSE]
     if (nrow(actual) != 1L) {
       stop("El consecutivo no identifica un registro único. Corrija los duplicados.",
            call. = FALSE)
@@ -105,37 +100,24 @@
       if (nzchar(cambios$comentario)) historial$comentarios <- c(historial$comentarios, list(
         list(fecha = as.numeric(Sys.time()), autor = usuario, texto = cambios$comentario)))
       if (actual$Tipo[[1]] == "list") historial$actividades <- cambios$metadatos
-      textos <- if (actual$Tipo[[1]] == "list") paste(cambios$textos, collapse = "|") else actual$Actividades[[1]]
-      estados <- if (actual$Tipo[[1]] == "list") paste(as.integer(cambios$cumplidas), collapse = "|") else {
-        actual$Cumplidas[[1]]
+      if (actual$Tipo[[1]] == "list") {
+        datos$Actividades[i] <- paste(cambios$textos, collapse = "|")
+        datos$Cumplidas[i] <- paste(as.integer(cambios$cumplidas), collapse = "|")
       }
-      comando <- DBI::sqlInterpolate(con,
-        "UPDATE CRMNALNOTAS SET Actividades = ?actividades, Cumplidas = ?cumplidas, Respuesta = ?respuesta
-         WHERE cons = ?id", actividades = textos, cumplidas = estados, respuesta = .tareas_codificar(historial),
-        id = as.numeric(original$cons[[1]]))
+      datos$Respuesta[i] <- .tareas_codificar(historial)
     } else if (accion == "eliminar") {
-      comando <- DBI::sqlInterpolate(con, "DELETE FROM CRMNALNOTAS WHERE cons = ?id",
-        id = as.numeric(original$cons[[1]]))
+      datos <- datos[-i, , drop = FALSE]
     } else if (accion == "cumplir") {
       if (!identical(as.character(actual$Tipo[[1]]), "list")) stop("Solo las tareas pueden marcarse como cumplidas.")
-      comando <- DBI::sqlInterpolate(
-        con, "UPDATE CRMNALNOTAS SET Cumplido = 1 WHERE cons = ?id",
-        id = as.numeric(original$cons[[1]])
-      )
+      datos$Cumplido[i] <- 1L
     } else if (accion == "archivar") {
-      comando <- DBI::sqlInterpolate(
-        con, "UPDATE CRMNALNOTAS SET Archivado = 1 WHERE cons = ?id",
-        id = as.numeric(original$cons[[1]])
-      )
+      datos$Archivado[i] <- 1L
     } else if (accion == "desarchivar") {
-      comando <- DBI::sqlInterpolate(con, "UPDATE CRMNALNOTAS SET Archivado = 0 WHERE cons = ?id",
-        id = as.numeric(original$cons[[1]]))
+      datos$Archivado[i] <- 0L
     } else stop("Acción no reconocida.", call. = FALSE)
-    afectadas <- DBI::dbExecute(con, comando)
-    if (!afectadas %in% if (accion == "editar") 0:1 else 1L) {
-      stop("No fue posible actualizar el registro.", call. = FALSE)
-    }
-  })
+    estado$registros <- datos
+    estado
+  }, ruta = ruta)
   invisible(TRUE)
 }
 
@@ -159,7 +141,7 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
       revision()
       if (shiny::is.reactive(actualizaciones)) actualizaciones()
       tryCatch({
-        d <- if (is.null(notas)) racafeBD::CargarDatos("CRMNALNOTAS") else if (is.function(notas)) notas() else notas
+        d <- if (is.null(notas)) .notas_leer() else if (is.function(notas)) notas() else notas
         d <- .tareas_visibles_usuario(d, usuario(), es_admin())
         list(datos = d, pendientes = .tareas_pendientes(d), error = NULL)
       }, error = function(e) list(datos = NULL, pendientes = NULL, error = conditionMessage(e)))
@@ -170,7 +152,7 @@ NotificacionesTareas <- function(id, usuario, notas = NULL, on_success = NULL,
     }
     guardar <- function(fila, accion, cambios = NULL) {
       tryCatch({
-        .tareas_modificar_bd(fila, accion, usuario = usuario(), es_admin = es_admin(), cambios = cambios)
+        .tareas_modificar_local(fila, accion, usuario = usuario(), es_admin = es_admin(), cambios = cambios)
         shiny::removeModal()
         refrescar()
         racafeForms::racafeNotify(session, "Registro actualizado", type = "success")

@@ -257,11 +257,17 @@ server <- function(input, output, session) {
   })
   ### Tareas ----
   notas_revision <- reactiveVal(0L)
+  ruta_notas <- .notas_ruta()
+  cambios_notas <- shiny::reactivePoll(2000, session, function() {
+    info <- file.info(ruta_notas)
+    c(info$size, as.numeric(info$mtime), as.numeric(info$ctime))
+  }, function() Sys.time())
   notas_datos <- reactive({
     notas_revision()
     notas_creadas$actualizaciones()
     notas_modal$actualizaciones()
-    racafeBD::CargarDatos("CRMNALNOTAS")
+    cambios_notas()
+    .notas_leer(ruta_notas)
   })
   menu_tareas <- HeaderTareasServer(session = session, usuario = usuario, notas = notas_datos, es_admin = es_admin,
     actualizaciones = notas_creadas$actualizaciones,
