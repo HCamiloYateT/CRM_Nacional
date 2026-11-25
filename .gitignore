@@ -2,6 +2,7 @@
 # DATOS LOCALES Y PRIVADOS
 # ==========================================
 *.rds
+*.rds.lock
 *.RDS
 *.rda
 *.RData

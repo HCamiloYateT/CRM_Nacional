@@ -458,7 +458,7 @@ CrearNotas <- function(id, usuario, abrir = NULL) {
           })
           registro$Respuesta <- .tareas_codificar(historial)
         }
-        racafeBD::AgregarDatos(registro, "CRMNALNOTAS")
+        registro <- .notas_agregar(registro)
         
         actualizaciones_rv(isolate(actualizaciones_rv()) + 1L)
         .limpiar_formulario()

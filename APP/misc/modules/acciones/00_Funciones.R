@@ -839,7 +839,7 @@ descartar_oportunidad <- function(id_oportunidad, razon, usr) {
 }
 ## Crear Tarea ----
 .nota_obtener_etiquetas <- function() {
-  notas <- tryCatch(racafeBD::CargarDatos("CRMNALNOTAS"), error = function(e) data.frame())
+  notas <- tryCatch(.notas_leer(), error = function(e) data.frame())
   
   if (nrow(notas) == 0L || !"Etiquetas" %in% names(notas)) {
     return(character(0))
@@ -862,25 +862,10 @@ descartar_oportunidad <- function(id_oportunidad, razon, usr) {
     unique() %>%
     sort()
 }
-.nota_obtener_consecutivo <- function() {
-  notas <- tryCatch(racafeBD::CargarDatos("CRMNALNOTAS"), error = function(e) data.frame())
-  
-  if (nrow(notas) == 0L || !"cons" %in% names(notas)) {
-    return(1L)
-  }
-  
-  consecutivo <- suppressWarnings(max(notas$cons, na.rm = TRUE))
-  
-  if (!is.finite(consecutivo)) {
-    return(1L)
-  }
-  
-  as.integer(consecutivo) + 1L
-}
 .nota_construir_registro <- function(titulo, tipo, descripcion, fecha_cumplimiento, prioridad, responsable,
                                      etiquetas, actividades, cumplidas, usuario) {
   data.frame(
-    cons = .nota_obtener_consecutivo(), titulo = trimws(titulo), Usuario = usuario, Responsable = responsable,
+    cons = NA_real_, titulo = trimws(titulo), Usuario = usuario, Responsable = responsable,
     FechaHoraCrea = Sys.time(), Tipo = tipo, Descripcion = trimws(descripcion %||% ""),
     FechaCumplimiento = fecha_cumplimiento, Actividades = paste(actividades, collapse = "|"),
     Cumplidas = paste(cumplidas, collapse = "|"), Etiquetas = paste(etiquetas, collapse = "|"),
